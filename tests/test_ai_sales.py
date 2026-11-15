@@ -29,6 +29,7 @@ os.environ.setdefault("OPENAI_API_KEY", "sk-test-not-used")
 import ai_memory
 import ai_provider
 import ai_sales
+import customer_portrait
 import database
 from ai_provider import ToolCall, Turn
 
@@ -42,6 +43,10 @@ def setUpModule():
     _SAVED_MODULE["build_profile"] = ai_memory.build_profile
     ai_memory.remember = AsyncMock(return_value=True)
     ai_memory.build_profile = AsyncMock(return_value="")
+    # Mijoz portreti ham bazaga bormasin: portret yo'q, so'rash imkoni yo'q.
+    for name in ("get", "claim_question"):
+        _SAVED_MODULE["portrait_" + name] = getattr(customer_portrait, name)
+        setattr(customer_portrait, name, AsyncMock(return_value=None))
     _SAVED_MODULE["record_ai_order"] = ai_sales.record_ai_order
     ai_sales.record_ai_order = AsyncMock()
     ai_sales._settings.update(at=float("inf"), values={}, staff=set())
@@ -52,6 +57,8 @@ def setUpModule():
 def tearDownModule():
     ai_memory.remember = _SAVED_MODULE["remember"]
     ai_memory.build_profile = _SAVED_MODULE["build_profile"]
+    for name in ("get", "claim_question"):
+        setattr(customer_portrait, name, _SAVED_MODULE["portrait_" + name])
     ai_sales.record_ai_order = _SAVED_MODULE["record_ai_order"]
     ai_sales.TYPING_PAUSE = _SAVED_MODULE["TYPING_PAUSE"]
     ai_sales._settings.update(at=float("-inf"), values={}, staff=set())

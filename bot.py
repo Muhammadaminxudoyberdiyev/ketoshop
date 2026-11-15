@@ -66,6 +66,7 @@ from retention_stats import router as retention_stats_router
 from review_stats import router as review_stats_router
 from jar_stats import router as jar_stats_router
 from sinov_buyurtma import router as sinov_buyurtma_router
+from customer_portrait import router as customer_portrait_router
 
 from webapp_server import create_webapp
 
@@ -256,6 +257,8 @@ async def main():
     dp.include_router(gemini_compare_router)
     dp.include_router(webapp_data_router)
     dp.include_router(start_router)
+    # 🔐 /malumotlarim — mijoz o'zi haqida saqlanganini ko'radi va o'chiradi.
+    dp.include_router(customer_portrait_router)
     dp.include_router(onboarding_video_router)
     dp.include_router(welcome_recipe_router)
     dp.include_router(broadcast_admin_router)
@@ -518,6 +521,10 @@ async def main():
     # AI sotuvchi: har kuni 23:58 da adminlarga o'sha kungi token va $ sarfi.
     from ai_sales import usage_report_loop as ai_usage_report_loop
     ai_usage_report_task = asyncio.create_task(ai_usage_report_loop(bot))
+    # 🧑‍🤝‍🧑 Mijoz portreti: har kuni 23:30 da adminlarga qaysi ma'lumot nechta
+    # mijozdan yig'ilgani (customer_portrait.py). PORTRAIT_REPORT=0 — o'chiq.
+    from customer_portrait import report_loop as portrait_report_loop
+    portrait_report_task = asyncio.create_task(portrait_report_loop(bot))
 
     # One-off channel post: the all-time top 20 (owner, 2026-10-04), sent
     # once right after this deploy — see top20_post.py.
@@ -559,6 +566,7 @@ async def main():
         release_notes_task.cancel()
         jar_stats_task.cancel()
         ai_usage_report_task.cancel()
+        portrait_report_task.cancel()
         meta_leads_task.cancel()
         meta_ads_task.cancel()
         if runner:

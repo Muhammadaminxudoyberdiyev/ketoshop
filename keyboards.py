@@ -26,6 +26,7 @@ BUYER_COMMANDS = [
     BotCommand(command="buyurtmalarim", description="📦 Mening buyurtmalarim"),
     BotCommand(command="kabinet", description="👤 Kabinetim (Keto balans, daraja)"),
     BotCommand(command="yordam", description="❓ Qo'llanma va yordam"),
+    BotCommand(command="malumotlarim", description="🔐 Ma'lumotlarim — ko'rish va o'chirish"),
 ]
 
 ADMIN_COMMANDS = [
