@@ -38,9 +38,11 @@ logger = logging.getLogger(__name__)
 router = Router(name="comment_followup")
 
 DAYS = max(7, int(os.getenv("COMMENT_FOLLOWUP_DAYS", "30")))
-DAILY = max(0, int(os.getenv("COMMENT_FOLLOWUP_DAILY", "25")))
-EVERY = max(300, int(os.getenv("COMMENT_FOLLOWUP_EVERY", "1200")))
-HOURS = (10, 20)                 # Toshkent: 10:00–19:59
+# Egasi, 2026-11-16: "30 kun avval yozilgan izohlarga nega yozmading, hammasiga yoz" —
+# 25/kun, 20 daqiqada bitta edi (≈7 kun); endi 5 daqiqada bitta, kuniga 120 gacha (≈1,5 kun).
+DAILY = max(0, int(os.getenv("COMMENT_FOLLOWUP_DAILY", "120")))
+EVERY = max(300, int(os.getenv("COMMENT_FOLLOWUP_EVERY", "300")))
+HOURS = (9, 21)                  # Toshkent: 09:00–20:59
 NEW_PRODUCT_DAYS = 45
 TRIES_PER_TICK = 3               # AI "yozmaymiz" desa — keyingi odam
 

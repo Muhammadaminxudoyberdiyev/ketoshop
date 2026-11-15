@@ -96,6 +96,20 @@ class SendOneTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await cf.send_one(None, NOON), "none")
 
 
+class PaceTest(unittest.TestCase):
+    def test_everyone_within_about_two_days(self):
+        # Egasi, 2026-11-16: "30 kun avval yozilgan izohlarga … hammasiga yoz" — 171 kishi navbatda edi.
+        per_day = min(cf.DAILY, (cf.HOURS[1] - cf.HOURS[0]) * 3600 // cf.EVERY)
+        self.assertGreaterEqual(per_day, 120)
+        self.assertLessEqual(-(-171 // per_day), 2)
+        self.assertGreaterEqual(cf.EVERY, 300)                         # never faster than one per 5 minutes
+
+    def test_admin_api_shows_the_progress(self):
+        src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "admin_web.py"),
+                   encoding="utf-8").read()
+        self.assertIn('"followup": followup', src)
+
+
 class ComposeTest(unittest.IsolatedAsyncioTestCase):
     async def test_ai_gets_the_old_comment_post_and_new_products(self):
         seen = {}
