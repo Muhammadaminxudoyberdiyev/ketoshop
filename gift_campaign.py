@@ -458,6 +458,12 @@ async def _product_photo(prod: dict | None) -> str | None:
     return None
 
 
+async def _capped(uid: int) -> bool:
+    """Kuniga 2 ta (xarid qilmagan / jim — 1 ta) rejali xabar — push_cap.py."""
+    import push_cap
+    return await push_cap.claim(uid, "sovga")
+
+
 async def announce_upgrade(bot: Bot) -> tuple[int, int]:
     row = await _state(force=True)
     until = (row["ends_at"] + TZ_OFFSET) if row and row.get("ends_at") else _now_tk() + timedelta(days=DURATION_DAYS)
@@ -469,6 +475,8 @@ async def announce_upgrade(bot: Bot) -> tuple[int, int]:
     sent = failed = 0
     for uid in user_ids:
         text, markup = bodies.get(langs.get(uid, "uz")) or bodies["uz"]
+        if not await _capped(uid):
+            continue
         if await _send_photo(bot, uid, photo, text, markup):
             sent += 1
         else:
@@ -580,6 +588,8 @@ async def send_reminder(bot: Bot) -> dict:
     for uid in user_ids:
         lang = langs.get(uid, "uz")
         segment = "again" if uid in got_gift else "new"
+        if not await _capped(uid):
+            continue
         if await _send_photo(bot, uid, photo, reminder_text(segment, lang, until), reminder_keyboard(lang)):
             stats[segment] += 1
         else:
@@ -600,6 +610,8 @@ async def announce(bot: Bot) -> tuple[int, int]:
     sent = failed = 0
     for uid in user_ids:
         lang = langs.get(uid, "uz")
+        if not await _capped(uid):
+            continue
         if await _send(bot, uid, announcement_text(lang, until), announcement_keyboard(lang)):
             sent += 1
         else:
@@ -697,6 +709,8 @@ async def announce_extension(bot: Bot) -> dict:
     sent = failed = 0
     for uid in user_ids:
         text, markup = bodies.get(langs.get(uid, "uz")) or bodies["uz"]
+        if not await _capped(uid):
+            continue
         if await _send_photo(bot, uid, photo, text, markup):
             sent += 1
         else:

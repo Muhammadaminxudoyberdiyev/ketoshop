@@ -155,7 +155,10 @@ async def broadcast(bot: Bot, product: dict, day=None) -> tuple[int, int]:
     captions = product_card.CaptionCache(
         product, extra_for=lambda lang: product_ideas.recipe_block(product, lang, seed))
     sent = failed = 0
+    import push_cap
     for uid in user_ids:
+        if not await push_cap.claim(uid, "kun_mahsuloti"):
+            continue
         ok = await _send_to_user(bot, uid, product, langs.get(uid, "uz"), captions)
         sent += ok
         failed += not ok
