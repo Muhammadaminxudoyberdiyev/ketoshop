@@ -192,6 +192,8 @@ async def post_to_channel(bot: Bot, product: dict, day=None) -> bool:
         caption = await product_card.build_caption(
             product, CHANNEL_LANG, rate,
             product_ideas.recipe_block(product, CHANNEL_LANG, _recipe_seed(day)))
+        import channel_voice
+        caption = await channel_voice.rewrite(caption, "kun_mahsuloti", 1024 - 120)
         caption = f"{caption.rstrip()}\n\n{channel_link_line(product['id'])}"
         await product_card.send_product_message(bot, REQUIRED_CHANNEL_ID, product, caption, None)
         return True

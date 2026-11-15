@@ -55,6 +55,7 @@ ADMIN_COMMANDS = [
     BotCommand(command="reklama_bog", description="🔗 Reklama kampaniyasi ↔ bot havolasi"),
     BotCommand(command="izohlar", description="💬 Instagram/Facebook izohlari: javobsizlar, AI"),
     BotCommand(command="izoh_hisobot", description="📋 AI bugun qayerda javob berdi, qaysilariga bera olmadi"),
+    BotCommand(command="kanal_ovoz", description="🗣 Kanal postlari jonli va har xil uzunlikda: holat, sinov"),
     BotCommand(command="izoh_qayta", description="🔁 Bir oy oldingi izohlarga qayta yozish: holat, on/off"),
     BotCommand(command="xabar_soni", description="📨 Userlarga kuniga nechta rejali xabar boryapti"),
     BotCommand(command="izoh_solishtir", description="⚖️ GPT va Gemini javoblari yonma-yon (yuborilmaydi)"),

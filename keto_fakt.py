@@ -324,7 +324,9 @@ async def _tick(bot: Bot) -> None:
     if not await database.claim_release_notes(key):
         return
     try:
-        await bot.send_message(REQUIRED_CHANNEL_ID, await build_post(day),
+        import channel_voice
+        post = await channel_voice.rewrite(await build_post(day), "fakt", 4096)
+        await bot.send_message(REQUIRED_CHANNEL_ID, post,
                                parse_mode=ParseMode.HTML, disable_web_page_preview=True)
     except Exception:
         await database.release_release_notes(key)          # retried on the next tick
