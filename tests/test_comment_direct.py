@@ -62,6 +62,16 @@ class DirectTest(unittest.TestCase):
         self.assertIn("https://t.me/ketoshopbot/shop", text)
 
 
+class AdviceFirstTest(unittest.TestCase):
+    def test_rules_put_advice_before_selling(self):
+        # Egasi, 2026-11-16: "faqat sotuvga yo'naltiraverma bu qo'pollik, tavsiyalar ham bergin va keto tavsiyalar ham".
+        self.assertIn("AVVAL FOYDA, KEYIN MAHSULOT", comment_ai.RULES)
+        self.assertIn("keto/PP maslahati", comment_ai.RULES)
+        self.assertIn("har javobda sotuvga undama", comment_ai.RULES)
+        self.assertIn("Avval foyda", comment_ai.FOLLOWUP_RULES)
+        self.assertIn("keto yoki PP\n  maslahati", comment_ai.FOLLOWUP_RULES.replace("\r", ""))
+
+
 class HoldingTest(unittest.TestCase):
     def test_every_category_but_spam_gets_an_answer(self):
         for cat in ("salomatlik", "shikoyat", "boshqa", None, "nimadir"):
