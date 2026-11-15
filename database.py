@@ -1297,6 +1297,24 @@ async def init_db():
         # o'zgarsa yangi xabar emas, shu xabar tahrirlanadi (egasi, 2026-11-13:
         # "qayta yubormagin huddi o'shani edit qil").
         await conn.execute("""
+            CREATE TABLE IF NOT EXISTS b2b_customers (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                phone TEXT,
+                address TEXT,
+                created_by BIGINT,
+                created_at TIMESTAMP DEFAULT (NOW() AT TIME ZONE 'UTC'),
+                last_order_at TIMESTAMP,
+                orders_count INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+        # Optom mijozlar (egasi, 2026-11-15: "b2b mijozlarni kiritib saqlab qolish
+        # va keyingi safar barcha mijozlar ismi va Yangi mijoz + belgisi") — bir ism
+        # bir marta; B2B buyurtma qaysi mijozniki — orders.b2b_customer_id.
+        await conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_b2b_customers_name ON b2b_customers (lower(name))")
+        await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS b2b_customer_id INTEGER")
+        await conn.execute("""
             CREATE TABLE IF NOT EXISTS order_cards (
                 order_id BIGINT NOT NULL,
                 chat_id BIGINT NOT NULL,
@@ -2829,7 +2847,8 @@ async def add_manual_order(admin_user_id: int, customer_name: str, phone: str,
 
 
 async def add_b2b_order(admin_user_id: int, company_name: str,
-                         items_data: list[dict], total: float) -> int:
+                         items_data: list[dict], total: float,
+                         phone: str | None = None, b2b_customer_id: int | None = None) -> int:
     """Insert an admin-entered B2B (wholesale/company) sale.
 
     Lives in the same orders table as manual orders (source='b2b') so it
@@ -2846,19 +2865,21 @@ async def add_b2b_order(admin_user_id: int, company_name: str,
         async with conn.transaction():
             items_data = await _snapshot_order_costs(conn, items_data)
             order_id = await conn.fetchval(
-                """INSERT INTO orders (user_id, customer_name, items, total, status,
-                                        source, confirmed_at, shipped_at, delivered_at)
-                   VALUES ($1, $2, $3, $4, 'delivered', 'b2b',
-                           CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """INSERT INTO orders (user_id, customer_name, phone, items, total, status,
+                                        source, confirmed_at, shipped_at, delivered_at, b2b_customer_id)
+                   VALUES ($1, $2, $3, $4, $5, 'delivered', 'b2b',
+                           CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, $6)
                    RETURNING id""",
-                admin_user_id, company_name,
-                json.dumps(items_data, ensure_ascii=False), total,
+                admin_user_id, company_name, phone,
+                json.dumps(items_data, ensure_ascii=False), total, b2b_customer_id,
             )
+            await _touch_b2b_customer(conn, b2b_customer_id)
             return order_id
 
 async def add_b2b_eritritol_order(admin_user_id: int, address: str, phone: str,
                                  quantity: float, total: float,
-                                 cost_per_kg: float = 0) -> int:
+                                 cost_per_kg: float = 0, customer_name: str | None = None,
+                                 b2b_customer_id: int | None = None) -> int:
     """Insert an admin-entered B2B Eritritol wholesale sale.
 
     The line carries its own cost_price (per kg) rather than pointing at a
@@ -2886,14 +2907,56 @@ async def add_b2b_eritritol_order(admin_user_id: int, address: str, phone: str,
         
         order_id = await conn.fetchval(
             """INSERT INTO orders (user_id, customer_name, address, phone, items, total, status,
-                                    source, confirmed_at, shipped_at, delivered_at)
-               VALUES ($1, 'B2B Eritritol', $2, $3, $4, $5, 'delivered', 'b2b',
-                       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                                    source, confirmed_at, shipped_at, delivered_at, b2b_customer_id)
+               VALUES ($1, $2, $3, $4, $5, $6, 'delivered', 'b2b',
+                       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, $7)
                RETURNING id""",
-            admin_user_id, address, phone,
-            json.dumps(items_data, ensure_ascii=False), total,
+            admin_user_id, customer_name or 'B2B Eritritol', address, phone,
+            json.dumps(items_data, ensure_ascii=False), total, b2b_customer_id,
         )
+        await _touch_b2b_customer(conn, b2b_customer_id)
         return order_id
+
+
+# ===== B2B mijozlar (handlers/admin.py — B2B buyurtma kiritish) =====
+
+async def _touch_b2b_customer(conn, customer_id: int | None) -> None:
+    if customer_id:
+        await conn.execute(
+            "UPDATE b2b_customers SET orders_count = orders_count + 1, "
+            "last_order_at = NOW() AT TIME ZONE 'UTC' WHERE id = $1", customer_id)
+
+
+async def list_b2b_customers() -> list[dict]:
+    """Hamma optom mijozlar — oxirgi buyurtma bergani birinchi, keyin ism bo'yicha."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM b2b_customers ORDER BY last_order_at DESC NULLS LAST, lower(name)")
+    return [dict(r) for r in rows]
+
+
+async def get_b2b_customer(customer_id: int) -> dict | None:
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM b2b_customers WHERE id = $1", customer_id)
+    return dict(row) if row else None
+
+
+async def save_b2b_customer(name: str, phone: str | None, address: str | None = None,
+                            by: int | None = None) -> dict:
+    """Yangi mijoz; shu ism bilan bor bo'lsa — o'sha (raqami va manzili yangilanadi)."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """INSERT INTO b2b_customers (name, phone, address, created_by) VALUES ($1, $2, $3, $4)
+               ON CONFLICT ((lower(name))) DO UPDATE
+                   SET phone = COALESCE(EXCLUDED.phone, b2b_customers.phone),
+                       address = COALESCE(EXCLUDED.address, b2b_customers.address)
+               RETURNING *""", name.strip(), phone, address, by)
+    return dict(row)
+
+
+async def set_b2b_customer_address(customer_id: int, address: str) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE b2b_customers SET address = $2 WHERE id = $1", customer_id, address)
 
 
 async def get_b2b_orders(period: str | dict = "all", limit: int = 200) -> list[dict]:

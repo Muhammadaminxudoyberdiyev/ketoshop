@@ -526,6 +526,33 @@ TEXTS = {
             "Сохранить?"
         ),
     },
+    "b2b_pick_customer": {
+        "uz": ("🏢 <b>{title}</b>\n\n"
+               "Mijozni tanlang yoki «➕ Yangi mijoz» bilan qo'shing — keyingi safar ismi shu ro'yxatda turadi."),
+        "ru": ("🏢 <b>{title}</b>\n\n"
+               "Выберите клиента или добавьте через «➕ Новый клиент» — в следующий раз он будет в этом списке."),
+    },
+    "b2b_no_customers": {
+        "uz": "Hozircha saqlangan mijoz yo'q.",
+        "ru": "Сохранённых клиентов пока нет.",
+    },
+    "btn_b2b_new_customer": {"uz": "➕ Yangi mijoz", "ru": "➕ Новый клиент"},
+    "b2b_new_name": {
+        "uz": "👤 <b>Yangi mijoz</b>\n\nIsmi yoki kompaniya nomini kiriting:",
+        "ru": "👤 <b>Новый клиент</b>\n\nВведите имя или название компании:",
+    },
+    "b2b_new_phone": {
+        "uz": "📞 <b>{name}</b> telefon raqamini kiriting (masalan: 90 123 45 67):",
+        "ru": "📞 Введите номер телефона <b>{name}</b> (например: 90 123 45 67):",
+    },
+    "b2b_bad_phone": {
+        "uz": "❌ Raqam noto'g'ri. O'zbekiston raqamini kiriting, masalan: 90 123 45 67",
+        "ru": "❌ Неверный номер. Введите узбекский номер, например: 90 123 45 67",
+    },
+    "b2b_customer_line": {
+        "uz": "👤 {name} · 📞 {phone}",
+        "ru": "👤 {name} · 📞 {phone}",
+    },
     "b2b_saved": {
         "uz": "✅ B2B savdo #{order_id} saqlandi va statistikaga qo'shildi.",
         "ru": "✅ B2B продажа #{order_id} сохранена и учтена в статистике.",
