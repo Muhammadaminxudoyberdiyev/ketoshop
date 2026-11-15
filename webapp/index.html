@@ -7816,7 +7816,8 @@ const Assistant = (() => {
   }
   function blocked() {
     const gate = document.getElementById('start-gate');
-    return document.getElementById('welcome-party') || (gate && gate.style.display !== 'none')
+    return document.getElementById('welcome-party') || document.getElementById('keto-party')
+      || (gate && gate.style.display !== 'none')
       || document.querySelector('.modal-overlay.show, .map-modal.show, .dock-hand');
   }
 

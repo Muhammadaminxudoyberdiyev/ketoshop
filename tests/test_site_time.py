@@ -428,6 +428,12 @@ class PageTest(unittest.TestCase):
         self.assertIn("function showWelcomeParty(w, endsAt)", party)
         hint = PAGE[PAGE.index("const DockHint"):PAGE.index("async maybe()", PAGE.index("const DockHint"))]
         self.assertIn("document.getElementById('keto-party')", hint)
+        # The Yordamchi intro and the «sayt qulaymi?» sheet wait for it too.
+        asst = PAGE[PAGE.index("const Assistant"):PAGE.index("const DockHint")]
+        blocked = asst[asst.index("function blocked()"):asst.index("function blocked()") + 300]
+        self.assertIn("document.getElementById('keto-party')", blocked)
+        quiet = PAGE[PAGE.index("function _siteFbQuietMoment()"):PAGE.index("function _siteFbPaint()")]
+        self.assertIn("KetoParty.recent(120000)", quiet)
 
     def test_texts_in_both_languages(self):
         b = self.block()
