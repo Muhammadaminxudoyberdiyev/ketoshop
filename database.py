@@ -675,6 +675,40 @@ async def init_db():
             "ON keto_ledger(user_id) WHERE kind = 'welcome'"
         )
 
+        # Saytda faol vaqt uchun Keto (owner, 2026-11-15; site_time.py). One
+        # row per buyer: the active seconds the server credited (lifetime and
+        # today's share), the last beat's time, the "still there?" check and
+        # the same-pattern watch. Each rung of site_time.LADDER pays once:
+        # its key is the ledger note, unique per buyer for this kind.
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS site_time (
+                user_id BIGINT PRIMARY KEY,
+                active_seconds INTEGER NOT NULL DEFAULT 0,
+                paid_through INTEGER NOT NULL DEFAULT -1,
+                last_beat_at TIMESTAMP,
+                day_date DATE,
+                day_seconds INTEGER NOT NULL DEFAULT 0,
+                check_at INTEGER,
+                check_token TEXT,
+                check_issued_at TIMESTAMP,
+                pattern TEXT,
+                pattern_seconds INTEGER NOT NULL DEFAULT 0,
+                flagged_sid TEXT,
+                flags INTEGER NOT NULL DEFAULT 0,
+                flagged_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_keto_ledger_site_time_once "
+            "ON keto_ledger(user_id, note) WHERE kind = 'site_time'"
+        )
+        # Its own switch (/sayt_keto_on|off), under the program's /keto_off.
+        await conn.execute(
+            "ALTER TABLE gamification_state ADD COLUMN IF NOT EXISTS "
+            "site_time_enabled BOOLEAN NOT NULL DEFAULT TRUE"
+        )
+
         # Single-row contest state, same pattern as gamification_state/
         # broadcast_state. image_url points at a web_images row uploaded
         # through the admin panel. prize_1/2/3 are free-form text (can list
@@ -735,6 +769,17 @@ async def init_db():
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_product_views_time ON product_views(viewed_at)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_bot_activity_time ON bot_activity(created_at)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_bot_activity_kind_time ON bot_activity(kind, created_at)")
+        # Rejali xabarlar chegarasi (push_cap.py, 2026-11-15): kim oxirgi kunlarda faol.
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_bot_activity_user_time ON bot_activity(user_id, created_at)")
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_push_day (
+                user_id BIGINT NOT NULL,
+                day DATE NOT NULL,
+                count INTEGER NOT NULL DEFAULT 0,
+                kinds TEXT[] NOT NULL DEFAULT '{}',
+                PRIMARY KEY (user_id, day)
+            )
+        """)
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_site_activity_time ON site_activity(created_at)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_site_events_time ON site_events(created_at)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_site_events_user ON site_events(user_id, created_at)")
@@ -5170,6 +5215,50 @@ async def get_month_stats(year: int, month: int) -> dict:
     return {"year": year, "month": month, "is_current": is_current, **stats}
 
 
+# ===== Rejali xabarlar chegarasi (push_cap.py) =====
+
+async def claim_user_push(user_id: int, kind: str, active_max: int, quiet_max: int, quiet_days: int) -> bool:
+    """Toshkent kuni bo'yicha shu userga yana bitta rejali xabar mumkinmi —
+    mumkin bo'lsa hisobga yozadi (bitta atomik so'rov, parallel yuboruvchilar
+    ham chegarani oshirolmaydi). Chegara: xaridor va oxirgi `quiet_days` kunda
+    botda yoki saytda faol — `active_max`, qolganlar — `quiet_max`."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """WITH lim AS (
+                   SELECT CASE WHEN EXISTS (SELECT 1 FROM orders o
+                                            WHERE o.user_id = $1 AND o.status <> 'cancelled'
+                                              AND COALESCE(o.source, '') NOT IN ('manual', 'b2b', 'test'))
+                                AND (EXISTS (SELECT 1 FROM bot_activity a WHERE a.user_id = $1
+                                               AND a.created_at > NOW() - make_interval(days => $5::int))
+                                     OR EXISTS (SELECT 1 FROM site_events s WHERE s.user_id = $1
+                                               AND s.created_at > NOW() - make_interval(days => $5::int)))
+                               THEN $3::int ELSE $4::int END AS n
+               )
+               INSERT INTO user_push_day (user_id, day, count, kinds)
+               SELECT $1, (NOW() AT TIME ZONE 'Asia/Tashkent')::date, 1, ARRAY[$2::text]
+               FROM lim WHERE lim.n >= 1
+               ON CONFLICT (user_id, day) DO UPDATE
+                   SET count = user_push_day.count + 1, kinds = user_push_day.kinds || $2::text
+                   WHERE user_push_day.count < (SELECT n FROM lim)
+               RETURNING count""",
+            user_id, kind, active_max, quiet_max, quiet_days)
+    return row is not None
+
+
+async def user_push_stats(days: int = 7) -> dict:
+    """Oxirgi `days` kunda rejali xabarlar: jami, o'rtacha (xabar olganlarga) va turlari."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """SELECT COALESCE(SUM(count), 0) AS total, COUNT(*) AS user_days,
+                      COUNT(DISTINCT user_id) AS users
+               FROM user_push_day WHERE day > (NOW() AT TIME ZONE 'Asia/Tashkent')::date - $1::int""", days)
+        kinds = await conn.fetch(
+            """SELECT k AS kind, COUNT(*) AS n FROM user_push_day, unnest(kinds) AS k
+               WHERE day > (NOW() AT TIME ZONE 'Asia/Tashkent')::date - $1::int GROUP BY k ORDER BY n DESC""", days)
+    return {"total": int(row["total"]), "user_days": int(row["user_days"]), "users": int(row["users"]),
+            "kinds": {r["kind"]: int(r["n"]) for r in kinds}}
+
+
 async def log_activity(user_id: int, kind: str, action: str) -> None:
     """Record one interaction (button tap or message) for the admin activity
     dashboard. Best-effort — callers fire this without letting failures
@@ -7410,6 +7499,73 @@ async def set_gamification_enabled(enabled: bool) -> None:
 async def set_redemption_enabled(enabled: bool) -> None:
     async with pool.acquire() as conn:
         await conn.execute("UPDATE gamification_state SET redemption_enabled = $1 WHERE id = 1", enabled)
+
+
+# ===== SAYTDA FAOL VAQT (2026-11-15, site_time.py) =====
+
+SITE_TIME_COLUMNS = (
+    "active_seconds", "last_beat_at", "day_date", "day_seconds", "check_at", "check_token",
+    "check_issued_at", "pattern", "pattern_seconds", "flagged_sid", "flags", "flagged_at",
+)
+
+
+async def update_site_time(user_id: int, change):
+    """Run change(state) on this buyer's site_time row (created if missing)
+    under a row lock, then save what it left in `state`. Returns
+    (change's result, state). Two beats of the same buyer at once wait for
+    each other here, so neither can count the same seconds twice.
+    paid_through is not saved here — set_site_time_paid_through moves it."""
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute(
+                "INSERT INTO site_time (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", user_id)
+            row = await conn.fetchrow("SELECT * FROM site_time WHERE user_id = $1 FOR UPDATE", user_id)
+            state = dict(row)
+            result = change(state)
+            sets = ", ".join(f"{c} = ${i + 2}" for i, c in enumerate(SITE_TIME_COLUMNS))
+            await conn.execute(f"UPDATE site_time SET {sets} WHERE user_id = $1",
+                               user_id, *[state.get(c) for c in SITE_TIME_COLUMNS])
+    return result, state
+
+
+async def set_site_time_paid_through(user_id: int, seconds: int) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE site_time SET paid_through = GREATEST(paid_through, $2) WHERE user_id = $1",
+            user_id, seconds)
+
+
+async def set_site_time_enabled(enabled: bool) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE gamification_state SET site_time_enabled = $1 WHERE id = 1", enabled)
+
+
+async def get_site_time_stats() -> dict:
+    """/sayt_keto: how many took part, how much time and Keto, and how many
+    sessions were stopped as scripted."""
+    today = (datetime.utcnow() + timedelta(hours=5)).date()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """SELECT COUNT(*) AS users,
+                      COALESCE(SUM(active_seconds), 0) AS seconds,
+                      COUNT(*) FILTER (WHERE day_date = $1 AND day_seconds > 0) AS today_users,
+                      COALESCE(SUM(day_seconds) FILTER (WHERE day_date = $1), 0) AS today_seconds,
+                      COALESCE(SUM(flags), 0) AS flags,
+                      MAX(flagged_at) AS last_flag
+                 FROM site_time""",
+            today,
+        )
+        keto = await conn.fetchval(
+            "SELECT COALESCE(SUM(amount), 0) FROM keto_ledger WHERE kind = 'site_time'")
+    return {
+        "users": int(row["users"] or 0),
+        "seconds": int(row["seconds"] or 0),
+        "today_users": int(row["today_users"] or 0),
+        "today_seconds": int(row["today_seconds"] or 0),
+        "flags": int(row["flags"] or 0),
+        "last_flag": row["last_flag"],
+        "keto": int(keto or 0),
+    }
 
 
 async def get_keto_balances_list() -> list[dict]:

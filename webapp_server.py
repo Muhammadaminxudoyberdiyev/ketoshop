@@ -1790,6 +1790,37 @@ async def api_keto_status(request: web.Request):
     return _json({"enabled": enabled, "balance": balance, "rate": rate})
 
 
+async def api_site_time(request: web.Request):
+    """POST /api/site-time — one beat of real, active time on the site
+    (site_time.py). Only the server counts the time and pays the rungs."""
+    import site_time
+    try:
+        body = await request.json()
+    except Exception:
+        return _json({"ok": False, "error": "bad_json"}, status=400)
+    try:
+        data, status = await site_time.handle_beat(request["user_id"], body)
+    except Exception:
+        logger.exception("Site-time beat failed for %s", request["user_id"])
+        return _json({"ok": False}, status=500)
+    return _json(data, status=status)
+
+
+async def api_site_time_here(request: web.Request):
+    """POST /api/site-time/here — the buyer tapped «Davom etyapsizmi? ✅»."""
+    import site_time
+    try:
+        body = await request.json()
+    except Exception:
+        return _json({"ok": False, "error": "bad_json"}, status=400)
+    try:
+        data, status = await site_time.handle_presence(request["user_id"], body)
+    except Exception:
+        logger.exception("Site-time presence failed for %s", request["user_id"])
+        return _json({"ok": False}, status=500)
+    return _json(data, status=status)
+
+
 async def api_set_lang(request: web.Request):
     """Update user's language preference."""
     user_id = request["user_id"]
@@ -2240,6 +2271,8 @@ def create_webapp(bot: Bot, storage=None) -> web.Application:
     app.router.add_get("/api/site-feedback/due", api_site_feedback_due)
     app.router.add_post("/api/site-feedback/shown", api_site_feedback_shown)
     app.router.add_post("/api/track", api_track)
+    app.router.add_post("/api/site-time", api_site_time)
+    app.router.add_post("/api/site-time/here", api_site_time_here)
     app.router.add_post("/api/checkout/cheque", api_checkout_cheque)
     app.router.add_post("/api/checkout/pay-in-chat", api_checkout_pay_in_chat)
     app.router.add_get("/api/orders", api_orders)

@@ -251,8 +251,12 @@ async def main():
     # erta turadi (admin boshqa FSM holatida bo'lsa ham javob ketadi).
     from meta_comments import router as meta_comments_router
     dp.include_router(meta_comments_router)
+    from channel_voice import router as channel_voice_router
+    dp.include_router(channel_voice_router)
     from comment_followup import router as comment_followup_router
     dp.include_router(comment_followup_router)
+    from push_cap import router as push_cap_router
+    dp.include_router(push_cap_router)
     from gemini_compare import router as gemini_compare_router
     dp.include_router(gemini_compare_router)
     dp.include_router(webapp_data_router)

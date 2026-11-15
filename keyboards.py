@@ -56,7 +56,9 @@ ADMIN_COMMANDS = [
     BotCommand(command="reklama_bog", description="🔗 Reklama kampaniyasi ↔ bot havolasi"),
     BotCommand(command="izohlar", description="💬 Instagram/Facebook izohlari: javobsizlar, AI"),
     BotCommand(command="izoh_hisobot", description="📋 AI bugun qayerda javob berdi, qaysilariga bera olmadi"),
+    BotCommand(command="kanal_ovoz", description="🗣 Kanal postlari jonli va har xil uzunlikda: holat, sinov"),
     BotCommand(command="izoh_qayta", description="🔁 Bir oy oldingi izohlarga qayta yozish: holat, on/off"),
+    BotCommand(command="xabar_soni", description="📨 Userlarga kuniga nechta rejali xabar boryapti"),
     BotCommand(command="izoh_solishtir", description="⚖️ GPT va Gemini javoblari yonma-yon (yuborilmaydi)"),
     BotCommand(command="leads", description="📋 Yangi leadlar"),
     BotCommand(command="ai_holat", description="🤖 AI sotuvchi: holat, yoqish/o'chirish, model"),
@@ -78,6 +80,7 @@ ADMIN_COMMANDS = [
     BotCommand(command="keto_tushuntirish", description="🎁 Keto tushuntirish xabari (18.09 17:30)"),
     BotCommand(command="sayt", description="🌐 Boshqaruv paneli manzili"),
     BotCommand(command="keto_status", description="🎁 Keto dasturi holati"),
+    BotCommand(command="sayt_keto", description="⏱ Saytda faol vaqt uchun Keto: holat"),
     BotCommand(command="backup_now", description="💾 Bazadan nusxa olish"),
 ]
 
