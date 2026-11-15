@@ -156,7 +156,9 @@ def keyboard(recipe: dict, lang: str) -> InlineKeyboardMarkup:
 
 
 async def send_recipe(bot: Bot, user_id: int, lang: str, recipe: dict | None = None) -> None:
-    recipe = recipe or recipes.schedule()[0]
+    if recipe is None:
+        await recipes.sync()
+        recipe = recipes.schedule()[0]
     caption = caption_text(recipe, lang)
     slug = recipe["slug"]
     photo = _photo_ids.get(slug) or (PHOTO_DIR / f"{slug}.jpg")
@@ -194,6 +196,7 @@ async def maybe_send(bot: Bot, user_id: int, lang: str) -> bool:
 async def add_all(callback: CallbackQuery):
     lang = await database.get_user_language(callback.from_user.id)
     L = recipes.labels(lang)
+    await recipes.sync()
     recipe = recipes.find(callback.data[len(CALLBACK):])
     if not recipe:
         await callback.answer("—")

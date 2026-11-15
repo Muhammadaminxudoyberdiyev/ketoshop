@@ -4,8 +4,9 @@ Saytdagi retseptlar — har 2 kunda bitta (egasi, 2026-10-08).
 Kontent recipes_content.py da. Bu modul:
   • qaysi retsept "bugungi" ekanini hisoblaydi (saytda faqat shu bitta
     ko'rinadi — egasi: "har kuni faqat 1 ta retsept ko'rsat, hammasini emas") — START dan boshlab har
-    EVERY_DAYS kunda navbatdagisi; kutubxona tugasa, boshidan aylanadi.
-    Yangi retsept qo'shish = recipes_content.RECIPES oxiriga qo'shish;
+    EVERY_DAYS kunda bitta "slot"; qaysi slotga qaysi retsept tushishi
+    pastdagi «Jadval» bo'limida. Yangi retsept qo'shish = recipes_content.RECIPES
+    oxiriga qo'shish + webapp/recipes/<slug>.jpg rasmi (rasmsiz chiqmaydi);
   • retsept masalliqlarini katalogdagi haqiqiy mahsulotlarga bog'laydi
     (rasm, joriy narx, omborda bormi) — narx kontentda yozilmaydi, shuning
     uchun narx o'zgarsa retsept o'zi to'g'ri ko'rsatadi;
@@ -14,17 +15,61 @@ Kontent recipes_content.py da. Bu modul:
 
 Rasmlar sun'iy intellekt yordamida yaratilgan va matnda buni ochiq aytamiz
 (egasi: "rasmlar ai yordamida qilinganini bildirib qo'yishimiz kerak, matnda").
+
+Jadval — the schedule (2026-11-13)
+  The first LEGACY_COUNT (15) recipes went out one per slot from START.
+  When they ran out (05.11) the old rule cycled them, so every slot before
+  QUEUE_START is exactly what that rule gave: slot k → RECIPES[k % 15].
+  That history is a formula and never changes.
+
+  From QUEUE_START (15.11) each slot is either
+    NEW    — the first recipe, in library order, that has never been out
+             and whose photo webapp/recipes/<slug>.jpg exists; or
+    REPEAT — when no such recipe is ready: one already out, taken in turn
+             (never the same as the slot before).
+  A recipe without its photo is never shown — not on the site, not in the
+  channel, not by a link (find). It waits; meanwhile the slots are
+  repeats, and the first slot after its photo arrives is its own. So the
+  new recipes come out in library order, one per slot, none skipped.
+
+  "The first slot after its photo arrives" needs memory: from the files
+  alone a photo added on 20.11 looks the same as one that was there on
+  15.11, and a replay would give that recipe to 15.11 — a day nobody saw
+  it — and push every later one along. So every slot's recipe is written
+  down once, the first time the slot is looked at (sync(): the recipe
+  scheduler loop every 10 minutes, and every site / bot request that shows
+  a recipe), as a release_notes_sent key "recipe-slot-YYYY-MM-DD:<slug>" —
+  the table every once-only send here uses, no new table. A written slot
+  never changes: a deploy that brings photos mid-slot leaves the current
+  slot alone, and the new recipe takes the next one.
+
+  plan() replays that log from QUEUE_START: the recipe of any day, whether
+  it is new, and every recipe out so far (find opens only those). A slot
+  with no entry follows the rule above — for the current slot that is
+  exactly what sync() is about to write; an older one (the bot was down for
+  the whole slot) counts as a repeat, so nothing is ever "published" on a
+  day nobody saw it. If a day were ever written twice, its first entry wins.
 """
+import logging
 import time
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 import database
 from recipes_content import RECIPES
+
+logger = logging.getLogger(__name__)
 
 START = date(2026, 10, 8)
 EVERY_DAYS = 2
 TZ_OFFSET = timedelta(hours=5)
 CATALOG_TTL = 300
+# «Jadval»: the first 15 went out by the old rule; the photo-gated queue
+# starts with the first slot after the cycled ones (13.11 was the last).
+LEGACY_COUNT = 15
+QUEUE_START = date(2026, 11, 15)
+PHOTO_DIR = Path(__file__).parent / "webapp" / "recipes"
+SLOT_KEY = "recipe-slot-"
 
 AI_NOTE = {
     "uz": "📸 Rasm sun'iy intellekt yordamida yaratilgan",
@@ -72,6 +117,8 @@ LABELS = {
 }
 
 _catalog_cache: dict = {"at": 0.0, "rows": []}
+_BY_SLUG = {r["slug"]: r for r in RECIPES}
+_slot_log: dict = {"slots": {}, "day": None}     # sync(): {slot day: slug}, the slot it was read for
 
 
 def labels(lang: str) -> dict:
@@ -91,25 +138,148 @@ def today_tk() -> date:
     return (datetime.utcnow() + TZ_OFFSET).date()
 
 
-def schedule(today: date | None = None) -> tuple[dict, list[dict], date]:
-    """(bugungi retsept, avvalgilari — yangisi birinchi, keyingisi qachon)."""
+# ─────────────────────────────── jadval ───────────────────────────────
+
+def has_photo(recipe: dict) -> bool:
+    """Its photo is on disk. Without it a recipe is never shown («Jadval»)."""
+    return (PHOTO_DIR / f"{recipe['slug']}.jpg").is_file()
+
+
+def slot_day(day: date) -> date:
+    """The first day of the slot `day` falls in (a day before START → START)."""
+    return START + timedelta(days=max(0, (day - START).days) // EVERY_DAYS * EVERY_DAYS)
+
+
+def _slot_no(day: date) -> int:
+    return (day - START).days // EVERY_DAYS
+
+
+def _repeat(k: int, published: list[dict], prev: dict | None) -> dict:
+    """Slot k's repeat: the recipes already out, in turn — never the one of
+    the slot before (that one was new, or the turn would not land on it)."""
+    pick = published[k % len(published)]
+    if prev is not None and pick["slug"] == prev["slug"] and len(published) > 1:
+        pick = published[(k + 1) % len(published)]
+    return pick
+
+
+def _replay(day: date, slots: dict, photo) -> tuple[dict, bool, list[dict]]:
+    """Walk the slots from QUEUE_START to `day` (a slot day, ≥ QUEUE_START).
+    → (its recipe, is it new, every recipe out so far in the order they
+    first came out — its own included)."""
+    published = [r for r in RECIPES[:LEGACY_COUNT] if photo(r)]
+    seen = {r["slug"] for r in published}
+    d = QUEUE_START
+    prev = RECIPES[(_slot_no(d) - 1) % LEGACY_COUNT]
+    while True:
+        recipe = _BY_SLUG.get(slots.get(d, ""))
+        if recipe is None or not photo(recipe):
+            recipe = None
+            if d == day:            # not written yet: what sync() writes for it
+                recipe = next((r for r in RECIPES if r["slug"] not in seen and photo(r)), None)
+            recipe = recipe or _repeat(_slot_no(d), published or RECIPES[:1], prev)
+        is_new = recipe["slug"] not in seen
+        if is_new:
+            published.append(recipe)
+            seen.add(recipe["slug"])
+        if d >= day:
+            return recipe, is_new, published
+        prev = recipe
+        d += timedelta(days=EVERY_DAYS)
+
+
+def plan(today: date | None = None, slots: dict | None = None, photo=None) -> dict:
+    """The slot `today` is in: {"day", "recipe", "is_new", "earlier" (out
+    before, newest first), "next_at"}. `slots` / `photo` default to the slot
+    log read by sync() and the photo files."""
     today = today or today_tk()
-    n = max(0, (today - START).days) // EVERY_DAYS + 1       # chiqqan retseptlar soni
-    idx = (n - 1) % len(RECIPES)
-    if n <= len(RECIPES):
-        earlier = list(reversed(RECIPES[:idx]))
-    else:
-        earlier = [RECIPES[(idx - k) % len(RECIPES)] for k in range(1, len(RECIPES))]
-    return RECIPES[idx], earlier, START + timedelta(days=n * EVERY_DAYS)
+    slots = _slot_log["slots"] if slots is None else slots
+    photo = photo or has_photo
+    day = slot_day(today)
+    k = _slot_no(day)
+    out = {"day": day, "next_at": day + timedelta(days=EVERY_DAYS)}
+    if day < QUEUE_START:                       # the old rule, kept as it was
+        idx = k % LEGACY_COUNT
+        if k < LEGACY_COUNT:
+            earlier = list(reversed(RECIPES[:idx]))
+        else:
+            earlier = [RECIPES[(idx - j) % LEGACY_COUNT] for j in range(1, LEGACY_COUNT)]
+        return {**out, "recipe": RECIPES[idx], "is_new": k < LEGACY_COUNT, "earlier": earlier}
+    recipe, is_new, published = _replay(day, slots, photo)
+    earlier = [r for r in reversed(published) if r["slug"] != recipe["slug"]]
+    return {**out, "recipe": recipe, "is_new": is_new, "earlier": earlier}
+
+
+def schedule(today: date | None = None, slots: dict | None = None,
+             photo=None) -> tuple[dict, list[dict], date]:
+    """(bugungi retsept, avvalgilari — yangisi birinchi, keyingisi qachon)."""
+    p = plan(today, slots, photo)
+    return p["recipe"], p["earlier"], p["next_at"]
+
+
+def waiting(today: date | None = None, slots: dict | None = None, photo=None) -> dict:
+    """Recipes not out yet: {"no_photo": [...], "ready": [...]} — "ready"
+    have their photo and only wait for their slot."""
+    photo = photo or has_photo
+    p = plan(today, slots, photo)
+    out = {p["recipe"]["slug"], *(r["slug"] for r in p["earlier"])}
+    rest = [r for r in RECIPES if r["slug"] not in out]
+    return {"no_photo": [r for r in rest if not photo(r)], "ready": [r for r in rest if photo(r)]}
 
 
 def find(slug: str, today: date | None = None) -> dict | None:
-    """Faqat chiqqan retseptlar — kelajakdagisi havola bilan ham ochilmaydi."""
+    """Faqat chiqqan retseptlar — kelajakdagisi (va rasmsizi) havola bilan ham ochilmaydi."""
     current, earlier, _ = schedule(today)
     for recipe in [current, *earlier]:
         if recipe["slug"] == slug:
             return recipe
     return None
+
+
+def parse_slots(keys) -> dict:
+    """"recipe-slot-2026-11-15:<slug>" keys, oldest first → {date: slug};
+    the first entry of a day wins."""
+    slots: dict = {}
+    for key in keys:
+        day, sep, slug = key[len(SLOT_KEY):].partition(":")
+        try:
+            when = date.fromisoformat(day)
+        except ValueError:
+            continue
+        if sep and slug:
+            slots.setdefault(when, slug)
+    return slots
+
+
+async def _load_slots() -> dict:
+    async with database.pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT key FROM release_notes_sent WHERE key LIKE $1 ORDER BY sent_at, key",
+            SLOT_KEY + "%")
+    return parse_slots(r["key"] for r in rows)
+
+
+async def sync(today: date | None = None) -> bool:
+    """Read the slot log and, the first time the current slot is looked at,
+    write its recipe down («Jadval»). One round trip per slot. Never raises:
+    False when the log could not be read or written — the last one read
+    (empty after a restart) stays in use."""
+    day = slot_day(today or today_tk())
+    if day < QUEUE_START or _slot_log["day"] == day:
+        return True
+    if database.pool is None:                   # no database (tests, before startup)
+        return False
+    try:
+        slots = await _load_slots()
+        if day not in slots:
+            recipe = _replay(day, slots, has_photo)[0]
+            await database.claim_release_notes(f"{SLOT_KEY}{day.isoformat()}:{recipe['slug']}")
+            slots = await _load_slots()
+    except Exception:
+        logger.warning("Recipe slot log could not be read or written", exc_info=True)
+        return False
+    _slot_log.update(slots=slots, day=day)
+    return True
 
 
 # ───────────────────────────── mahsulotlar ─────────────────────────────
