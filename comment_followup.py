@@ -40,9 +40,12 @@ router = Router(name="comment_followup")
 DAYS = max(7, int(os.getenv("COMMENT_FOLLOWUP_DAYS", "30")))
 # Egasi, 2026-11-16: "30 kun avval yozilgan izohlarga nega yozmading, hammasiga yoz" —
 # 25/kun, 20 daqiqada bitta edi (≈7 kun); endi 5 daqiqada bitta, kuniga 120 gacha (≈1,5 kun).
-DAILY = max(0, int(os.getenv("COMMENT_FOLLOWUP_DAILY", "120")))
-EVERY = max(300, int(os.getenv("COMMENT_FOLLOWUP_EVERY", "300")))
-HOURS = (9, 21)                  # Toshkent: 09:00–20:59
+# Egasi, 2026-11-16: "nega har 5 daqiqada 1 tadan? hammasiga hozir yoz … har 10 daqiqada yozilmagan
+# hammasiga yoz" — har EVERY soniyada navbatdagilarning HAMMASIGA, orasida GAP soniya; kecha-kunduz.
+DAILY = max(0, int(os.getenv("COMMENT_FOLLOWUP_DAILY", "1000")))
+EVERY = max(300, int(os.getenv("COMMENT_FOLLOWUP_EVERY", "600")))
+GAP = max(5, int(os.getenv("COMMENT_FOLLOWUP_GAP", "20")))
+HOURS = (0, 24)                  # Toshkent: kun bo'yi
 NEW_PRODUCT_DAYS = 45
 TRIES_PER_TICK = 3               # AI "yozmaymiz" desa — keyingi odam
 
@@ -143,6 +146,10 @@ async def send_one(bot: Bot | None, now: datetime | None = None) -> str:
                 ident = await mc.identity(session)
                 await mc.reply_public(session, ident, row, text)
         except mc.GraphError as e:
+            if throttled(e):
+                # Instagram cheklovi / «action blocked» — odamni belgilamaymiz, keyinroq.
+                logger.warning("follow-up paused — Instagram limit: %s", e)
+                return "throttled"
             # Izoh o'chirilgan yoki yopilgan — keyingi safar ham bo'lmaydi.
             logger.info("follow-up to %s failed: %s", row.get("comment_id"), e)
             await database.mark_meta_comment_followup(row["id"], "")
@@ -153,15 +160,57 @@ async def send_one(bot: Bot | None, now: datetime | None = None) -> str:
     return "skipped"
 
 
+THROTTLE_CODES = {4, 17, 32, 368, 613}
+
+
+def throttled(e) -> bool:
+    """Instagram/Meta «sekinroq» deyapti — rate limit yoki vaqtincha blok."""
+    msg = str(getattr(e, "message", e)).lower()
+    return getattr(e, "code", None) in THROTTLE_CODES or any(
+        w in msg for w in ("rate limit", "too many", "action blocked", "temporarily blocked", "spam"))
+
+
+async def send_all(bot: Bot | None, now: datetime | None = None) -> dict:
+    """Navbatdagilarning hammasiga, orasida GAP soniya. Navbat tugasa, chegara
+    to'lsa, o'chirilsa yoki Instagram cheklasa — to'xtaydi."""
+    stats = {"sent": 0, "skipped": 0, "stop": ""}
+    while True:
+        result = await send_one(bot, now)
+        if result == "sent":
+            stats["sent"] += 1
+        elif result == "skipped":
+            stats["skipped"] += 1
+        else:
+            stats["stop"] = result
+            break
+        await asyncio.sleep(GAP)
+    if stats["sent"] or stats["stop"] == "throttled":
+        logger.info("comment follow-up round: %s", stats)
+    return stats
+
+
+MAX_BACKOFF = 2 * 3600
+
+
+def next_wait(throttles: int) -> int:
+    """Navbatdagi tekshiruvgacha: odatda EVERY; Instagram ketma-ket cheklasa —
+    2, 4, 8 … baravar uzoqroq (ko'pi bilan MAX_BACKOFF), blok cho'zilmasin.
+    Ochilishi bilan (birinchi yuborilgan xabar) yana EVERY (egasi, 2026-11-16:
+    "to'xtab qolsa avtomatik davom etishi kerak ochilgandan keyin")."""
+    return EVERY if throttles <= 0 else min(MAX_BACKOFF, EVERY * 2 ** throttles)
+
+
 async def loop(bot: Bot) -> None:
     await asyncio.sleep(120)
-    logger.info("Comment follow-up loop started (every %ds, %d/day)", EVERY, DAILY)
+    logger.info("Comment follow-up loop started (every %ds, everyone waiting, %ds apart)", EVERY, GAP)
+    throttles = 0
     while True:
         try:
-            await send_one(bot)
+            stats = await send_all(bot)
+            throttles = throttles + 1 if stats.get("stop") == "throttled" and not stats.get("sent") else 0
         except Exception:
             logger.exception("comment follow-up tick failed")
-        await asyncio.sleep(EVERY)
+        await asyncio.sleep(next_wait(throttles))
 
 
 # ─────────────────────────────── /izoh_qayta ───────────────────────────────
@@ -176,7 +225,8 @@ async def status_text() -> str:
         f"Holat: <b>{'yoqilgan ✅' if on else 'o‘chiq ⏸'}</b>",
         f"Bugun: <b>{st['today']}</b> / {DAILY} ta · jami: {st['total']} ta · AI yozmagan: {st['skipped']} ta",
         f"Navbatda: {st['queue']} kishi ({DAYS} kundan eski izohlar, har biriga bir marta)",
-        f"Vaqti: Toshkent {HOURS[0]:02d}:00–{HOURS[1]:02d}:00, har {EVERY // 60} daqiqada bittadan",
+        f"Har {EVERY // 60} daqiqada navbatdagilarning hammasiga (orasida {GAP} soniya), kun bo'yi; "
+        "Instagram cheklasa — to'xtab, keyingi safar davom etadi",
     ]
     if st["last"]:
         lines += ["", "<b>Oxirgilari:</b>"]

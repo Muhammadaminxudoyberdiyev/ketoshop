@@ -78,9 +78,8 @@ class SendOneTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await cf.send_one(None, NOON), "sent")
         self.assertEqual(self.marked, [(1, ""), (2, "Salom 🌿")])
 
-    async def test_quiet_hours_cap_off_and_no_token_send_nothing(self):
+    async def test_cap_off_and_no_token_send_nothing(self):
         self.texts = {"c1": "Salom 🌿"}
-        self.assertEqual(await cf.send_one(None, NIGHT), "quiet")
         self.stats["today"] = cf.DAILY
         self.assertEqual(await cf.send_one(None, NOON), "cap")
         self.stats["today"] = 0
@@ -91,18 +90,57 @@ class SendOneTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await cf.send_one(None, NOON), "no_token")
         self.assertEqual((self.sent, self.marked), ([], []))
 
+    async def test_night_is_no_longer_quiet(self):
+        # Egasi, 2026-11-16: "hammasiga hozir yoz" — kun bo'yi.
+        self.texts = {"c1": "Salom 🌿"}
+        self.assertEqual(await cf.send_one(None, NIGHT), "sent")
+
+    async def test_send_all_goes_through_the_whole_queue(self):
+        self.candidates = [row(i, f"c{i}") for i in range(1, 6)]
+        self.texts = {f"c{i}": "Salom 🌿" for i in range(1, 6)}
+
+        async def candidates(days, n):
+            return [r for r in self.candidates if r["id"] not in {k for k, _ in self.marked}][:n]
+
+        with patch.object(database, "meta_comment_followup_candidates", AsyncMock(side_effect=candidates)), \
+                patch.object(cf, "GAP", 0):
+            stats = await cf.send_all(None, NOON)
+        self.assertEqual(stats["sent"], 5)
+        self.assertEqual(stats["stop"], "none")
+        self.assertEqual([c for c, _ in self.sent], ["c1", "c2", "c3", "c4", "c5"])
+
+    async def test_instagram_limit_stops_without_burning_the_queue(self):
+        self.candidates = [row(1, "c1"), row(2, "c2")]
+        self.texts = {"c1": "Salom 🌿", "c2": "Salom 🌿"}
+
+        async def limited(session, ident, c, text):
+            raise mc.GraphError(4, "Application request limit reached")
+
+        with patch.object(mc, "reply_public", limited), patch.object(cf, "GAP", 0):
+            stats = await cf.send_all(None, NOON)
+        self.assertEqual(stats["stop"], "throttled")
+        self.assertEqual(self.marked, [])                       # nobody marked — they wait for the next round
+        self.assertTrue(cf.throttled(mc.GraphError(368, "temporarily blocked for spam")))
+        self.assertFalse(cf.throttled(mc.GraphError(100, "Unsupported post request")))
+
     async def test_empty_queue(self):
         self.candidates = []
         self.assertEqual(await cf.send_one(None, NOON), "none")
 
 
 class PaceTest(unittest.TestCase):
-    def test_everyone_within_about_two_days(self):
-        # Egasi, 2026-11-16: "30 kun avval yozilgan izohlarga … hammasiga yoz" — 171 kishi navbatda edi.
-        per_day = min(cf.DAILY, (cf.HOURS[1] - cf.HOURS[0]) * 3600 // cf.EVERY)
-        self.assertGreaterEqual(per_day, 120)
-        self.assertLessEqual(-(-171 // per_day), 2)
-        self.assertGreaterEqual(cf.EVERY, 300)                         # never faster than one per 5 minutes
+    def test_every_ten_minutes_everyone_waiting(self):
+        # Egasi, 2026-11-16: "har 10 daqiqada yozilmagan hammasiga yoz".
+        self.assertEqual(cf.EVERY, 600)
+        self.assertEqual(cf.HOURS, (0, 24))
+        self.assertGreaterEqual(cf.DAILY, 500)
+        self.assertGreaterEqual(cf.GAP, 5)                              # never a burst
+
+    def test_resumes_by_itself_after_an_instagram_block(self):
+        # Egasi, 2026-11-16: "to'xtab qolsa avtomatik davom etishi kerak ochilgandan keyin".
+        self.assertEqual(cf.next_wait(0), cf.EVERY)                    # normal: every 10 minutes
+        self.assertEqual([cf.next_wait(n) for n in (1, 2, 3)], [1200, 2400, 4800])
+        self.assertEqual(cf.next_wait(10), cf.MAX_BACKOFF)             # never longer than 2 hours
 
     def test_admin_api_shows_the_progress(self):
         src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "admin_web.py"),
