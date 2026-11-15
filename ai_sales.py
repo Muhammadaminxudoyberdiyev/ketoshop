@@ -2616,12 +2616,14 @@ async def _opening_context(user_id: int) -> str:
     return "\n\n".join(p for p in parts if p)
 
 
-async def _respond(bot: Bot, message: Message, user_text: str) -> str:
+async def _respond(bot: Bot, message: Message, user_text: str, tools=None) -> str:
     """Bitta mijoz xabari -> bitta javob. Ichida vosita chaqiruvlari tsikli:
     model savatga soladi/kartani ochadi, natijani o'qiydi va yakuniy matnni
     yozadi. MAX_TURNS — cheksiz tsiklga qarshi to'siq. Model qaysi
     provayderdan ekani bu yerda ahamiyatsiz — ai_provider.step() ikkalasini
-    bir xil Turn ga keltiradi."""
+    bir xil Turn ga keltiradi. `tools` — saytdagi Yordamchi uchun qisqartirilgan
+    ro'yxat (botdagi karta va lokatsiya tugmasisiz, site_assistant)."""
+    tools = tools or TOOLS
     user_id = message.from_user.id
     session = _session(user_id)
     session["last"] = time.time()
@@ -2641,7 +2643,7 @@ async def _respond(bot: Bot, message: Message, user_text: str) -> str:
     prices = PriceCheck(rules, catalog, user_text)
     products = _catalog_products(catalog)          # qator miqdori ↔ summa tekshiruvi uchun
 
-    turn = await _step(state, rules, catalog, TOOLS, user=user_text,
+    turn = await _step(state, rules, catalog, tools, user=user_text,
                        max_tokens=MAX_TOKENS, history_limit=HISTORY_LIMIT)
     reply_text = ""
     done: set[str] = set()     # shu xabarda muvaffaqiyatli ishlagan vositalar
@@ -2696,7 +2698,7 @@ async def _respond(bot: Bot, message: Message, user_text: str) -> str:
                 return reply_text
             corrected.add(kind)
             logger.warning("AI sales reply needs a fix (%s, user %s) — asking again", kind, user_id)
-            turn = await _step(state, rules, catalog, TOOLS, user=fix,
+            turn = await _step(state, rules, catalog, tools, user=fix,
                                max_tokens=MAX_TOKENS, history_limit=HISTORY_LIMIT)
             continue
 
@@ -2708,6 +2710,9 @@ async def _respond(bot: Bot, message: Message, user_text: str) -> str:
             except Exception:
                 logger.exception("AI tool %s failed", call.name)
                 output, is_error = "Xato: ichki nosozlik.", True
+            trace = getattr(message, "web_cards", None)        # saytdagi Yordamchi (site_assistant)
+            if trace is not None:
+                trace.append((call.name, dict(call.args or {}), output))
             if not is_error:
                 done.add(call.name)
             prices.add_tool_output(output)             # hisob / savat raqamlari — model ko'chiradi
@@ -2715,7 +2720,7 @@ async def _respond(bot: Bot, message: Message, user_text: str) -> str:
 
         if attempt == MAX_TURNS - 1:
             break
-        turn = await _step(state, rules, catalog, TOOLS, results=results,
+        turn = await _step(state, rules, catalog, tools, results=results,
                            max_tokens=MAX_TOKENS, history_limit=HISTORY_LIMIT)
 
     # Chegara: oxirgi vosita natijalari modelga qaytmadi. OpenAI zanjirida
