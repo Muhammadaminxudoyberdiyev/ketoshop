@@ -137,6 +137,7 @@ class SchedulerTest(unittest.IsolatedAsyncioTestCase):
         bot.send_message = AsyncMock(side_effect=[None, None, TelegramForbiddenError(method=None, message="blocked")])
         with patch.object(database, "daily_quiz_sent_keys", AsyncMock(return_value=set())), \
              patch.object(database, "start_daily_quiz", AsyncMock(return_value=31)) as start, \
+             patch.object(database, "claim_user_push", AsyncMock(return_value=True)), \
              patch.object(database, "get_all_user_ids", AsyncMock(return_value=[1, 2, 3])), \
              patch.object(database, "get_user_languages", AsyncMock(return_value={2: "ru"})), \
              patch.object(database, "finish_daily_quiz", AsyncMock()) as finish, \

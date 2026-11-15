@@ -201,7 +201,10 @@ async def send_round(bot: Bot, day=None, test_user: int | None = None) -> dict |
     users = [test_user] if test_user else await database.get_all_user_ids()
     langs = await database.get_user_languages(users)
     sent = failed = 0
+    import push_cap
     for uid in users:
+        if not test_user and not await push_cap.claim(uid, "keto_savol"):
+            continue
         text, markup = question_message(item, send_id, langs.get(uid, "uz"))
         if await _send(bot, uid, text, markup):
             sent += 1

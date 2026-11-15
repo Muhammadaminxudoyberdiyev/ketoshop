@@ -1102,6 +1102,12 @@ async def run_once(bot: Bot) -> dict:
                 stats["skipped"] += 1
                 continue
             new_offer_id = offer["id"] if offer and not had_offer and plan["kind"] in OFFER_KINDS else None
+            import push_cap
+            if not await push_cap.claim(uid, "qayta_sotuv"):
+                if new_offer_id:
+                    await _drop_offer(new_offer_id)
+                stats["skipped"] += 1
+                continue
             mid = await _claim_message(uid, plan, payload, offer["id"] if offer else None)
             if mid is None:
                 if new_offer_id:

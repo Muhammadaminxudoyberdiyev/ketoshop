@@ -735,6 +735,17 @@ async def init_db():
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_product_views_time ON product_views(viewed_at)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_bot_activity_time ON bot_activity(created_at)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_bot_activity_kind_time ON bot_activity(kind, created_at)")
+        # Rejali xabarlar chegarasi (push_cap.py, 2026-11-15): kim oxirgi kunlarda faol.
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_bot_activity_user_time ON bot_activity(user_id, created_at)")
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_push_day (
+                user_id BIGINT NOT NULL,
+                day DATE NOT NULL,
+                count INTEGER NOT NULL DEFAULT 0,
+                kinds TEXT[] NOT NULL DEFAULT '{}',
+                PRIMARY KEY (user_id, day)
+            )
+        """)
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_site_activity_time ON site_activity(created_at)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_site_events_time ON site_events(created_at)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_site_events_user ON site_events(user_id, created_at)")
@@ -5168,6 +5179,50 @@ async def get_month_stats(year: int, month: int) -> dict:
     async with pool.acquire() as conn:
         stats = await _query_month(conn, start_utc, end_utc)
     return {"year": year, "month": month, "is_current": is_current, **stats}
+
+
+# ===== Rejali xabarlar chegarasi (push_cap.py) =====
+
+async def claim_user_push(user_id: int, kind: str, active_max: int, quiet_max: int, quiet_days: int) -> bool:
+    """Toshkent kuni bo'yicha shu userga yana bitta rejali xabar mumkinmi —
+    mumkin bo'lsa hisobga yozadi (bitta atomik so'rov, parallel yuboruvchilar
+    ham chegarani oshirolmaydi). Chegara: xaridor va oxirgi `quiet_days` kunda
+    botda yoki saytda faol — `active_max`, qolganlar — `quiet_max`."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """WITH lim AS (
+                   SELECT CASE WHEN EXISTS (SELECT 1 FROM orders o
+                                            WHERE o.user_id = $1 AND o.status <> 'cancelled'
+                                              AND COALESCE(o.source, '') NOT IN ('manual', 'b2b', 'test'))
+                                AND (EXISTS (SELECT 1 FROM bot_activity a WHERE a.user_id = $1
+                                               AND a.created_at > NOW() - make_interval(days => $5::int))
+                                     OR EXISTS (SELECT 1 FROM site_events s WHERE s.user_id = $1
+                                               AND s.created_at > NOW() - make_interval(days => $5::int)))
+                               THEN $3::int ELSE $4::int END AS n
+               )
+               INSERT INTO user_push_day (user_id, day, count, kinds)
+               SELECT $1, (NOW() AT TIME ZONE 'Asia/Tashkent')::date, 1, ARRAY[$2::text]
+               FROM lim WHERE lim.n >= 1
+               ON CONFLICT (user_id, day) DO UPDATE
+                   SET count = user_push_day.count + 1, kinds = user_push_day.kinds || $2::text
+                   WHERE user_push_day.count < (SELECT n FROM lim)
+               RETURNING count""",
+            user_id, kind, active_max, quiet_max, quiet_days)
+    return row is not None
+
+
+async def user_push_stats(days: int = 7) -> dict:
+    """Oxirgi `days` kunda rejali xabarlar: jami, o'rtacha (xabar olganlarga) va turlari."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """SELECT COALESCE(SUM(count), 0) AS total, COUNT(*) AS user_days,
+                      COUNT(DISTINCT user_id) AS users
+               FROM user_push_day WHERE day > (NOW() AT TIME ZONE 'Asia/Tashkent')::date - $1::int""", days)
+        kinds = await conn.fetch(
+            """SELECT k AS kind, COUNT(*) AS n FROM user_push_day, unnest(kinds) AS k
+               WHERE day > (NOW() AT TIME ZONE 'Asia/Tashkent')::date - $1::int GROUP BY k ORDER BY n DESC""", days)
+    return {"total": int(row["total"]), "user_days": int(row["user_days"]), "users": int(row["users"]),
+            "kinds": {r["kind"]: int(r["n"]) for r in kinds}}
 
 
 async def log_activity(user_id: int, kind: str, action: str) -> None:

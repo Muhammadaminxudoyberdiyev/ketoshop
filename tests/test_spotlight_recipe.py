@@ -58,7 +58,8 @@ class SpotlightTest(unittest.TestCase):
             return True
 
         built = AsyncMock(side_effect=lambda p, lang, rate, extra=None, tip=None: extra)
-        with patch.object(product_of_day.database, "get_all_user_ids", AsyncMock(return_value=[1, 2, 3])), \
+        with patch.object(product_of_day.database, "claim_user_push", AsyncMock(return_value=True)), \
+             patch.object(product_of_day.database, "get_all_user_ids", AsyncMock(return_value=[1, 2, 3])), \
              patch.object(product_of_day.database, "get_user_languages", AsyncMock(return_value={2: "ru", 3: "uz_cyr"})), \
              patch.object(product_of_day, "_send_to_user", fake_send), \
              patch.object(product_card, "build_caption", built), \
