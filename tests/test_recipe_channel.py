@@ -161,9 +161,12 @@ class DeepLinkTest(unittest.TestCase):
         with patch.object(recipe_channel, "WEBAPP_URL", ""):
             self.assertFalse(run(recipe_channel.open_from_link(MagicMock(), 77, "uz")))
 
-    def test_photos_exist_for_every_recipe(self):
-        for r in RECIPES:
+    def test_photos_exist_for_every_recipe_already_out(self):
+        # Newer ones may wait for theirs — they are never posted without it
+        # (test_recipe_queue.ChannelTickTest).
+        for r in RECIPES[:recipes.LEGACY_COUNT]:
             self.assertTrue((recipe_channel.PHOTO_DIR / f"{r['slug']}.jpg").exists(), r["slug"])
+        self.assertEqual(recipe_channel.PHOTO_DIR, recipes.PHOTO_DIR)
 
 
 class RecipeApiTest(unittest.TestCase):

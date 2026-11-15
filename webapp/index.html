@@ -3919,6 +3919,292 @@
   }
   @keyframes wp-in { from { opacity: 0; } to { opacity: 1; } }
   @keyframes wp-pop { from { opacity: 0; transform: scale(.7) translateY(20px); } to { opacity: 1; transform: none; } }
+
+  /* ── Yordamchi (owner, 2026-11-15): the AI helper's round button, its
+     typing introduction and the chat sheet (site_assistant.py). The button
+     takes the birdsong button's corner; birdsong moves left of it. ── */
+  .birdsong-btn { right: 80px; }
+  .asst-fab {
+    position: fixed;
+    right: 14px;
+    bottom: calc(var(--dock-h) + var(--dock-gap) * 2 + var(--safe-b) + 4px);
+    z-index: 9002;
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--pop);
+    color: var(--on-pop);
+    box-shadow: var(--shadow-pop), 0 10px 24px -10px rgba(0,0,0,.5);
+    cursor: pointer;
+    transition: transform .25s var(--ease), opacity .25s var(--ease);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .asst-fab svg { width: 27px; height: 27px; }
+  .asst-fab:active { transform: scale(.92); }
+  .asst-fab.hidden { opacity: 0; transform: scale(.6); pointer-events: none; }
+  .asst-fab-label {
+    position: absolute;
+    left: 50%;
+    bottom: -7px;
+    transform: translateX(-50%);
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--hairline);
+    font: 700 9.5px/1.35 var(--font-body);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .asst-fab .asst-dot {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: #2fbf71;
+    border: 2px solid var(--surface);
+  }
+  .asst-bubble {
+    position: fixed;
+    right: 14px;
+    bottom: calc(var(--dock-h) + var(--dock-gap) * 2 + var(--safe-b) + 72px);
+    z-index: 9003;
+    width: min(290px, calc(100% - 28px));
+    padding: 12px 34px 12px 14px;
+    border-radius: 18px 18px 6px 18px;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--hairline);
+    box-shadow: 0 14px 34px -14px rgba(0,0,0,.5);
+    font: 500 14px/1.45 var(--font-body);
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(8px) scale(.97);
+    transform-origin: 100% 100%;
+    transition: opacity .3s var(--ease), transform .3s var(--ease);
+  }
+  .asst-bubble.on { opacity: 1; transform: none; }
+  .asst-bubble b { font-weight: 800; }
+  .asst-bubble-x {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    width: 26px;
+    height: 26px;
+    border: 0;
+    background: none;
+    color: var(--hint);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .asst-typing { display: inline-flex; gap: 4px; align-items: center; height: 18px; }
+  .asst-typing i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--hint);
+    animation: asstDot 1.1s infinite ease-in-out;
+  }
+  .asst-typing i:nth-child(2) { animation-delay: .15s; }
+  .asst-typing i:nth-child(3) { animation-delay: .3s; }
+  @keyframes asstDot { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+  .asst-caret::after { content: '▍'; opacity: .55; animation: asstCaret 1s steps(2) infinite; }
+  @keyframes asstCaret { 50% { opacity: 0; } }
+
+  .modal.asst-sheet {
+    display: flex;
+    flex-direction: column;
+    height: min(88vh, 780px);
+    height: min(88dvh, 780px);
+    max-height: none;
+    overflow: hidden;
+  }
+  .asst-head {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 14px 12px;
+    border-bottom: 1px solid var(--hairline);
+    background: var(--glass);
+  }
+  .asst-head::before {
+    content: '';
+    position: absolute;
+    top: 7px;
+    left: 50%;
+    width: 40px;
+    height: 5px;
+    margin-left: -20px;
+    border-radius: 3px;
+    background: var(--hint);
+    opacity: .35;
+  }
+  .asst-ava {
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--pop);
+    color: var(--on-pop);
+  }
+  .asst-ava svg { width: 22px; height: 22px; }
+  .asst-titles { flex: 1; min-width: 0; }
+  .asst-title { font: 800 16px/1.2 var(--font-display, var(--font-body)); color: var(--text); }
+  .asst-sub { font: 500 12px/1.3 var(--font-body); color: var(--hint); }
+  .asst-close {
+    flex: none;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .asst-log {
+    flex: 1;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 14px 12px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .asst-msg {
+    max-width: 86%;
+    padding: 10px 13px;
+    border-radius: 18px;
+    font: 500 14.5px/1.45 var(--font-body);
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+  }
+  .asst-msg.bot { align-self: flex-start; background: var(--surface); color: var(--text); border: 1px solid var(--hairline); border-bottom-left-radius: 6px; }
+  .asst-msg.me { align-self: flex-end; background: var(--pop); color: var(--on-pop); border-bottom-right-radius: 6px; }
+  .asst-msg a { color: var(--link); text-decoration: underline; }
+  .asst-msg.me a { color: inherit; }
+  .asst-cards { align-self: stretch; display: flex; flex-direction: column; gap: 8px; }
+  .asst-card {
+    padding: 10px;
+    border-radius: 16px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    color: var(--text);
+    font: 500 13.5px/1.4 var(--font-body);
+  }
+  .asst-prod { display: flex; gap: 10px; align-items: center; cursor: pointer; }
+  .asst-img {
+    flex: none;
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
+    background: var(--bg) center / cover no-repeat;
+    border: 1px solid var(--hairline);
+  }
+  .asst-img.sm { width: 38px; height: 38px; border-radius: 9px; }
+  .asst-prod-body { flex: 1; min-width: 0; }
+  .asst-prod-name { font-weight: 700; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .asst-prod-price { margin-top: 2px; font-weight: 800; }
+  .asst-prod-price s { font-weight: 500; color: var(--hint); margin-left: 6px; }
+  .asst-oos { color: var(--hint); font-weight: 600; }
+  .asst-add {
+    flex: none;
+    min-height: 40px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--pop);
+    color: var(--on-pop);
+    font: 800 13px var(--font-body);
+    cursor: pointer;
+  }
+  .asst-add:disabled { opacity: .6; }
+  .asst-card-title { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; font-weight: 800; margin-bottom: 6px; }
+  .asst-status { padding: 2px 8px; border-radius: 10px; background: var(--bg); border: 1px solid var(--hairline); font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .asst-line { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+  .asst-line-name { flex: 1; min-width: 0; }
+  .asst-line-sum { font-weight: 700; white-space: nowrap; }
+  .asst-meta { margin-top: 6px; color: var(--hint); font-size: 12.5px; }
+  .asst-total { margin-top: 6px; display: flex; justify-content: space-between; font-weight: 800; }
+  .asst-card-btn {
+    width: 100%;
+    min-height: 40px;
+    margin-top: 8px;
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    background: var(--bg);
+    color: var(--text);
+    font: 700 13.5px var(--font-body);
+    cursor: pointer;
+  }
+  .asst-chips { display: flex; gap: 6px; overflow-x: auto; padding: 4px 12px 8px; scrollbar-width: none; }
+  .asst-chips::-webkit-scrollbar { display: none; }
+  .asst-chip {
+    flex: none;
+    min-height: 34px;
+    padding: 0 12px;
+    border-radius: 17px;
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+    color: var(--text);
+    font: 600 13px var(--font-body);
+    cursor: pointer;
+  }
+  .asst-form {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    padding: 8px 12px calc(10px + var(--safe-b));
+    border-top: 1px solid var(--hairline);
+    background: var(--glass);
+  }
+  .asst-form textarea {
+    flex: 1;
+    min-height: 44px;
+    max-height: 120px;
+    padding: 11px 14px;
+    border-radius: 22px;
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+    color: var(--text);
+    font: 500 15px/1.4 var(--font-body);
+    resize: none;
+    outline: none;
+  }
+  .asst-form textarea:focus { border-color: var(--link); }
+  .asst-send {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--pop);
+    color: var(--on-pop);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .asst-send:disabled { opacity: .5; }
+  .asst-send svg { width: 20px; height: 20px; }
+  .asst-note { padding: 0 14px 4px; color: var(--hint); font: 500 11px/1.3 var(--font-body); text-align: center; }
+  @media (prefers-reduced-motion: reduce) {
+    .asst-fab, .asst-bubble { transition: none; }
+    .asst-typing i, .asst-caret::after { animation: none; }
+  }
 </style>
 </head>
 <body>
@@ -4310,6 +4596,36 @@
   </div>
 </div>
 
+<!-- ===== YORDAMCHI (AI suhbatdosh, site_assistant.py) ===== -->
+<button class="asst-fab hidden" id="asst-fab" type="button" aria-label="Yordamchi" onclick="Assistant.open('fab')">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14v-2a8 8 0 0116 0v2"/><rect x="2.5" y="13" width="4" height="6" rx="1.6"/><rect x="17.5" y="13" width="4" height="6" rx="1.6"/><path d="M19.5 19v.5a2.5 2.5 0 01-2.5 2.5h-3.5"/></svg>
+  <span class="asst-dot" aria-hidden="true"></span>
+  <span class="asst-fab-label" id="asst-fab-label">Yordamchi</span>
+</button>
+<div class="asst-bubble" id="asst-bubble" role="status" onclick="Assistant.open('intro')">
+  <button class="asst-bubble-x" type="button" aria-label="Yopish" onclick="event.stopPropagation(); Assistant.hideIntro()">&times;</button>
+  <div id="asst-bubble-text"></div>
+</div>
+<div class="modal-overlay" id="asst-modal" onclick="if (event.target === this) Assistant.close()">
+  <div class="modal asst-sheet" role="dialog" aria-modal="true" aria-labelledby="asst-title">
+    <div class="asst-head">
+      <div class="asst-ava" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v-2a8 8 0 0116 0v2"/><rect x="2.5" y="13" width="4" height="6" rx="1.6"/><rect x="17.5" y="13" width="4" height="6" rx="1.6"/><path d="M19.5 19v.5a2.5 2.5 0 01-2.5 2.5h-3.5"/></svg></div>
+      <div class="asst-titles">
+        <div class="asst-title" id="asst-title">Yordamchi</div>
+        <div class="asst-sub" id="asst-sub"></div>
+      </div>
+      <button class="asst-close" type="button" id="asst-close" onclick="Assistant.close()">&times;</button>
+    </div>
+    <div class="asst-log" id="asst-log" aria-live="polite"></div>
+    <div class="asst-chips" id="asst-chips"></div>
+    <form class="asst-form" id="asst-form" onsubmit="event.preventDefault(); Assistant.send()">
+      <textarea id="asst-input" rows="1" maxlength="1000"></textarea>
+      <button class="asst-send" id="asst-send" type="submit"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.4 20.4l17.45-7.48a1 1 0 000-1.84L3.4 3.6a.99.99 0 00-1.39.91L2 9.12c0 .5.37.93.87.99L17 12 2.87 13.88c-.5.07-.87.5-.87 1l.01 4.61c0 .71.73 1.2 1.39.91z"/></svg></button>
+    </form>
+    <div class="asst-note" id="asst-note"></div>
+  </div>
+</div>
+
 <!-- ===== BOTTOM TAB BAR ===== -->
 <nav class="tab-bar" id="tab-bar">
   <div class="tab-item active" data-page="catalog">
@@ -4337,6 +4653,8 @@
 
 <!-- The games' question bank (quiz_bank.py), filled in by webapp_server.index(). -->
 <script type="application/json" id="game-bank">{{GAME_BANK}}</script>
+<!-- Background music: public-domain recordings served from /music (site_music.py). -->
+<script type="application/json" id="music-playlist">{{MUSIC_PLAYLIST}}</script>
 <script src="/static/pickup_checkout.js"></script>
 <script>
 const tg = window.Telegram.WebApp;
@@ -4636,8 +4954,8 @@ const Butterfly = (() => {
 // ===== BIRDSONG =====
 // Now and then a bird or two sings quietly in the background (owner,
 // 2026-10-22: "fonga qushlarni yoqimli nolasini ora-orada sayrab turadigan").
-// Every note is synthesised with Web Audio — no recordings, so nothing to
-// license or download. Phones only allow sound after the buyer's first tap,
+// Every bird note is synthesised with Web Audio; the music under them is
+// real public-domain recordings (see "Classical music" below). Phones only allow sound after the buyer's first tap,
 // so the first song comes a few seconds after it. A song never plays at
 // night (22:00–07:00 Tashkent), while the app is hidden, on the ordering
 // screens or over an open window, and the 🎶 button (shown once the music or
@@ -4690,21 +5008,10 @@ const Birdsong = (() => {
     fb.connect(echo);
     echo.connect(wet);
     wet.connect(ctx.destination);
-    // The music's own chain: a gentler high cut and a small hall.
+    // The music's gain — on iOS the recordings go through it (see route()).
     mus = ctx.createGain();
     mus.gain.value = 0;
-    const soft = ctx.createBiquadFilter();
-    soft.type = 'lowpass';
-    soft.frequency.value = 3200;
-    const hall = ctx.createConvolver();
-    hall.buffer = hallImpulse(ctx);
-    const hallWet = ctx.createGain();
-    hallWet.gain.value = 0.32;
-    mus.connect(soft);
-    soft.connect(ctx.destination);
-    soft.connect(hall);
-    hall.connect(hallWet);
-    hallWet.connect(ctx.destination);
+    mus.connect(ctx.destination);
     return ctx;
   }
 
@@ -4805,205 +5112,123 @@ const Birdsong = (() => {
     }, rand(range[0], range[1]));
   }
 
-  // ── Classical music under the birds (owner, 2026-10-24: "sayt foniga
-  // qushlar bilan birga klassik yoqimli musiqa ham qo'ygin, har bosib
-  // o'chirganda boshqa musiqaga o'tsin"). Four famous public-domain pieces,
-  // note by note on a soft synthesised piano — no recordings, nothing to
-  // license or download. One piece follows another; switching the 🎶 button
-  // off and on again starts the next one. The music keeps playing while
-  // products and recipes are open, rests on the ordering screens and while
-  // the app is hidden, and keeps the birds' night rule.
+  // ── Classical music under the birds (owner, 2026-10-24; real recordings
+  // since 2026-11-15: "original internetdan olingan top classic musiqalar
+  // bo'lsin, yuqori sifatli … musiqa saytga kirgan zahoti boshlansin, qo'l
+  // tekkizganda emas"). Public-domain and CC0 recordings from Wikimedia
+  // Commons, cached and served by our own server (site_music.py,
+  // /music/<id>.mp3, playlist in #music-playlist). It tries to start the
+  // moment the shop opens; where the phone's browser allows no sound before
+  // a touch, it starts on the first touch. One piece follows another;
+  // switching 🎶 off and on again starts the next one. It keeps playing over
+  // products and recipes, rests on the ordering screens and while the app is
+  // hidden, and keeps the birds' night rule.
   const MUSIC_KEY = 'ketoshop_music_piece';
-  const MUSIC_LEVEL = 0.5;
+  const MUSIC_LEVEL = 0.35;
   const MUSIC_REST_PAGES = ['checkout', 'cheque', 'order-success'];
-  const PIECES = [bachPrelude(), canonInD(), furElise(), odeToJoy()]
-    .map(p => { p.ev.sort((a, b) => a[0] - b[0]); return p; });   // the scheduler reads them in time order
-  let mus = null, musicTimer = null, piece = -1, evi = 0, t0 = 0, playing = false;
-
-  // Each piece: name [uz, ru], tempo, events [beat, midi note, beats, loudness 0–1], length in beats.
-  // J. S. Bach, Prelude in C major BWV 846, bars 1–19 and the closing chord.
-  function bachPrelude() {
-    const bars = [
-      [60, 64, 67, 72, 76], [60, 62, 69, 74, 77], [59, 62, 67, 74, 77], [60, 64, 67, 72, 76],
-      [60, 64, 69, 76, 81], [60, 62, 66, 69, 74], [59, 62, 67, 74, 79], [59, 60, 64, 67, 72],
-      [57, 60, 64, 67, 72], [50, 57, 62, 66, 72], [55, 59, 62, 67, 71], [55, 58, 64, 67, 73],
-      [53, 57, 62, 69, 74], [53, 56, 62, 65, 71], [52, 55, 60, 67, 72], [52, 53, 57, 60, 65],
-      [50, 53, 57, 60, 65], [43, 50, 55, 59, 65], [48, 52, 55, 60, 64],
-    ];
-    const ev = [];
-    bars.forEach((n, bar) => {
-      for (let half = 0; half < 2; half++) {
-        const s = bar * 4 + half * 2;
-        ev.push([s, n[0], 2, 0.75], [s + 0.25, n[1], 1.75, 0.65]);
-        [2, 3, 4, 2, 3, 4].forEach((k, i) => ev.push([s + 0.5 + i * 0.25, n[k], 0.25, 0.6]));
-      }
-    });
-    const end = bars.length * 4;
-    [48, 55, 60, 64, 72].forEach((m, i) => ev.push([end + i * 0.15, m, 4, 0.6]));
-    return { name: ['J. S. Bax — Do-major prelyudiyasi', 'И. С. Бах — Прелюдия до мажор'], bpm: 66, ev, len: end + 4 };
-  }
-
-  // J. Pachelbel, Canon in D: the eight-chord ground, then the two violin
-  // lines that answer each other over it.
-  function canonInD() {
-    const ground = [[50, [62, 66, 69]], [45, [57, 61, 64]], [47, [59, 62, 66]], [42, [54, 57, 61]],
-                    [43, [55, 59, 62]], [50, [62, 66, 69]], [43, [55, 59, 62]], [45, [57, 61, 64]]];
-    const upper = [78, 76, 74, 73, 71, 69, 71, 73], lower = [74, 73, 71, 69, 67, 66, 67, 64];
-    const ev = [];
-    for (let cycle = 0; cycle < 4; cycle++) {
-      ground.forEach(([bass, chord], i) => {
-        const s = cycle * 16 + i * 2;
-        ev.push([s, bass, 2, 0.6]);
-        [chord[0], chord[1], chord[2], chord[1]].forEach((m, k) => ev.push([s + k * 0.5, m, 0.5, 0.4]));
-        if (cycle === 1 || cycle === 3) ev.push([s, upper[i], 2, 0.7]);
-        if (cycle >= 2) ev.push([s, lower[i], 2, 0.62]);
-      });
-    }
-    [38, 50, 62, 66, 69, 74].forEach((m, i) => ev.push([64 + i * 0.12, m, 4, 0.55]));
-    return { name: ['Pachelbel — Kanon', 'Пахельбель — Канон'], bpm: 60, ev, len: 68 };
-  }
-
-  // L. van Beethoven, Für Elise, the opening theme twice (beats are sixteenths).
-  function furElise() {
-    const ev = [];
-    const am = [45, 52, 57], e7 = [40, 52, 56];
-    const turn = s => [76, 75, 76, 71, 74, 72].forEach((m, i) => ev.push([s + i, m, 1, 0.66]));
-    const left = (s, chord) => chord.forEach((m, i) => ev.push([s + i, m, 3 - i, 0.45]));
-    const theme = s => {                     // s: the first sixteenth of bar 1
-      turn(s);
-      ev.push([s + 6, 69, 2, 0.66]); left(s + 6, am); [60, 64, 69].forEach((m, i) => ev.push([s + 9 + i, m, 1, 0.6]));
-      ev.push([s + 12, 71, 2, 0.66]); left(s + 12, e7); [64, 68, 71].forEach((m, i) => ev.push([s + 15 + i, m, 1, 0.6]));
-      ev.push([s + 18, 72, 2, 0.66]); left(s + 18, am); [64, 76, 75].forEach((m, i) => ev.push([s + 21 + i, m, 1, 0.6]));
-      turn(s + 24);
-      ev.push([s + 30, 69, 2, 0.66]); left(s + 30, am); [60, 64, 69].forEach((m, i) => ev.push([s + 33 + i, m, 1, 0.6]));
-      ev.push([s + 36, 71, 2, 0.66]); left(s + 36, e7); [64, 72, 71].forEach((m, i) => ev.push([s + 39 + i, m, 1, 0.6]));
-      ev.push([s + 42, 69, 4, 0.66]); left(s + 42, am);
-    };
-    ev.push([0, 76, 1, 0.6], [1, 75, 1, 0.6]);
-    theme(2);
-    ev.push([48, 76, 1, 0.6], [49, 75, 1, 0.6]);   // the last two sixteenths of bar 8
-    theme(50);
-    return { name: ['Betxoven — «Elizaga»', 'Бетховен — «К Элизе»'], bpm: 300, ev, len: 100 };
-  }
-
-  // L. van Beethoven, «Ode to Joy» from the Ninth Symphony, slow, with a soft left hand.
-  function odeToJoy() {
-    const A = [[76, 1], [76, 1], [77, 1], [79, 1], [79, 1], [77, 1], [76, 1], [74, 1], [72, 1], [72, 1], [74, 1], [76, 1]];
-    const tune = [
-      ...A, [76, 1.5], [74, 0.5], [74, 2],
-      ...A, [74, 1.5], [72, 0.5], [72, 2],
-      [74, 1], [74, 1], [76, 1], [72, 1], [74, 1], [76, 0.5], [77, 0.5], [76, 1], [72, 1],
-      [74, 1], [76, 0.5], [77, 0.5], [76, 1], [74, 1], [72, 1], [74, 1], [67, 2],
-      ...A, [74, 1.5], [72, 0.5], [72, 2],
-    ];
-    const C = [48, [55, 60, 64]], G = [43, [55, 59, 62]];
-    const halves = [C, C, G, G, C, C, G, G, C, C, G, G, C, C, G, C,
-                    G, C, G, C, G, G, C, G, C, C, G, G, C, C, G, C];
-    const ev = [];
-    let s = 0;
-    tune.forEach(([m, d]) => { ev.push([s, m, d, 0.68]); s += d; });
-    halves.forEach(([bass, chord], i) => {
-      ev.push([i * 2, bass, 2, 0.5]);
-      chord.forEach(m => ev.push([i * 2 + 1, m, 1, 0.32]));
-    });
-    ev.sort((a, b) => a[0] - b[0]);
-    [48, 55, 60, 64, 72].forEach((m, i) => ev.push([64 + i * 0.12, m, 3, 0.55]));
-    return { name: ['Betxoven — «Shodlik qasidasi»', 'Бетховен — «Ода к радости»'], bpm: 80, ev, len: 68 };
-  }
-
-  // A soft piano tone: a triangle wave with a quiet octave above, struck and
-  // left to ring; low notes ring longer.
-  function pianoNote(t, midi, durSec, vel) {
-    const f = 440 * Math.pow(2, (midi - 69) / 12);
-    const peak = 0.11 * vel;
-    const ring = Math.min(Math.max(durSec + 0.5, 0.9), 1.4 + Math.max(0, 76 - midi) * 0.045);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(peak, t + 0.01);
-    g.gain.exponentialRampToValueAtTime(peak * 0.4, t + 0.3);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + ring);
-    const a = ctx.createOscillator();
-    a.type = 'triangle';
-    a.frequency.value = f;
-    const b = ctx.createOscillator();
-    b.type = 'sine';
-    b.frequency.value = f * 2;
-    const bg = ctx.createGain();
-    bg.gain.value = 0.15;
-    a.connect(g);
-    b.connect(bg);
-    bg.connect(g);
-    g.connect(mus);
-    a.start(t);
-    b.start(t);
-    a.stop(t + ring + 0.05);
-    b.stop(t + ring + 0.05);
-  }
-
-  // A small hall: two seconds of fading noise as the reverb's impulse.
-  function hallImpulse(c) {
-    const len = Math.floor(c.sampleRate * 2.2), buf = c.createBuffer(2, len, c.sampleRate);
-    for (let ch = 0; ch < 2; ch++) {
-      const d = buf.getChannelData(ch);
-      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
-    }
-    return buf;
-  }
+  const PLAYLIST = (() => {
+    try { return JSON.parse(document.getElementById('music-playlist').textContent) || []; } catch (_) { return []; }
+  })();
+  // iOS ignores a media element's volume — there the music goes through a
+  // Web Audio gain (which only sounds after a touch); elsewhere the element's
+  // own volume, so it can start before any touch.
+  const VOLUME_WORKS = (() => {
+    try { const a = document.createElement('audio'); a.volume = 0.5; return Math.abs(a.volume - 0.5) < 0.01; }
+    catch (_) { return false; }
+  })();
+  let mus = null, el = null, routed = false, piece = -1, playing = false, blocked = false;
+  let musicTimer = null, volTimer = null;
 
   function savedPiece() {
-    try { return parseInt(localStorage.getItem(MUSIC_KEY), 10) || 0; } catch (_) { return 0; }
+    try { return parseInt(localStorage.getItem(MUSIC_KEY) || '0', 10) || 0; } catch (_) { return 0; }
   }
   function pieceName() {
-    const n = PIECES[piece < 0 ? savedPiece() % PIECES.length : piece].name;
-    return gx(n[0], n[1]);
+    const p = PLAYLIST[piece];
+    return p ? gx(p.uz, p.ru) : '';
   }
-  function fade(to, sec) {
-    const now = ctx.currentTime;
-    mus.gain.cancelScheduledValues(now);
-    mus.gain.setValueAtTime(mus.gain.value, now);
-    mus.gain.linearRampToValueAtTime(to, now + sec);
+  function element() {
+    if (el) return el;
+    el = document.createElement('audio');
+    el.preload = 'auto';
+    el.setAttribute('playsinline', '');
+    el.addEventListener('ended', () => startPiece(piece + 1));
+    el.addEventListener('playing', () => { blocked = false; if (!heard) { heard = true; sync(); } });
+    el.addEventListener('error', () => {
+      // Our server has no copy → the same file straight from Wikimedia, once.
+      const p = PLAYLIST[piece];
+      if (p && p.remote && el.getAttribute('src') !== p.remote) { el.src = p.remote; if (playing) { playing = false; play(); } return; }
+      if (playing) setTimeout(() => startPiece(piece + 1), 3000);
+    });
+    return el;
   }
-  function startPiece(i) {
-    piece = ((i % PIECES.length) + PIECES.length) % PIECES.length;
-    try { localStorage.setItem(MUSIC_KEY, String(piece)); } catch (_) {}
-    evi = 0;
-    t0 = ctx.currentTime + 0.5;
-    playing = true;
-    fade(MUSIC_LEVEL, 0.3);
-    if (!heard) { heard = true; sync(); }
+  function route() {
+    // Only our own files: a Web Audio route of another site's file is silent
+    // without CORS — from Wikimedia an iPhone plays at the phone's own volume.
+    if (routed || VOLUME_WORKS || !PLAYLIST.length || !/^\//.test(PLAYLIST[0].src) || !audio()) return;
+    try { ctx.createMediaElementSource(element()).connect(mus); routed = true; } catch (_) {}
   }
-  function musicOk() {
-    return !muted() && !night() && !document.hidden && !MUSIC_REST_PAGES.includes(activePage) &&
-      ctx.state === 'running';
-  }
-  // Every 150 ms: put the next half second of notes on the clock.
-  function musicTick() {
-    if (!ctx || !mus) return;
-    if (!musicOk()) {
-      if (playing) { playing = false; fade(0, 0.4); }
+  function setLevel(to, sec) {
+    clearInterval(volTimer);
+    if (routed && mus) {
+      const g = mus.gain, now = ctx.currentTime;
+      g.cancelScheduledValues(now);
+      g.setValueAtTime(g.value, now);
+      g.linearRampToValueAtTime(to, now + sec);
       return;
     }
-    if (piece < 0) startPiece(savedPiece());
-    const p = PIECES[piece], spb = 60 / p.bpm;
-    if (!playing) {                       // back from a rest: carry on where it stopped
-      playing = true;
-      if (evi < p.ev.length) t0 = ctx.currentTime + 0.4 - p.ev[evi][0] * spb;
-      fade(MUSIC_LEVEL, 0.6);
-    }
-    const until = ctx.currentTime + 0.5;
-    while (evi < p.ev.length && t0 + p.ev[evi][0] * spb <= until) {
-      const [beat, midi, beats, vel] = p.ev[evi++];
-      pianoNote(Math.max(ctx.currentTime, t0 + beat * spb), midi, beats * spb, vel);
-    }
-    if (evi >= p.ev.length && ctx.currentTime > t0 + p.len * spb + 3) startPiece(piece + 1);
+    const a = element(), from = a.volume, steps = Math.max(1, Math.round(sec * 20));
+    let i = 0;
+    volTimer = setInterval(() => {
+      i++;
+      a.volume = Math.max(0, Math.min(1, from + (to - from) * i / steps));
+      if (i >= steps) clearInterval(volTimer);
+    }, 50);
+  }
+  function musicOk() {
+    return PLAYLIST.length > 0 && !muted() && !night() && !document.hidden && !MUSIC_REST_PAGES.includes(activePage);
+  }
+  function startPiece(i) {
+    if (!PLAYLIST.length) return;
+    piece = ((i % PLAYLIST.length) + PLAYLIST.length) % PLAYLIST.length;
+    try { localStorage.setItem(MUSIC_KEY, String(piece)); } catch (_) {}
+    element().src = PLAYLIST[piece].src;
+    playing = false;
+    play();
+  }
+  function play() {
+    if (!musicOk() || blocked) return;
+    const a = element();
+    if (!a.getAttribute('src')) { startPiece(savedPiece()); return; }
+    if (routed && mus) mus.gain.value = 0; else if (VOLUME_WORKS) a.volume = 0;
+    playing = true;
+    const p = a.play();
+    const up = () => setLevel(MUSIC_LEVEL, 1.5);
+    if (p && typeof p.then === 'function') {
+      p.then(up).catch(() => { playing = false; blocked = true; });   // this phone wants a touch first
+    } else up();
+  }
+  function pauseMusic() {
+    if (!el || !playing) return;
+    playing = false;
+    setLevel(0, 0.4);
+    setTimeout(() => { if (!playing && el) el.pause(); }, 450);
+  }
+  // Twice a second: rest or carry on as the page changes.
+  function musicTick() {
+    if (!PLAYLIST.length) return;
+    if (!musicOk()) { pauseMusic(); return; }
+    if (!playing || element().paused) play();
   }
 
   // The first tap unlocks sound (browser rule); the music and the birds start then.
   function unlock() {
-    if (!audio()) return;
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-    if (!timer) schedule(FIRST_DELAY);
-    if (!musicTimer) musicTimer = setInterval(musicTick, 150);
+    blocked = false;
+    route();
+    if (audio()) {
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      if (!timer) schedule(FIRST_DELAY);
+    }
+    musicTick();
   }
 
   function sync() {
@@ -5019,11 +5244,11 @@ const Birdsong = (() => {
     const off = !muted();
     try { localStorage.setItem(KEY, off ? 'off' : 'on'); } catch (_) {}
     if (off) {
-      if (mus) { playing = false; fade(0, 0.3); }
+      pauseMusic();
       showToast(t.birdsOff);
     } else {
       unlock();
-      if (ctx && mus) startPiece(piece < 0 ? savedPiece() + 1 : piece + 1);   // back on: the next piece
+      startPiece(piece < 0 ? savedPiece() + 1 : piece + 1);   // back on: the next piece
       sing();                           // and a little chirp
       showToast(t.birdsOn + ' · ' + pieceName(), false, 3500);
     }
@@ -5039,12 +5264,16 @@ const Birdsong = (() => {
     btn.onclick = toggle;
     document.body.appendChild(btn);
     sync();
+    // The music starts at once where the phone allows sound before a touch.
+    musicTimer = setInterval(musicTick, 500);
+    musicTick();
     // touchend/click, not pointerdown: a touch only counts as the gesture
     // that may start sound when it ends (Chrome and iOS alike).
     const gestures = ['touchend', 'click'];
     const first = () => {
       unlock();
-      if (ctx && ctx.state === 'running') gestures.forEach(e => document.removeEventListener(e, first, true));
+      if (ctx && ctx.state === 'running' && (!PLAYLIST.length || (el && !el.paused)))
+        gestures.forEach(e => document.removeEventListener(e, first, true));
     };
     gestures.forEach(e => document.addEventListener(e, first, true));
     document.addEventListener('visibilitychange', () => {
@@ -5783,6 +6012,7 @@ let t = buildActiveLocale();
 
 function applyLanguage() {
   t = buildActiveLocale();
+  try { Assistant.applyText(); } catch (_) {}
   // Tab labels
   document.getElementById('tab-home-label').textContent = t.tabHome;
   document.getElementById('tab-catalog-label').textContent = t.tabCatalog;
@@ -6053,6 +6283,7 @@ function switchPage(page) {
   trk(() => Trk.page(page, page === 'catalog' ? currentCat : null));
   updateBackButton();
   Birdsong.sync();
+  try { Assistant.sync(); } catch (_) {}
 }
 
 // ===== SYSTEM BACK BUTTON =====
@@ -6067,6 +6298,7 @@ function _isModalOpen(id) {
 
 function onBackPressed() {
   // Highest-priority overlays win.
+  if (_isModalOpen('asst-modal')) { Assistant.close(); return; }
   if (_isModalOpen('map-modal')) { closeMapPicker(); return; }
   if (_isModalOpen('detail-modal')) { closeDetail(); return; }
   if (_isModalOpen('recipe-modal')) { closeRecipe(); return; }
@@ -6084,6 +6316,7 @@ function onBackPressed() {
 function updateBackButton() {
   if (!tg.BackButton) return;
   const shouldShow = (
+    _isModalOpen('asst-modal') ||
     _isModalOpen('map-modal') ||
     _isModalOpen('detail-modal') ||
     _isModalOpen('recipe-modal') ||
@@ -6825,6 +7058,7 @@ async function checkStartGate(manual) {
     await loadProducts();
     await loadCart();
     DockHint.maybe();
+    Assistant.start();
 
     // Deep link: ?product=<id> on the Mini App URL (used by admin broadcasts —
     // e.g. a low-stock alert with a "tap here" button) opens straight into
@@ -7522,6 +7756,318 @@ function launchFireworks(canvas) {
 // launch counts even if the buyer stops it); from the fourth launch, never.
 // It waits for the entry screen and the YANGI5 card to be gone; any touch
 // stops it. Without storage it is not shown at all — it could not stop.
+// ===== YORDAMCHI (owner, 2026-11-15) =====
+// "Saytga Yordamchi nomli o'ng taraf pastda turadigan operator dumaloq
+// belgisini qo'y u orqali ai suhbatdosh ochilsin … buyurtmalarni rasmlari
+// bilan va barcha ma'lumotlari bilan chatda ko'rsatib bera olsin" and "har
+// bir kirgan foydalanuvchi uchun … typing rejimida yordamchini tanishtir".
+// The bot's AI seller answers through POST /api/assistant (site_assistant.py);
+// products, the cart and the buyer's own orders come back as cards. The
+// typing introduction plays once per launch of the shop; the conversation is
+// kept on this phone (last MAX_KEEP messages) so reopening shows it.
+const Assistant = (() => {
+  const HIDE_ON = ['cart', 'checkout'];
+  const MAX_KEEP = 40;
+  const INTRO_FIRST = 3500, INTRO_HOLD = 12000, TYPE_MS = 24;
+  let started = false, busy = false, history = null, introTimer = null, introToken = 0;
+  const $ = id => document.getElementById(id);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const uid = () => (tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) || 'x';
+  const KEY = () => 'ketoshop_asst_' + uid();
+  const reduced = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  const txt = {
+    intro: () => gx("Assalomu alaykum! 👋 Bu — <b>Yordamchi</b>. Keto shopdagi istalgan mahsulot bo'yicha shu yerda maslahat olishingiz mumkin. Savolingizni yozing 👇",
+                    "Здравствуйте! 👋 Это — <b>Помощник</b>. Здесь можно получить совет по любому товару Keto shop. Напишите свой вопрос 👇"),
+    greet: () => gx("Assalomu alaykum! 👋 Bu — Keto shop Yordamchisi. Istalgan mahsulot bo'yicha maslahat beramiz: nima, qanday ishlatiladi, narxi qancha. Buyurtmangiz holatini ham rasmlari bilan ko'rsatib beramiz — savolingizni yozing 👇",
+                    "Здравствуйте! 👋 Это — Помощник Keto shop. Подскажем по любому товару: что это, как использовать, сколько стоит. Покажем и статус вашего заказа с фото — напишите вопрос 👇"),
+    label: () => gx('Yordamchi', 'Помощник'),
+    sub: () => gx('Keto shop · AI maslahatchi', 'Keto shop · AI-консультант'),
+    note: () => gx("AI javob beradi — muhim narsani buyurtmada tekshiring", 'Отвечает ИИ — важное проверьте в заказе'),
+    placeholder: () => gx('Savolingizni yozing…', 'Напишите вопрос…'),
+    send: () => gx('Yuborish', 'Отправить'),
+    close: () => gx('Yopish', 'Закрыть'),
+    chips: () => [gx('📦 Buyurtmam qayerda?', '📦 Где мой заказ?'),
+                  gx("🍞 Keto non uchun qaysi un?", '🍞 Какая мука для кето-хлеба?'),
+                  gx("🍬 Shakar o'rniga nima?", '🍬 Чем заменить сахар?'),
+                  gx('🛒 Savatimda nima bor?', '🛒 Что в моей корзине?')],
+    error: () => gx("Ulanishda xato bo'ldi — birozdan keyin qayta yozib ko'ring.", 'Ошибка связи — попробуйте написать чуть позже.'),
+    add: () => gx('+ Savatga', '+ В корзину'),
+    oos: () => gx('⏳ Tez orada qaytadi', '⏳ Скоро вернётся'),
+    openCart: () => gx('🛒 Savatni ochish', '🛒 Открыть корзину'),
+    cartTitle: () => gx('🛒 Savatingiz', '🛒 Ваша корзина'),
+    cartEmpty: () => gx("Savat hozircha bo'sh", 'Корзина пока пуста'),
+    goods: () => gx('Mahsulotlar', 'Товары'),
+    total: () => gx('Jami', 'Итого'),
+    order: () => gx('Buyurtma', 'Заказ'),
+    myOrders: () => gx('📦 Buyurtmalarim', '📦 Мои заказы'),
+    gift: () => gx("sovg'a", 'подарок'),
+    som: () => gx("so'm", 'сум'),
+  };
+
+  function load() {
+    if (history) return history;
+    try { history = JSON.parse(localStorage.getItem(KEY()) || '[]'); } catch (_) { history = []; }
+    if (!Array.isArray(history)) history = [];
+    return history;
+  }
+  function save() {
+    try { localStorage.setItem(KEY(), JSON.stringify(history.slice(-MAX_KEEP))); } catch (_) {}
+  }
+  function blocked() {
+    const gate = document.getElementById('start-gate');
+    return document.getElementById('welcome-party') || (gate && gate.style.display !== 'none')
+      || document.querySelector('.modal-overlay.show, .map-modal.show, .dock-hand');
+  }
+
+  // Reply text: the bot's HTML (b/i/u/s/code) kept, everything else escaped;
+  // web links and @usernames become links opened through Telegram.
+  function rich(s) {
+    const keep = [];
+    s = String(s || '').replace(/<a\s+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (m, href, label) => label + ' ' + href);
+    s = s.replace(/<\/?(b|i|u|s|code)>/gi, m => { keep.push(m.toLowerCase()); return '' + (keep.length - 1) + ''; });
+    s = s.replace(/<[^>]*>/g, '');
+    const box = document.createElement('textarea');
+    box.innerHTML = s;
+    s = escapeHtml(box.value);
+    s = s.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" data-ext="1">$1</a>');
+    s = s.replace(/(^|[^\w/])@([A-Za-z][A-Za-z0-9_]{4,31})\b/g, '$1<a href="https://t.me/$2" data-ext="1">@$2</a>');
+    s = s.replace(/(\d+)/g, (m, i) => keep[+i] || '');
+    return s.replace(/\n/g, '<br>');
+  }
+  function som(v) { return formatPrice(v || 0) + ' ' + txt.som(); }
+  function img(url, sm) {
+    return '<div class="asst-img' + (sm ? ' sm' : '') + '"' +
+      (url ? ' style="background-image:url(\'' + cssUrl(url) + '\')"' : '') + '></div>';
+  }
+  function qtyText(q, unit) {
+    const n = Number(q) || 0;
+    return (Number.isInteger(n) ? n : String(n).replace('.', ',')) + (unit ? ' ' + escapeHtml(unit) : '');
+  }
+
+  function productCard(c) {
+    const price = c.discount_percent > 0 && c.original_price > c.price
+      ? som(c.price) + '<s>' + formatPrice(c.original_price) + '</s>' : som(c.price);
+    return '<div class="asst-card asst-prod" data-pid="' + c.id + '">' + img(c.photo_url) +
+      '<div class="asst-prod-body"><div class="asst-prod-name">' + escapeHtml(c.name || '') + '</div>' +
+      '<div class="asst-prod-price">' + price + (c.unit ? ' <span class="asst-oos">/ ' + escapeHtml(c.unit) + '</span>' : '') + '</div>' +
+      (c.out_of_stock ? '<div class="asst-oos">' + txt.oos() + '</div>' : '') + '</div>' +
+      (c.out_of_stock ? '' : '<button class="asst-add" type="button" data-add="' + c.id + '">' + txt.add() + '</button>') +
+      '</div>';
+  }
+  function lines(items) {
+    return items.map(it => '<div class="asst-line">' + img(it.photo_url, true) +
+      '<div class="asst-line-name">' + escapeHtml(it.name || '') + ' × ' + qtyText(it.quantity, it.unit) + '</div>' +
+      '<div class="asst-line-sum">' + (it.gift ? '🎁 ' + txt.gift() : (it.total != null ? som(it.total) : '')) + '</div></div>').join('');
+  }
+  function cartCard(c) {
+    if (!c.items || !c.items.length) return '<div class="asst-card"><div class="asst-card-title">' + txt.cartTitle() + '</div>' + txt.cartEmpty() + '</div>';
+    return '<div class="asst-card"><div class="asst-card-title">' + txt.cartTitle() + '</div>' + lines(c.items) +
+      '<div class="asst-total"><span>' + txt.goods() + '</span><span>' + som(c.total) + '</span></div>' +
+      '<button class="asst-card-btn" type="button" data-go="cart">' + txt.openCart() + '</button></div>';
+  }
+  function orderCard(c) {
+    const meta = [formatOrderDate(c.created_at), c.delivery, c.payment].filter(Boolean).map(escapeHtml).join(' · ');
+    return '<div class="asst-card"><div class="asst-card-title"><span>' + txt.order() + ' #' + c.id + '</span>' +
+      '<span class="asst-status">' + escapeHtml(c.status_text || c.status || '') + '</span></div>' + lines(c.items || []) +
+      '<div class="asst-total"><span>' + txt.total() + '</span><span>' + som(c.total) + '</span></div>' +
+      (meta ? '<div class="asst-meta">' + meta + '</div>' : '') +
+      (c.address ? '<div class="asst-meta">📍 ' + escapeHtml(c.address) + '</div>' : '') +
+      '<button class="asst-card-btn" type="button" data-go="orders">' + txt.myOrders() + '</button></div>';
+  }
+  function cardsHtml(cards) {
+    return (cards || []).map(c => c.type === 'product' ? productCard(c)
+      : c.type === 'cart' ? cartCard(c) : c.type === 'order' ? orderCard(c) : '').join('');
+  }
+
+  function append(m) {
+    const log = $('asst-log');
+    if (!log) return;
+    if (m.text) {
+      const el = document.createElement('div');
+      el.className = 'asst-msg ' + (m.me ? 'me' : 'bot');
+      el.innerHTML = m.me ? escapeHtml(m.text).replace(/\n/g, '<br>') : rich(m.text);
+      log.appendChild(el);
+    }
+    if (m.cards && m.cards.length) {
+      const box = document.createElement('div');
+      box.className = 'asst-cards';
+      box.innerHTML = cardsHtml(m.cards);
+      log.appendChild(box);
+    }
+    log.scrollTop = log.scrollHeight;
+  }
+  function render() {
+    const log = $('asst-log');
+    log.innerHTML = '';
+    const h = load();
+    if (!h.length) append({ text: txt.greet() });
+    h.forEach(append);
+    $('asst-chips').innerHTML = txt.chips().map(c => '<button class="asst-chip" type="button">' + escapeHtml(c) + '</button>').join('');
+    $('asst-chips').style.display = h.length > 6 ? 'none' : 'flex';
+  }
+  function typing(on) {
+    const log = $('asst-log');
+    let el = document.getElementById('asst-typing-row');
+    if (on && !el) {
+      el = document.createElement('div');
+      el.id = 'asst-typing-row';
+      el.className = 'asst-msg bot';
+      el.innerHTML = '<span class="asst-typing"><i></i><i></i><i></i></span>';
+      log.appendChild(el);
+      log.scrollTop = log.scrollHeight;
+    } else if (!on && el) el.remove();
+  }
+
+  function applyText() {
+    const fab = $('asst-fab');
+    if (!fab) return;
+    fab.setAttribute('aria-label', txt.label());
+    $('asst-fab-label').textContent = txt.label();
+    $('asst-title').textContent = txt.label();
+    $('asst-sub').textContent = txt.sub();
+    $('asst-note').textContent = txt.note();
+    $('asst-input').placeholder = txt.placeholder();
+    $('asst-send').setAttribute('aria-label', txt.send());
+    $('asst-close').setAttribute('aria-label', txt.close());
+  }
+
+  function sync() {
+    const fab = $('asst-fab');
+    if (!fab || !started) return;
+    const hide = HIDE_ON.includes(activePage) || _isModalOpen('asst-modal');
+    fab.classList.toggle('hidden', hide);
+    if (hide) hideIntro();
+  }
+
+  async function playIntro() {
+    const my = ++introToken;
+    const bubble = $('asst-bubble'), out = $('asst-bubble-text');
+    for (let i = 0; i < 20 && blocked(); i++) await sleep(1500);   // wait out the gate, party, dock hint, sheets
+    if (my !== introToken || blocked() || HIDE_ON.includes(activePage) || _isModalOpen('asst-modal')) return;
+    trk(() => Trk.ev('assistant', 'intro', null, activePage));
+    out.innerHTML = '<span class="asst-typing"><i></i><i></i><i></i></span>';
+    bubble.classList.add('on');
+    const html = txt.intro();
+    if (reduced()) { out.innerHTML = html; }
+    else {
+      await sleep(1300);
+      // Typed out letter by letter; tags go in whole so <b> never shows.
+      const parts = html.match(/<[^>]+>|[\s\S]/g) || [];
+      let shown = '';
+      for (const p of parts) {
+        if (my !== introToken) return;
+        shown += p;
+        out.innerHTML = shown + '<span class="asst-caret"></span>';
+        if (p.length === 1) await sleep(TYPE_MS);
+      }
+      out.innerHTML = html;
+    }
+    clearTimeout(introTimer);
+    introTimer = setTimeout(hideIntro, INTRO_HOLD);
+  }
+  function hideIntro() {
+    introToken++;
+    clearTimeout(introTimer);
+    const b = $('asst-bubble');
+    if (b) b.classList.remove('on');
+  }
+
+  function open(src) {
+    hideIntro();
+    render();
+    $('asst-modal').classList.add('show');
+    sync();
+    updateBackButton();
+    trk(() => Trk.ev('assistant', 'open', null, src || ''));
+    setTimeout(() => { const i = $('asst-input'); if (i && !matchMedia('(pointer: coarse)').matches) i.focus(); }, 300);
+  }
+  function close() {
+    $('asst-modal').classList.remove('show');
+    sync();
+    updateBackButton();
+  }
+
+  async function send(text) {
+    const input = $('asst-input');
+    text = String(text != null ? text : input.value).trim();
+    if (!text || busy) return;
+    busy = true;
+    $('asst-send').disabled = true;
+    input.value = '';
+    input.style.height = '';
+    const h = load();
+    const mine = { me: true, text };
+    h.push(mine); save(); append(mine);
+    $('asst-chips').style.display = 'none';
+    typing(true);
+    trk(() => Trk.ev('assistant', 'send', null, String(text.length)));
+    let msg;
+    try {
+      const res = await api('/api/assistant', { method: 'POST', body: JSON.stringify({ text }) });
+      msg = { text: res.reply || '', cards: res.cards || [] };
+    } catch (e) {
+      msg = { text: txt.error(), cards: [], err: true };
+    }
+    typing(false);
+    if (!msg.err) { h.push(msg); save(); }
+    append(msg);
+    busy = false;
+    $('asst-send').disabled = false;
+  }
+
+  function wire() {
+    $('asst-log').addEventListener('click', e => {
+      const ext = e.target.closest('a[data-ext]');
+      if (ext) {
+        e.preventDefault();
+        const href = ext.getAttribute('href');
+        try { if (/^https:\/\/t\.me\//.test(href) && tg.openTelegramLink) tg.openTelegramLink(href); else if (tg.openLink) tg.openLink(href); else window.open(href, '_blank'); }
+        catch (_) { window.open(href, '_blank'); }
+        return;
+      }
+      const add = e.target.closest('[data-add]');
+      if (add) {
+        e.stopPropagation();
+        quickAddToCart({ id: parseInt(add.dataset.add, 10), is_set: false }, add, 'assistant');
+        return;
+      }
+      const go = e.target.closest('[data-go]');
+      if (go) { close(); switchPage(go.dataset.go); return; }
+      const prod = e.target.closest('[data-pid]');
+      if (prod) { close(); openDetail(parseInt(prod.dataset.pid, 10)).catch(() => {}); }
+    });
+    $('asst-chips').addEventListener('click', e => {
+      const c = e.target.closest('.asst-chip');
+      if (c) send(c.textContent.replace(/^\S+\s/, ''));
+    });
+    const input = $('asst-input');
+    input.addEventListener('input', () => {
+      input.style.height = '';
+      input.style.height = Math.min(120, input.scrollHeight) + 'px';
+    });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey && !matchMedia('(pointer: coarse)').matches) { e.preventDefault(); send(); }
+    });
+  }
+
+  function start() {
+    if (started || !$('asst-fab')) return;
+    started = true;
+    applyText();
+    wire();
+    sync();
+    let shown = false;
+    try { shown = sessionStorage.getItem('ketoshop_asst_intro') === '1'; } catch (_) {}
+    if (!shown) {
+      try { sessionStorage.setItem('ketoshop_asst_intro', '1'); } catch (_) {}
+      setTimeout(playIntro, INTRO_FIRST);
+    }
+  }
+
+  return { start, open, close, send, sync, hideIntro, applyText, rich, cardsHtml };
+})();
+
 const DockHint = (() => {
   const SHOWS = 3;
   // Slow enough to follow (owner, 2026-11-08: "sekinroq chiqsin odam

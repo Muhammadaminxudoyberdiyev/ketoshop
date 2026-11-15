@@ -58,12 +58,13 @@ class SnapshotConn:
             self.cost_write_events.append(("insert", self.transaction_active))
             if "seller_id" in sql:          # create_order — manual orders carry latitude too
                 index = 5
-            elif "B2B Eritritol" in sql:
-                index = 3
             elif "phone, address, items" in sql:
                 index = 4
             else:
-                index = 2
+                # B2B inserts: every column up to `items` is a $n parameter in order
+                # (2026-11-15: phone and b2b_customer_id were added).
+                columns = [c.strip() for c in sql.split("(", 1)[1].split(")", 1)[0].split(",")]
+                index = columns.index("items")
             self.inserted_items.append(json.loads(args[index]))
             return 41
         if "INSERT INTO order_line_cost_audit" in sql:

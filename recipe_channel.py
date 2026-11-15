@@ -25,6 +25,11 @@ recipe it shows (recipes.find: published ones only).
 The day is claimed in release_notes_sent before posting, so a restart can't
 post twice; a failed post gives the claim back and is retried on the next
 tick. The channel reads Cyrillic (product_of_day.CHANNEL_LANG).
+
+Which recipe a day gets — new or a repeat, and never one without its photo
+— is recipes.py «Jadval»; the tick reads it after recipes.sync(). The admins'
+note says which it was: a repeat never says «yangi retsept» (owner,
+2026-11-13), it says it is a repeat and how many recipes wait for a photo.
 """
 import asyncio
 import html
@@ -163,6 +168,7 @@ async def open_from_link(bot: Bot, user_id: int, lang: str, slug: str | None = N
     """Private answer to the channel link: photo + «Retseptni ochish» that
     opens the Mini App on that recipe (today's if it isn't published yet or
     is unknown). False if there's no site to open."""
+    await recipes.sync()
     recipe = (recipes.find(slug) if slug else None) or recipes.schedule()[0]
     url = recipe_url(recipe)
     if not url:
@@ -192,26 +198,59 @@ async def _notify_admins(bot: Bot, text: str) -> None:
             pass
 
 
+def queue_lines(queue: dict) -> list[str]:
+    """Recipes not out yet, for the admins (recipes.waiting)."""
+    lines = []
+    if queue["no_photo"]:
+        lines.append(f"🖼 Rasmini kutayotgan retseptlar: {len(queue['no_photo'])} ta. Rasmsiz retsept "
+                     "saytga ham, kanalga ham chiqmaydi; rasmi qo'shilgani navbatdagi kuni o'zi chiqadi.")
+    if queue["ready"]:
+        lines.append(f"✅ Rasmi tayyor, navbatini kutayotganlar: {len(queue['ready'])} ta.")
+    if not queue["no_photo"] and not queue["ready"]:
+        lines.append("📚 Kutubxonadagi hamma retsept chiqib bo'ldi — yangilarini qo'shish kerak.")
+    return lines
+
+
+def admin_note(recipe: dict, is_new: bool, queue: dict) -> str:
+    """After the post. A repeat is called a repeat, never «yangi retsept»."""
+    title = html.escape(recipe["title"]["uz"], quote=False)
+    if is_new:
+        lines = [f"📣 <b>Kanalga yangi retsept e'lon qilindi:</b> {title}",
+                 "Havola matnning ichida, tugma yo'q — izohlar ochiq."]
+        if queue["no_photo"]:
+            lines += queue_lines(queue)
+    else:
+        lines = [f"🔁 <b>Kanalga takroriy retsept e'lon qilindi:</b> {title}",
+                 "Bu retsept avval ham chiqqan.",
+                 *queue_lines(queue)]
+    return "\n".join(lines + ["Ko'rish: /retsept_kanal"])
+
+
 async def _tick(bot: Bot) -> None:
     now = _now_tk()
     if not POST_HOUR <= now.hour < LAST_HOUR or not is_new_day(now.date()):
         return
-    recipe = recipes.schedule(now.date())[0]
+    if not await recipes.sync(now.date()):
+        return                                          # slot log unknown — the next tick
+    slot = recipes.plan(now.date())
+    recipe = slot["recipe"]
+    if not recipes.has_photo(recipe):                   # never without its photo («Jadval»)
+        logger.warning("Recipe %s has no photo — not posted", recipe["slug"])
+        return
     key = f"recipe-channel-{recipe['slug']}-{now.date().isoformat()}"
     if not await database.claim_release_notes(key):
         return
     if not await post_to_channel(bot, recipe):
         await database.release_release_notes(key)       # retried on the next tick
         return
-    title = html.escape(recipe["title"]["uz"], quote=False)
-    await _notify_admins(bot, f"📣 <b>Kanalga yangi retsept e'lon qilindi:</b> {title}\n"
-                              "Havola matnning ichida, tugma yo'q — izohlar ochiq. Ko'rish: /retsept_kanal")
+    await _notify_admins(bot, admin_note(recipe, slot["is_new"], recipes.waiting(now.date())))
 
 
 async def scheduler_loop(bot: Bot) -> None:
     logger.info("Recipe channel scheduler started (%02d:00 on new-recipe days)", POST_HOUR)
     while True:
         try:
+            await recipes.sync()                        # the site's slot is written on time too
             await _tick(bot)
         except Exception:
             logger.exception("Recipe channel tick failed")
@@ -221,7 +260,9 @@ async def scheduler_loop(bot: Bot) -> None:
 @router.message(Command("retsept_kanal"), F.from_user.id.in_(ADMIN_IDS))
 async def cmd_preview(message: Message):
     """The announcement of today's recipe, to the admin who asked only."""
-    recipe = recipes.schedule()[0]
+    await recipes.sync()
+    slot = recipes.plan()
+    recipe = slot["recipe"]
     day = recipes.today_tk()
     nxt = day
     while not is_new_day(nxt) or nxt <= day:
@@ -233,7 +274,10 @@ async def cmd_preview(message: Message):
                "ochilishi uchun: @BotFather → /mybots → @" + BOT_USERNAME + " → Bot Settings → "
                "Configure Mini App → Enable Mini App, manzil: " + (WEBAPP_URL or "sayt manzili") + ". "
                "Yoqilgach, keyingi post o'zi bir bosishli havola bilan chiqadi.")
+    today = "yangi" if slot["is_new"] else "takroriy (avval chiqqan)"
+    queue = "\n".join(queue_lines(recipes.waiting()))
     await message.answer(
-        f"👀 Kanal e'loni shunday ko'rinadi (faqat sizga). Yangi retsept chiqqan kuni soat "
-        f"{POST_HOUR}:00 da kanalga avtomatik chiqadi. Keyingisi: {nxt:%d.%m.%Y}.\n\n{how}")
+        f"👀 Kanal e'loni shunday ko'rinadi (faqat sizga). Retsept chiqadigan kuni soat "
+        f"{POST_HOUR}:00 da kanalga avtomatik chiqadi. Keyingisi: {nxt:%d.%m.%Y}.\n"
+        f"Bugungi retsept: {today}.\n{queue}\n\n{how}")
     await post_to_channel(message.bot, recipe, chat_id=message.from_user.id)

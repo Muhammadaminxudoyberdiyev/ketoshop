@@ -332,6 +332,9 @@ async def index(request: web.Request):
     # question every 2 days (daily_quiz.py).
     import quiz_bank
     html = html.replace("{{GAME_BANK}}", quiz_bank.bank_json())
+    import site_music
+    html = html.replace("{{MUSIC_PLAYLIST}}", json.dumps(site_music.playlist(), ensure_ascii=False)
+                        .replace("</", "<\\/"))
     # Yangi alifbo switch (alphabet.py) — the page converts its own text.
     import alphabet
     html = html.replace("{{NEW_ALPHABET}}", "1" if alphabet.is_on() else "0")
@@ -1312,6 +1315,23 @@ async def _stock_gone(exc: InsufficientStockError, request: web.Request):
         "available": exc.available,
     }, status=409)
 
+async def api_assistant(request: web.Request):
+    """POST /api/assistant {"text": "..."} — saytdagi «Yordamchi» (site_assistant):
+    botdagi AI sotuvchi javobi va rasmli kartochkalar (mahsulot, savat, o'z
+    buyurtmalari). Hech narsa Telegram'ga yuborilmaydi — javob shu yerda."""
+    try:
+        body = await request.json()
+    except Exception:
+        return _json({"error": "bad_request"}, status=400)
+    text = str((body or {}).get("text") or "").strip()
+    if not text:
+        return _json({"error": "empty"}, status=400)
+    import site_assistant
+    user = dict(request.get("telegram_user") or {}, id=request["user_id"])
+    result = await site_assistant.ask(request.app.get("bot"), user, text, request.get("user_lang", "uz"))
+    return _json(result)
+
+
 async def api_orders(request: web.Request):
     """Return the buyer's recent orders with full details for the Mini App
     "My Orders" page (status, lifecycle timestamps, items, delivery + payment)."""
@@ -1859,6 +1879,7 @@ async def api_recipes(request: web.Request):
     faqat 1 ta retsept ko'rsat ... hammasini emas"). recipes.py."""
     import recipes
     lang = request.get("user_lang", "uz")
+    await recipes.sync()
     current, _, next_at = recipes.schedule()
     return _json({
         "current": await recipes.view(current, lang),
@@ -1870,8 +1891,9 @@ async def api_recipes(request: web.Request):
 async def api_recipe_one(request: web.Request):
     """One published recipe by slug — the channel post's link names its
     recipe, so a post opened days later still shows that one. Future recipes
-    stay hidden (recipes.find)."""
+    stay hidden (recipes.find), and so do ones still waiting for a photo."""
     import recipes
+    await recipes.sync()
     recipe = recipes.find(request.match_info["slug"])
     if not recipe:
         return _json({"error": "not_found"}, status=404)
@@ -1882,6 +1904,7 @@ async def api_recipe_to_cart(request: web.Request):
     """"🛒 Barcha masalliqlarni savatga" — one pack of every in-stock product."""
     import recipes
     from database import get_cart_count
+    await recipes.sync()
     recipe = recipes.find(request.match_info["slug"])
     if not recipe:
         return _json({"error": "not_found"}, status=404)
@@ -2096,7 +2119,8 @@ def _apply_set_stock(data: dict, stock: dict) -> dict:
 # The Mini App tracker's batches (see "SITE ANALYTICS" in webapp/index.html).
 # Anything malformed is dropped silently — analytics must never cost a buyer
 # an error, and a bad client can't push more than 60 short rows per call.
-TRACK_KINDS = {"open", "view", "time", "scroll", "row", "search", "cart_add", "fav", "checkout", "game"}
+TRACK_KINDS = {"open", "view", "time", "scroll", "row", "search", "cart_add", "fav", "checkout", "game",
+               "assistant"}
 _TRACK_SID = re.compile(r"[A-Za-z0-9_-]{6,40}")
 
 
@@ -2258,6 +2282,7 @@ def create_webapp(bot: Bot, storage=None) -> web.Application:
     app.router.add_get("/api/lang", api_get_lang)
     app.router.add_post("/api/lang", api_set_lang)
     app.router.add_get("/api/keto/status", api_keto_status)
+    app.router.add_post("/api/assistant", api_assistant)
     app.router.add_get("/api/photo/{file_id}", api_photo)
 
     # Admin website (/admin) + uploaded-image serving (/img/{id}).
@@ -2269,6 +2294,8 @@ def create_webapp(bot: Bot, storage=None) -> web.Application:
     # bilan tekshiriladi, sessiya yoki initData emas (meta_comments.py).
     import meta_comments
     meta_comments.setup_routes(app)
+    import site_music
+    site_music.setup_routes(app)        # /music/<id>.mp3 — the site's background recordings
 
     # Serve the webapp/ directory at /static/ so we can self-host vendor
     # assets (Leaflet, etc) instead of relying on a CDN — flaky CDN
