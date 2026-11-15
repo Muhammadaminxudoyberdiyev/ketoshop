@@ -136,6 +136,70 @@ _TEMPLATE_FOR = {"narx": "tpl_narx", "mavjudlik": "tpl_narx", "buyurtma": "tpl_b
                  "yetkazish": "tpl_yetkazish"}
 
 
+# Egasi, 2026-11-16: "Directda va izohda javob yozilmagan … izohsiz qolmasin javobsiz qolmasin".
+# AI aniq javob topa olmagan sog'liq / shikoyat / boshqa savolga — iliq oraliq javob (keyin odam qaraydi).
+HOLDING = {
+    "salomatlik": "Yaxshi savol 🌿 Bu borada aniq maslahatni shifokor beradi; mahsulot tarkibi va qanday "
+                  "ishlatilishi haqida Telegram botimiz @ketoshopbot da batafsil yozib beramiz.",
+    "shikoyat": "Kechirasiz, noqulaylik uchun 🙏 Iltimos, Direct'ga yoki Telegram botimiz @ketoshopbot ga "
+                "yozing — tezda hal qilamiz.",
+    "boshqa": "Savolingiz uchun rahmat 😊 Aniq javobni Telegram botimiz @ketoshopbot da beramiz — u yerga "
+              "yozsangiz, xodimimiz yordam beradi.",
+}
+
+
+def holding_reply(category: str | None) -> str | None:
+    """Spamdan boshqa har qanday izohga oxirgi zaxira javob."""
+    if category == "spam":
+        return None
+    return HOLDING.get(category or "", HOLDING["boshqa"])
+
+
+DM_LIMIT = 1000           # Instagram Direct matni
+
+
+async def dm_text_full(comment_text: str | None, dm: str | None, limit: int = DM_LIMIT) -> str:
+    """Izohdan keyingi bitta Direct xabari (egasi, 2026-11-16: "mahsulotlarimiz ro'yxatini …
+    hammasini va chegirmadagilarni alohida yubor faqat bu directdan"): rahmat, hamma
+    mahsulotlar havolasi (≈140 ta mahsulot 1000 belgiga sig'maydi) va chegirmadagilar
+    ro'yxati — sig'gancha. Meta izohga faqat bitta shaxsiy xabarga ruxsat beradi;
+    davomini odam javob yozgach Direct AI'si yuboradi."""
+    body = _URL.sub("", (dm or "").strip()).strip() or DEFAULT_DM
+    head = f"{body}\n\n🛍 Barcha mahsulotlarimiz va narxlari: {SHOP_LINK}"
+    lines = []
+    try:
+        import database
+        for p in await database.admin_list_products(include_inactive=False):
+            if p.get("b2b_only") or float(p.get("quantity") or 0) <= 0:
+                continue
+            pct = database.active_discount(p.get("discount_percent"), p.get("discount_until"))
+            if not pct:
+                continue
+            new = database.effective_price(float(p["price"]), pct, p.get("discount_until"))
+            lines.append((pct, f"• {p.get('name')} — {int(round(new)):,} so'm (−{int(pct)}%)".replace(",", " ")))
+    except Exception:
+        logger.warning("Direct: discounted products unavailable", exc_info=True)
+    text = head
+    if lines:
+        text += "\n\n🔥 Chegirmadagilar:"
+        for _pct, line in sorted(lines, key=lambda x: -x[0]):
+            if len(in_script_of(comment_text, text + "\n" + line)) > limit - 40:
+                text += "\n… va boshqalar — havolada"
+                break
+            text += "\n" + line
+    return direct_links(in_script_of(comment_text, text))[:limit]
+
+
+_TG_HANDLES = {"@ketoshopbot": "https://t.me/ketoshopbot", "@ketoshop_uz": "https://t.me/ketoshop_uz"}
+
+
+def direct_links(text: str) -> str:
+    """Instagram Direct'da @username bosilmaydi (egasi, 2026-11-16) — to'liq t.me havola."""
+    for handle, link in _TG_HANDLES.items():
+        text = re.sub(re.escape(handle) + r"\b", link, text, flags=re.IGNORECASE)
+    return text
+
+
 def template_reply(category: str | None, kb: dict) -> str | None:
     """Narx / bor-yo'qligi / buyurtma / yetkazish / manzil savoliga tayyor
     javob (2026-11-12: «Narxi qancha», «Нархи» kabi izohlar kutib qolgan edi).
