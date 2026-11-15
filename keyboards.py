@@ -77,6 +77,7 @@ ADMIN_COMMANDS = [
     BotCommand(command="keto_tushuntirish", description="🎁 Keto tushuntirish xabari (18.09 17:30)"),
     BotCommand(command="sayt", description="🌐 Boshqaruv paneli manzili"),
     BotCommand(command="keto_status", description="🎁 Keto dasturi holati"),
+    BotCommand(command="sayt_keto", description="⏱ Saytda faol vaqt uchun Keto: holat"),
     BotCommand(command="backup_now", description="💾 Bazadan nusxa olish"),
 ]
 
