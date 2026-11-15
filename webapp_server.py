@@ -1845,6 +1845,7 @@ async def api_recipes(request: web.Request):
     faqat 1 ta retsept ko'rsat ... hammasini emas"). recipes.py."""
     import recipes
     lang = request.get("user_lang", "uz")
+    await recipes.sync()
     current, _, next_at = recipes.schedule()
     return _json({
         "current": await recipes.view(current, lang),
@@ -1856,8 +1857,9 @@ async def api_recipes(request: web.Request):
 async def api_recipe_one(request: web.Request):
     """One published recipe by slug — the channel post's link names its
     recipe, so a post opened days later still shows that one. Future recipes
-    stay hidden (recipes.find)."""
+    stay hidden (recipes.find), and so do ones still waiting for a photo."""
     import recipes
+    await recipes.sync()
     recipe = recipes.find(request.match_info["slug"])
     if not recipe:
         return _json({"error": "not_found"}, status=404)
@@ -1868,6 +1870,7 @@ async def api_recipe_to_cart(request: web.Request):
     """"🛒 Barcha masalliqlarni savatga" — one pack of every in-stock product."""
     import recipes
     from database import get_cart_count
+    await recipes.sync()
     recipe = recipes.find(request.match_info["slug"])
     if not recipe:
         return _json({"error": "not_found"}, status=404)
