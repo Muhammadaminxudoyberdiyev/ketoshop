@@ -110,6 +110,18 @@ def _gate_text(lang: str) -> str:
     )
 
 
+def _is_privacy_request(event) -> bool:
+    """/malumotlarim va uning tugmalari (customer_portrait.py): saqlangan
+    ma'lumotni ko'rish va o'chirish obunasiz ham ishlaydi — Mini App dagi
+    Yordamchi obunasiz odam bilan ham gaplashadi."""
+    if isinstance(event, Message):
+        command = (event.text or "").strip().split(maxsplit=1)[0:1]
+        return bool(command) and command[0].split("@")[0].lower() == "/malumotlarim"
+    if isinstance(event, CallbackQuery):
+        return (event.data or "").startswith("mydata:")
+    return False
+
+
 def _gate_keyboard(lang: str) -> InlineKeyboardMarkup:
     join_text = "📢 Kanalga o'tish" if lang != "ru" else "📢 Перейти в канал"
     check_text = "✅ Tekshirish" if lang != "ru" else "✅ Проверить"
@@ -143,6 +155,8 @@ class SubscriptionGateMiddleware(BaseMiddleware):
         # sees every member's message (link_guard.py) — nagging each of them
         # there about the channel would spam the whole group.
         if isinstance(event, Message) and event.chat.type != "private":
+            return await handler(event, data)
+        if _is_privacy_request(event):
             return await handler(event, data)
 
         bot = data["bot"]

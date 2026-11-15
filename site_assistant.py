@@ -246,9 +246,8 @@ async def ask(bot, tg_user: dict, text: str, lang: str) -> dict:
         session.pop(key, None)
     if reply:
         reply = ai_sales.polish_reply(reply, lang, customer_text=text)
-        names = ai_sales.customer_names(message.from_user, text, session.get("names", ()))
-        session.setdefault("names", set()).update(names)
-        reply = ai_sales.naturalize(ai_sales.thank_politely(ai_sales.strip_name_address(reply, names)))
+        reply = ai_sales.naturalize(ai_sales.thank_politely(
+            ai_sales.finish_address(reply, message.from_user, text, session)))
     try:
         cards = await build_cards(user_id, lang, message.web_cards)
     except Exception:
