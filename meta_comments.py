@@ -88,6 +88,8 @@ RETRY_KEY_V3 = "meta_comments_retry_subreplies_2026_11_12_v3"
 RECHECK_KEY_C = "meta_comments_recheck_2026_11_12c"
 # 100 g dagi raqamlar va tarkib katalogga qo'shilgach — uglevod/tarkib savollari yana bir marta.
 RECHECK_KEY_D = "meta_comments_recheck_2026_11_13d"
+# Hech bir izoh javobsiz qolmasin (2026-11-16) — «topa olmadi» deganlar oraliq javob oladi.
+RECHECK_KEY_E = "meta_comments_recheck_2026_11_16e"
 MAX_ADS = 100
 TEXT_MAX = 1500
 REPLY_MAX = 900                       # Instagram izohi ~2200 belgi; javob qisqa
@@ -473,6 +475,7 @@ async def route(bot: Bot | None, row: dict, *, notify: bool = True, wait: bool =
             # yana uriniladi; adminni hozircha bezovta qilmaymiz.
             return "retry"
     action = comment_ai.decide(d.category, d.confident, mode) if d else "approve"
+    holding = False
     if d and action == "approve" and mode == "avto":
         # Oddiy savol (narx, bor-yo'qligi, buyurtma, yetkazish, manzil) — AI
         # aniq javob topmasa ham, bilim bazasidagi tayyor javob ketadi
@@ -481,6 +484,10 @@ async def route(bot: Bot | None, row: dict, *, notify: bool = True, wait: bool =
         fallback = comment_ai.template_reply(d.category, comment_ai.kb_with_defaults(state.get("kb")))
         if fallback:
             d.reply, d.confident, action = fallback, True, "auto"
+        elif comment_ai.holding_reply(d.category):
+            # Hech bir izoh javobsiz qolmasin (egasi, 2026-11-16) — iliq oraliq javob
+            # ketadi, odam keyin qarashi uchun adminlarga kartochka ham boradi.
+            d.reply, action, holding = comment_ai.holding_reply(d.category), "auto", True
     fields = {"ai_confident": bool(d and d.confident and action == "auto")}
     if d:
         fields.update(category=d.category, ai_draft=d.reply or None, ai_model=d.model, ai_dm=d.dm or None)
@@ -490,6 +497,8 @@ async def route(bot: Bot | None, row: dict, *, notify: bool = True, wait: bool =
         await send_cards(bot, await database.get_meta_comment(row["id"]), new_ok=False)
         return "spam"
     if action == "auto" and d and d.reply:
+        if holding and notify:
+            await send_cards(bot, row)
         if wait:
             await auto_send(bot, row["id"], delay=0, notify=notify)
         else:
@@ -548,7 +557,7 @@ async def thank_in_direct(row: dict) -> bool:
         return False
     if await database.meta_comment_dm_recent(row.get("from_id")):
         return False
-    text = comment_ai.dm_text(row.get("text"), row.get("ai_dm"))
+    text = await comment_ai.dm_text_full(row.get("text"), row.get("ai_dm"))
     try:
         async with aiohttp.ClientSession() as session:
             ident = await identity(session)
@@ -1121,7 +1130,7 @@ async def scheduler_loop(bot: Bot) -> None:
     # #190 deployidan oldin kelgan izohlar kartochkasi qolmaydi.
     _spawn(_cleanup_quietly(bot))
     try:
-        for key in (RECHECK_KEY_C, RECHECK_KEY_D):
+        for key in (RECHECK_KEY_C, RECHECK_KEY_D, RECHECK_KEY_E):
             if await database.claim_release_notes(key):
                 n = await database.reset_meta_comments_unconfident()
                 logger.info("comments: %d unanswerable comment(s) queued for a re-check (%s)", n, key)
