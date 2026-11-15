@@ -78,6 +78,26 @@ def is_new_day(day: date) -> bool:
 def caption(recipe: dict, lang: str, link: str) -> str:
     """The recipe's start: title, intro, numbers, the first ingredients — and
     the link to the whole recipe, twice: on the title and as a big line."""
+    return caption_body(recipe, lang, link) + "\n\n" + caption_cta(lang, link)
+
+
+def caption_cta(lang: str, link: str) -> str:
+    """The fixed ending — never rewritten by channel_voice. Owner, 2026-11-15:
+    "to'liq retseptni ko'rish uchun link ustiga bosing deb aniq yozuv ham qo'sh,
+    bo'lmasa qayerda retsept to'lig'i deb so'rashyapti"."""
+    e = lambda s: html.escape(s, quote=False)  # noqa: E731
+    href = html.escape(link, quote=True)
+    cta = e(_t("TO'LIQ RETSEPTNI SAYTIMIZ ORQALI KO'RING", "СМОТРИТЕ ПОЛНЫЙ РЕЦЕПТ НА НАШЕМ САЙТЕ", lang))
+    how = e(_t("☝️ To'liq retseptni ko'rish uchun yuqoridagi ko'k yozuv ustiga bosing — masalliqlar, "
+               "qadamma-qadam tayyorlash va bir bosishda savatga qo'shish saytimizda ochiladi.",
+               "☝️ Чтобы увидеть полный рецепт, нажмите на синюю надпись выше — ингредиенты, "
+               "пошаговое приготовление и корзина в один клик откроются на нашем сайте.", lang))
+    return "\n".join(["━━━━━━━━━━━━━━━━", f'👉 <b><a href="{href}">{cta}</a></b> 👈', "━━━━━━━━━━━━━━━━", how])
+
+
+def caption_body(recipe: dict, lang: str, link: str) -> str:
+    """Title (linked), intro, numbers and the first ingredients — the part the
+    channel voice may rewrite."""
     e = lambda s: html.escape(s, quote=False)  # noqa: E731
     href = html.escape(link, quote=True)
     L = recipes.labels(lang)
@@ -95,13 +115,6 @@ def caption(recipe: dict, lang: str, link: str) -> str:
     if len(ings) > TEASER_INGREDIENTS:
         more = len(ings) - TEASER_INGREDIENTS
         lines.append(e(_t(f"… va yana {more} ta masalliq", f"… и ещё {more} ингредиента", lang)))
-    cta = e(_t("TO'LIQ RETSEPTNI SAYTIMIZ ORQALI KO'RING", "СМОТРИТЕ ПОЛНЫЙ РЕЦЕПТ НА НАШЕМ САЙТЕ", lang))
-    lines += ["", "━━━━━━━━━━━━━━━━",
-              f'👉 <b><a href="{href}">{cta}</a></b> 👈',
-              "━━━━━━━━━━━━━━━━",
-              e(_t("Masalliqlar, qadamma-qadam tayyorlash va bir bosishda savatga qo'shish — hammasi saytimizda.",
-                   "Ингредиенты, пошаговое приготовление и всё в корзину одним нажатием — на нашем сайте.",
-                   lang))]
     return "\n".join(lines)
 
 
@@ -143,7 +156,11 @@ async def post_to_channel(bot: Bot, recipe: dict, chat_id: int | None = None) ->
         return False
     link = full_recipe_link(recipe, await main_app_enabled(bot))
     try:
-        await bot.send_photo(target, photo(recipe), caption=caption(recipe, CHANNEL_LANG, link),
+        import channel_voice
+        cta = caption_cta(CHANNEL_LANG, link)
+        body = await channel_voice.rewrite(caption_body(recipe, CHANNEL_LANG, link), "retsept",
+                                           1024 - len(cta))
+        await bot.send_photo(target, photo(recipe), caption=f"{body.rstrip()}\n\n{cta}",
                              parse_mode=ParseMode.HTML)
         return True
     except Exception:
