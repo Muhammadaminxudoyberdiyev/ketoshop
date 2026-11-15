@@ -58,6 +58,7 @@ ADMIN_COMMANDS = [
     BotCommand(command="kanal_ovoz", description="🗣 Kanal postlari jonli va har xil uzunlikda: holat, sinov"),
     BotCommand(command="izoh_qayta", description="🔁 Bir oy oldingi izohlarga qayta yozish: holat, on/off"),
     BotCommand(command="xabar_soni", description="📨 Userlarga kuniga nechta rejali xabar boryapti"),
+    BotCommand(command="fikr_sorash", description="🗣 2 kunda bir AI xaridorlardan fikr so'raydi: holat, namuna"),
     BotCommand(command="izoh_solishtir", description="⚖️ GPT va Gemini javoblari yonma-yon (yuborilmaydi)"),
     BotCommand(command="leads", description="📋 Yangi leadlar"),
     BotCommand(command="ai_holat", description="🤖 AI sotuvchi: holat, yoqish/o'chirish, model"),

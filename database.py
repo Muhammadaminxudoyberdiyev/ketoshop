@@ -5217,11 +5217,14 @@ async def get_month_stats(year: int, month: int) -> dict:
 
 # ===== Rejali xabarlar chegarasi (push_cap.py) =====
 
-async def claim_user_push(user_id: int, kind: str, active_max: int, quiet_max: int, quiet_days: int) -> bool:
+async def claim_user_push(user_id: int, kind: str, active_max: int, quiet_max: int, quiet_days: int,
+                          unless: list[str] | None = None) -> bool:
     """Toshkent kuni bo'yicha shu userga yana bitta rejali xabar mumkinmi —
     mumkin bo'lsa hisobga yozadi (bitta atomik so'rov, parallel yuboruvchilar
     ham chegarani oshirolmaydi). Chegara: xaridor va oxirgi `quiet_days` kunda
-    botda yoki saytda faol — `active_max`, qolganlar — `quiet_max`."""
+    botda yoki saytda faol — `active_max`, qolganlar — `quiet_max`. `unless` —
+    bugun shu turlardan biri ketgan bo'lsa, bu xabar yuborilmaydi (masalan,
+    fikr so'ralgan kuni umumiy maslahat ketmaydi)."""
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """WITH lim AS (
@@ -5240,8 +5243,9 @@ async def claim_user_push(user_id: int, kind: str, active_max: int, quiet_max: i
                ON CONFLICT (user_id, day) DO UPDATE
                    SET count = user_push_day.count + 1, kinds = user_push_day.kinds || $2::text
                    WHERE user_push_day.count < (SELECT n FROM lim)
+                     AND NOT (user_push_day.kinds && $6::text[])
                RETURNING count""",
-            user_id, kind, active_max, quiet_max, quiet_days)
+            user_id, kind, active_max, quiet_max, quiet_days, list(unless or []))
     return row is not None
 
 

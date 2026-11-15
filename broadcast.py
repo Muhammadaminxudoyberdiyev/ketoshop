@@ -156,7 +156,8 @@ async def _broadcast_to_all(bot: Bot, text: str | dict) -> tuple[int, int]:
         markup = shop_button(lang)
         # Kuniga ko'pi bilan 2 ta (xarid qilmagan / jim — 1 ta) rejali xabar — push_cap.py.
         import push_cap
-        if not await push_cap.claim(uid, "tips"):
+        # Fikr so'ralgan kuni (feedback_ask.py) umumiy maslahat ketmaydi — ikki xabar ketma-ket emas.
+        if not await push_cap.claim(uid, "tips", unless=("fikr",)):
             continue
         try:
             await bot.send_message(

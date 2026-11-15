@@ -31,11 +31,14 @@ QUIET_MAX = 1
 QUIET_AFTER_DAYS = 3
 
 
-async def claim(user_id: int, kind: str) -> bool:
+async def claim(user_id: int, kind: str, unless: tuple[str, ...] = ()) -> bool:
     """True — shu xabar bugun yuborilishi mumkin (va hisobga yozildi);
     False — bugungi chegara to'lgan. Baza xatosida False: chegara
     hech qachon oshib ketmasin."""
     try:
+        if unless:
+            return await database.claim_user_push(user_id, kind, ACTIVE_BUYER_MAX, QUIET_MAX, QUIET_AFTER_DAYS,
+                                                  list(unless))
         return await database.claim_user_push(user_id, kind, ACTIVE_BUYER_MAX, QUIET_MAX, QUIET_AFTER_DAYS)
     except Exception:
         logger.exception("push cap: claim failed for %s (%s) — not sent", user_id, kind)
@@ -51,7 +54,7 @@ router = Router(name="push_cap")
 
 KIND_NAMES = {"tips": "Keto maslahat", "reco": "Shaxsiy tavsiya", "aksiya": "Aksiya", "kun_mahsuloti": "Kun mahsuloti",
               "qiziqish": "Qiziqish eslatmasi", "keto_savol": "Keto savol", "qayta_sotuv": "Qayta sotuv",
-              "savat": "Savat eslatmasi", "sovga": "Sovg'a kampaniyasi"}
+              "savat": "Savat eslatmasi", "sovga": "Sovg'a kampaniyasi", "fikr": "Fikr so'rash (AI)"}
 
 
 def stats_text(st: dict, days: int) -> str:
