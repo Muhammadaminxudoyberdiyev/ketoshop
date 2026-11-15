@@ -90,10 +90,11 @@ class SendOneTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await cf.send_one(None, NOON), "no_token")
         self.assertEqual((self.sent, self.marked), ([], []))
 
-    async def test_night_is_no_longer_quiet(self):
-        # Egasi, 2026-11-16: "hammasiga hozir yoz" — kun bo'yi.
+    async def test_quiet_at_night(self):
+        # Egasi, 2026-11-16: "instagram bloklash xavfiga yaqinlashmasin" — tunda ommaviy javob yo'q.
         self.texts = {"c1": "Salom 🌿"}
-        self.assertEqual(await cf.send_one(None, NIGHT), "sent")
+        self.assertEqual(await cf.send_one(None, datetime(2026, 11, 16, 23, 30)), "quiet")
+        self.assertEqual(await cf.send_one(None, NOON), "sent")
 
     async def test_send_all_goes_through_the_whole_queue(self):
         self.candidates = [row(i, f"c{i}") for i in range(1, 6)]
@@ -103,7 +104,7 @@ class SendOneTest(unittest.IsolatedAsyncioTestCase):
             return [r for r in self.candidates if r["id"] not in {k for k, _ in self.marked}][:n]
 
         with patch.object(database, "meta_comment_followup_candidates", AsyncMock(side_effect=candidates)), \
-                patch.object(cf, "GAP", 0):
+                patch.object(cf, "GAP", 0), patch.object(cf, "GAP_MAX", 0):
             stats = await cf.send_all(None, NOON)
         self.assertEqual(stats["sent"], 5)
         self.assertEqual(stats["stop"], "none")
@@ -116,7 +117,7 @@ class SendOneTest(unittest.IsolatedAsyncioTestCase):
         async def limited(session, ident, c, text):
             raise mc.GraphError(4, "Application request limit reached")
 
-        with patch.object(mc, "reply_public", limited), patch.object(cf, "GAP", 0):
+        with patch.object(mc, "reply_public", limited), patch.object(cf, "GAP", 0), patch.object(cf, "GAP_MAX", 0):
             stats = await cf.send_all(None, NOON)
         self.assertEqual(stats["stop"], "throttled")
         self.assertEqual(self.marked, [])                       # nobody marked — they wait for the next round
@@ -129,12 +130,13 @@ class SendOneTest(unittest.IsolatedAsyncioTestCase):
 
 
 class PaceTest(unittest.TestCase):
-    def test_every_ten_minutes_everyone_waiting(self):
-        # Egasi, 2026-11-16: "har 10 daqiqada yozilmagan hammasiga yoz".
+    def test_everyone_waiting_but_at_a_human_pace(self):
+        # Egasi, 2026-11-16: "har 10 daqiqada yozilmagan hammasiga yoz" + "bloklash xavfiga yaqinlashmasin".
         self.assertEqual(cf.EVERY, 600)
-        self.assertEqual(cf.HOURS, (0, 24))
-        self.assertGreaterEqual(cf.DAILY, 500)
-        self.assertGreaterEqual(cf.GAP, 5)                              # never a burst
+        self.assertGreaterEqual(cf.GAP, 90)                             # ≤ ~40 replies an hour
+        self.assertGreater(cf.GAP_MAX, cf.GAP)                          # random, not a machine rhythm
+        self.assertLessEqual(cf.DAILY, 200)
+        self.assertEqual(cf.HOURS, (8, 23))
 
     def test_resumes_by_itself_after_an_instagram_block(self):
         # Egasi, 2026-11-16: "to'xtab qolsa avtomatik davom etishi kerak ochilgandan keyin".

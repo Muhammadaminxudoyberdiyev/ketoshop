@@ -40,12 +40,14 @@ router = Router(name="comment_followup")
 DAYS = max(7, int(os.getenv("COMMENT_FOLLOWUP_DAYS", "30")))
 # Egasi, 2026-11-16: "30 kun avval yozilgan izohlarga nega yozmading, hammasiga yoz" —
 # 25/kun, 20 daqiqada bitta edi (≈7 kun); endi 5 daqiqada bitta, kuniga 120 gacha (≈1,5 kun).
-# Egasi, 2026-11-16: "nega har 5 daqiqada 1 tadan? hammasiga hozir yoz … har 10 daqiqada yozilmagan
-# hammasiga yoz" — har EVERY soniyada navbatdagilarning HAMMASIGA, orasida GAP soniya; kecha-kunduz.
-DAILY = max(0, int(os.getenv("COMMENT_FOLLOWUP_DAILY", "1000")))
+# Egasi, 2026-11-16: "har 10 daqiqada yozilmagan hammasiga yoz", keyin "instagram bloklash xavfiga
+# yaqinlashmasin" — har EVERY soniyada navbatdagilarning hammasiga, lekin odamdek: orasida tasodifiy
+# GAP..GAP_MAX soniya (soatiga ~30 ta), kuniga DAILY tadan oshmaydi, tunda emas.
+DAILY = max(0, int(os.getenv("COMMENT_FOLLOWUP_DAILY", "200")))
 EVERY = max(300, int(os.getenv("COMMENT_FOLLOWUP_EVERY", "600")))
-GAP = max(5, int(os.getenv("COMMENT_FOLLOWUP_GAP", "20")))
-HOURS = (0, 24)                  # Toshkent: kun bo'yi
+GAP = max(30, int(os.getenv("COMMENT_FOLLOWUP_GAP", "90")))
+GAP_MAX = max(GAP, int(os.getenv("COMMENT_FOLLOWUP_GAP_MAX", "150")))
+HOURS = (8, 23)                  # Toshkent: 08:00–22:59
 NEW_PRODUCT_DAYS = 45
 TRIES_PER_TICK = 3               # AI "yozmaymiz" desa — keyingi odam
 
@@ -183,7 +185,8 @@ async def send_all(bot: Bot | None, now: datetime | None = None) -> dict:
         else:
             stats["stop"] = result
             break
-        await asyncio.sleep(GAP)
+        import random
+        await asyncio.sleep(random.uniform(GAP, GAP_MAX))
     if stats["sent"] or stats["stop"] == "throttled":
         logger.info("comment follow-up round: %s", stats)
     return stats
@@ -225,8 +228,8 @@ async def status_text() -> str:
         f"Holat: <b>{'yoqilgan ✅' if on else 'o‘chiq ⏸'}</b>",
         f"Bugun: <b>{st['today']}</b> / {DAILY} ta · jami: {st['total']} ta · AI yozmagan: {st['skipped']} ta",
         f"Navbatda: {st['queue']} kishi ({DAYS} kundan eski izohlar, har biriga bir marta)",
-        f"Har {EVERY // 60} daqiqada navbatdagilarning hammasiga (orasida {GAP} soniya), kun bo'yi; "
-        "Instagram cheklasa — to'xtab, keyingi safar davom etadi",
+        f"Har {EVERY // 60} daqiqada navbatdagilarning hammasiga, orasida {GAP}–{GAP_MAX} soniya, "
+        f"Toshkent {HOURS[0]:02d}:00–{HOURS[1]:02d}:00; Instagram cheklasa — to'xtab, o'zi davom etadi",
     ]
     if st["last"]:
         lines += ["", "<b>Oxirgilari:</b>"]
