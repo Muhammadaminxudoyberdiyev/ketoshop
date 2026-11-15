@@ -3685,6 +3685,176 @@
   }
   @keyframes dock-ripple { to { transform: scale(1.6); opacity: 0; } }
 
+  /* Saytda faol vaqt uchun Keto (owner, 2026-11-15): the celebration at
+     every reward (YANGI5's look), the "still there?" card, the next-gift
+     pill and the profile card. `.still` = reduced motion: nothing moves. */
+  #keto-party {
+    position: fixed;
+    inset: 0;
+    z-index: 99990;
+    display: flex;
+    overflow-y: auto;
+    padding: 20px 16px;
+    background: radial-gradient(circle at 50% 35%, rgba(43, 22, 46, .82), rgba(12, 8, 20, .94));
+    animation: wp-in .35s var(--ease) both;
+  }
+  #keto-party canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  #keto-party .kp-card {
+    position: relative;
+    margin: auto;
+    width: 100%;
+    max-width: 360px;
+    padding: 24px 20px 16px;
+    border-radius: 28px;
+    background: var(--surface, #fff);
+    color: var(--text, #2B2116);
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .45);
+    animation: wp-pop .55s var(--ease-spring) .1s both;
+  }
+  #keto-party .kp-coin {
+    width: 74px;
+    height: 74px;
+    margin: 0 auto;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font: 900 32px/1 var(--font-display);
+    color: #7A4A00;
+    background: radial-gradient(circle at 35% 30%, #FFF6C8, #FFC94D 45%, #E8A317 100%);
+    box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .12), 0 6px 18px rgba(232, 163, 23, .45);
+    animation: kp-coin 1.1s var(--ease-spring) .15s both;
+  }
+  @keyframes kp-coin { from { opacity: 0; transform: rotateY(540deg) scale(.4); } to { opacity: 1; transform: none; } }
+  #keto-party h2 { margin: 12px 0 6px; font: 800 26px/1.15 var(--font-display); }
+  #keto-party .kp-why { margin: 0 0 12px; font-size: 14.5px; line-height: 1.45; color: var(--hint, #7A6A55); }
+  #keto-party .kp-balance {
+    display: inline-block;
+    margin: 0 0 14px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: rgba(255, 201, 77, .22);
+    font-size: 14px;
+    font-weight: 700;
+  }
+  #keto-party .kp-also { margin: 2px 0 8px; font-size: 14px; font-weight: 800; }
+  #keto-party .kp-yangi {
+    margin: 0 0 14px;
+    padding: 12px;
+    border-radius: 20px;
+    background: linear-gradient(115deg, #E5484D 0%, #F76B15 100%);
+    color: #fff;
+  }
+  #keto-party .kp-pct { display: block; font: 900 40px/1 var(--font-display); letter-spacing: -1px; }
+  #keto-party .kp-gift { display: block; margin-top: 4px; font: 700 14px/1.3 var(--font-body); }
+  #keto-party .kp-code {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 3px 12px;
+    border: 1.5px dashed rgba(255, 255, 255, .85);
+    border-radius: 999px;
+    font: 800 13px/1.4 var(--font-body);
+    letter-spacing: 1px;
+  }
+  #keto-party .kp-left { margin-top: 10px; font-size: 12.5px; font-weight: 700; opacity: .9; }
+  #keto-party .kp-clock { font: 900 32px/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
+  #keto-party .kp-note { margin: 6px 0 0; font-size: 12.5px; line-height: 1.4; opacity: .92; }
+  #keto-party .kp-next { margin: 0; font-size: 15px; font-weight: 800; }
+  #keto-party .kp-hint { margin: 3px 0 14px; font-size: 12.5px; line-height: 1.4; color: var(--hint, #7A6A55); }
+  #keto-party .kp-go {
+    width: 100%;
+    border: 0;
+    border-radius: 16px;
+    padding: 15px;
+    font: 800 16px var(--font-body);
+    background: var(--btn, #2E7D32);
+    color: var(--btn-text, #fff);
+    cursor: pointer;
+  }
+  .kp-more {
+    margin-top: 8px;
+    padding: 8px 12px;
+    border: 0;
+    background: none;
+    color: var(--hint, #7A6A55);
+    font: 700 13.5px var(--font-body);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+  .kp-details { margin-top: 4px; text-align: left; font-size: 13.5px; line-height: 1.5; }
+  .kp-details p { margin: 0 0 8px; }
+  .kp-details ul { margin: 0 0 8px; padding-left: 18px; }
+  .kp-details li { margin-bottom: 4px; }
+  #keto-party .kp-rain {
+    position: fixed;
+    top: -40px;
+    font-size: 26px;
+    pointer-events: none;
+    animation: kp-fall linear forwards;
+  }
+  @keyframes kp-fall { to { transform: translateY(115vh) rotate(320deg); } }
+  #keto-party.still, #keto-party.still .kp-card, #keto-party.still .kp-coin { animation: none; }
+  #keto-party.still .kp-rain { display: none; }
+  .st-check {
+    position: fixed;
+    z-index: 99980;
+    width: min(220px, calc(100% - 32px));
+    padding: 10px 14px;
+    border: 1.5px solid var(--btn, #2E7D32);
+    border-radius: 18px;
+    background: var(--surface, #fff);
+    color: var(--text, #2B2116);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, .22);
+    font: 800 15px/1.3 var(--font-body);
+    text-align: left;
+    cursor: pointer;
+  }
+  .st-check small { display: block; margin-top: 3px; font-size: 12px; font-weight: 500; color: var(--hint, #7A6A55); }
+  .st-pill {
+    position: fixed;
+    left: 50%;
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    z-index: 99970;
+    max-width: calc(100% - 32px);
+    padding: 9px 16px;
+    border-radius: 999px;
+    background: var(--surface, #fff);
+    color: var(--text, #2B2116);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .18);
+    font: 700 13.5px/1.3 var(--font-body);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -16px);
+    transition: opacity .3s, transform .3s;
+  }
+  .st-pill.on { opacity: 1; transform: translate(-50%, 0); }
+  #st-profile {
+    margin: 0 0 14px;
+    padding: 14px;
+    border-radius: 24px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    box-shadow: var(--shadow-1);
+  }
+  #st-profile:empty { display: none; }
+  #st-profile .st-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14.5px; font-weight: 700; }
+  #st-profile .st-bal { flex: none; padding: 4px 10px; border-radius: 999px; background: rgba(255, 201, 77, .22); font-size: 13px; }
+  #st-profile .st-bar { height: 8px; margin: 10px 0 8px; border-radius: 99px; background: var(--hairline, #E5DAC6); overflow: hidden; }
+  #st-profile .st-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #FFC94D, #E8A317); }
+  #st-profile .st-next { font-size: 14px; font-weight: 700; }
+  #st-profile .st-sub { margin-top: 2px; font-size: 12.5px; color: var(--hint, #7A6A55); }
+  #st-profile .kp-more { padding-left: 0; }
+  @media (prefers-reduced-motion: reduce) {
+    #keto-party, #keto-party .kp-card, #keto-party .kp-coin { animation: none; }
+    #keto-party .kp-rain { display: none; }
+    .st-pill { transition: none; }
+  }
+
   /* YANGI5 tantanasi (owner, 2026-11-08): fireworks and the clock, once. */
   #welcome-party {
     position: fixed;
@@ -4001,6 +4171,7 @@
     <div class="profile-avatar" id="profile-avatar">👤</div>
     <div class="profile-name" id="profile-name"></div>
     <div class="profile-meta" id="profile-lang"></div>
+    <div id="st-profile"></div>
     <div id="profile-menu"></div>
   </div>
 </div>
@@ -6422,6 +6593,8 @@ function _siteFbDue() {
 }
 function _siteFbQuietMoment() {
   if (['checkout', 'cheque', 'order-success'].includes(activePage)) return false;
+  // Not right after a Keto celebration — one thing at a time.
+  if (typeof KetoParty !== 'undefined' && KetoParty.recent(120000)) return false;
   if (activePage === 'games' && typeof gameState !== 'undefined' && gameState) return false;
   return !document.querySelector('.modal-overlay.show, .map-modal.show');
 }
@@ -6619,6 +6792,7 @@ async function checkStartGate(manual) {
   });
   Butterfly.start();
   Birdsong.start();
+  SiteTime.start();
 
   // Reconcile the server-saved language preference in the background; only
   // re-render text if it actually differs from our local guess.
@@ -6742,6 +6916,448 @@ function markHeld(root) {
   }, { passive: true });
 })();
 
+// ===== SAYTDA FAOL VAQT UCHUN KETO (owner, 2026-11-15: "saytda qancha ko'p
+// vaqt o'tkazsa shuncha ko'p Keto tanga berilsin ... ekranni to'ldirib,
+// bayramona qilib, o'rtada pop-up chiqsin"; the same day: "saytni har daqiqa
+// qimirlatib turish kerak, firibgarlik va sun'iy qurilmalar ishlamasin") =====
+// The server counts the time and pays (site_time.py); this page only reports
+// minutes a person really used it. After each full minute the shop was on
+// screen and focused, with at least one real (isTrusted) tap, touch, wheel
+// or key in it, it sends a beat with their count and the gaps between them;
+// a minute nobody touched is not sent. Scroll events don't count on their
+// own (the catalog tiles scroll by themselves) — the touch or wheel behind a
+// real scroll does. Now and then the server asks «Davom etyapsizmi? ✅»; the
+// small card waits for a real tap and nothing counts until then. A reward
+// comes back with a beat: the celebration waits for a free screen (never
+// over the entry gate, checkout, an open sheet, a game or the YANGI5 card)
+// and takes a new member's YANGI5 in with it — one party, not two. Reduced
+// motion: nothing moves and nothing plays; the 🎶 switch off: no tune.
+function stDur(sec, floor, long) {
+  const total = Math.max(0, floor ? Math.floor(sec / 60) : Math.ceil(sec / 60));
+  const h = Math.floor(total / 60), m = total % 60;
+  const ru = (n, one, few, many) => {
+    const a = n % 10, b = n % 100;
+    return n + ' ' + (a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many);
+  };
+  const join = (x, y) => [x, y].filter(Boolean).join(' ');
+  const uz = join(h ? h + ' soat' : '', m || !h ? m + ' daqiqa' : '');
+  const r = long
+    ? join(h ? ru(h, 'час', 'часа', 'часов') : '', m || !h ? ru(m, 'минуту', 'минуты', 'минут') : '')
+    : join(h ? h + ' ч' : '', m || !h ? m + ' мин' : '');
+  return gx(uz, r);
+}
+// «Yana 9 daqiqa — +50 Keto 🎁» — the next gift, calmly.
+function stNextText(next) {
+  if (!next || !(next.left > 0)) return '';
+  return gx('Yana {d} — +{n} Keto 🎁', 'Ещё {d} — +{n} Keto 🎁')
+    .replace('{d}', stDur(next.left)).replace('{n}', formatPrice(next.amount));
+}
+// «Batafsil»: what Keto is, how it is spent and earned — every rate from
+// the server (/api/site-time's info), never typed in here.
+function ketoInfoHtml(info) {
+  info = info || {};
+  const pct = r => String(Math.round(r * 1000) / 10).replace('.', ',') + '%';
+  const label = escapeHtml(t.ketoRedeemLabel || gx('Ketochalarni ishlatish', 'Использовать Keto-монетки'));
+  const out = [];
+  out.push('<p>' + gx(
+    "🪙 <b>Keto nima?</b> Ketoshopning sovg'a tangachalari: <b>1 Keto = 1 so'm</b> chegirma. Ular yo'qolmaydi — hisobingizda yig'ilib boradi.",
+    '🪙 <b>Что такое Keto?</b> Подарочные монетки Ketoshop: <b>1 Keto = 1 сум</b> скидки. Они не сгорают — копятся на вашем счёте.') + '</p>');
+  out.push('<p>' + (info.redeem
+    ? gx("🛒 <b>Qanday ishlatiladi?</b> Buyurtma berayotganda «{l}» ni tanlang — Keto pul o'rniga o'tadi va shuncha kam to'laysiz. Botda ham, saytda ham.",
+         '🛒 <b>Как потратить?</b> При оформлении заказа выберите «{l}» — монетки пойдут вместо денег, и вы заплатите меньше. И в боте, и на сайте.')
+    : gx("🛒 <b>Qanday ishlatiladi?</b> Hozircha Keto hisobingizda yig'ilib turadi; ishlatish mumkin bo'lganda buyurtmada «{l}» chiqadi.",
+         '🛒 <b>Как потратить?</b> Пока Keto копятся на счёте; когда их можно будет тратить, при заказе появится «{l}».')
+  ).replace('{l}', label) + '</p>');
+  const items = [];
+  const levels = (info.levels || []).map(l => escapeHtml(l.emoji + ' ' + pct(l.rate))).join(' · ');
+  if (levels) {
+    items.push(gx("🛍 Har yetkazilgan xariddan keshbek, darajangizga qarab: {v}.", '🛍 Кешбэк с каждой доставленной покупки, по уровню: {v}.').replace('{v}', levels)
+      + (info.my_rate ? ' ' + gx('Sizniki — <b>{m}</b>.', 'У вас — <b>{m}</b>.').replace('{m}', pct(info.my_rate)) : ''));
+  }
+  const ladder = info.ladder || [];
+  if (ladder.length) {
+    const rung = s => (s.seconds === 0 ? gx('birinchi tashrif', 'первый визит') : stDur(s.seconds)) + ' — ' + formatPrice(s.amount);
+    const last = ladder[ladder.length - 1];
+    items.push(gx('⏱ Saytda faol vaqt uchun: {r} … {last}; keyin har soatga yana {h} Keto.',
+                  '⏱ За активное время на сайте: {r} … {last}; дальше каждый час — ещё {h} Keto.')
+      .replace('{r}', escapeHtml(ladder.slice(0, 6).map(rung).join(', ')))
+      .replace('{last}', escapeHtml(rung(last)))
+      .replace('{h}', formatPrice(info.every_hour_after || 0)));
+  }
+  if (info.referral_percent) {
+    items.push(gx("👥 Do'stingizni taklif qiling: uning birinchi xaridining <b>{p}%</b> i sizga Keto bo'lib tushadi — botdagi «🎁 Bepul xarid qilish» tugmasida.",
+                  '👥 Приглашайте друзей: <b>{p}%</b> от их первой покупки придут вам в Keto — кнопка «🎁 Бесплатные покупки» в боте.')
+      .replace('{p}', escapeHtml(String(info.referral_percent))));
+  }
+  if (items.length) {
+    out.push('<p>' + gx("📥 <b>Qanday yig'iladi?</b>", '📥 <b>Как копить?</b>') + '</p><ul>' + items.map(i => '<li>' + i + '</li>').join('') + '</ul>');
+  }
+  out.push('<p>' + gx("🤝 <b>Halol hisob.</b> Vaqt faqat saytdan haqiqatan foydalanganingizda hisoblanadi — ko'rib, bosib, varaqlab turganingizda; kuniga ko'pi bilan {c}. Ora-orada «Davom etyapsizmi?» deb so'raymiz — bir bosish kifoya.",
+                      '🤝 <b>Честный счёт.</b> Время считается, только когда вы правда пользуетесь сайтом — смотрите, нажимаете, листаете; не больше {c} в день. Иногда спросим «Вы ещё здесь?» — достаточно одного нажатия.')
+    .replace('{c}', stDur(info.daily_cap || 0)) + '</p>');
+  return out.join('');
+}
+function stPill(text, ms) {
+  if (!text) return;
+  let el = document.getElementById('st-pill');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'st-pill';
+    el.className = 'st-pill';
+    el.setAttribute('role', 'status');
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  requestAnimationFrame(() => el.classList.add('on'));
+  clearTimeout(el._hide);
+  el._hide = setTimeout(() => el.classList.remove('on'), ms || 6000);
+}
+// A short "ta-da", synthesised like the birds — no recording. Sound may only
+// start from a person's gesture: if the phone hasn't allowed it yet, the
+// next tap during the party plays it (a tap on the close button only
+// unlocks it for next time).
+const Fanfare = (() => {
+  let ctx = null;
+  function context() {
+    if (ctx) return ctx;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try { ctx = new AC(); } catch (_) { ctx = null; }
+    return ctx;
+  }
+  function notes(c) {
+    const t0 = c.currentTime + 0.05;
+    const out = c.createGain();
+    out.gain.value = 0.16;
+    out.connect(c.destination);
+    // G4 C5 E5 G5, then a C-major chord that rings out.
+    [[392, 0, .13], [523.25, .13, .13], [659.25, .26, .13], [783.99, .39, .24],
+     [523.25, .66, 1.1], [659.25, .66, 1.1], [783.99, .66, 1.1], [1046.5, .66, 1.2]].forEach(([f, at, dur]) => {
+      const o = c.createOscillator();
+      o.type = 'triangle';
+      o.frequency.value = f;
+      const g = c.createGain();
+      g.gain.setValueAtTime(0, t0 + at);
+      g.gain.linearRampToValueAtTime(at > .6 ? 0.55 : 0.9, t0 + at + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + at + dur);
+      o.connect(g);
+      g.connect(out);
+      o.start(t0 + at);
+      o.stop(t0 + at + dur + 0.05);
+    });
+  }
+  function play(stillOpen) {
+    const c = context();
+    if (!c) return;
+    if (c.state === 'running') { notes(c); return; }
+    const gestures = ['touchend', 'click'];
+    const once = e => {
+      gestures.forEach(g => document.removeEventListener(g, once, true));
+      const closing = e && e.target && e.target.closest && e.target.closest('.kp-go');
+      c.resume().then(() => { if (!closing && stillOpen()) notes(c); }).catch(() => {});
+    };
+    gestures.forEach(g => document.addEventListener(g, once, true));
+  }
+  return { play };
+})();
+// «Davom etyapsizmi? ✅» — a small card at a random spot in the upper part
+// of the screen (clear of the dock and the bottom-right buttons). Shopping
+// goes on around it; only the time stops counting until a real tap, and a
+// tap within 300 ms of it appearing is ignored.
+const Presence = (() => {
+  const MIN_REPLY_MS = 300;
+  let token = null, card = null, shownAt = 0, retry = null, sending = false;
+  function blocked() {
+    const gate = document.getElementById('start-gate');
+    return (gate && gate.style.display !== 'none') || document.getElementById('keto-party')
+      || document.getElementById('welcome-party') || ['checkout', 'cheque', 'order-success'].includes(activePage);
+  }
+  function place() {
+    clearTimeout(retry);
+    retry = null;
+    if (!token) return;
+    if (blocked()) {
+      if (card) card.style.display = 'none';
+      retry = setTimeout(place, 2000);
+      return;
+    }
+    if (!card) {
+      card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'st-check';
+      card.addEventListener('click', onTap);
+      document.body.appendChild(card);
+    }
+    card.innerHTML = escapeHtml(gx('Davom etyapsizmi? ✅', 'Вы ещё здесь? ✅')) + '<small>' +
+      escapeHtml(gx('Bosing — saytdagi vaqtingiz hisoblanishda davom etadi', 'Нажмите — время на сайте продолжит считаться')) + '</small>';
+    const w = Math.min(220, window.innerWidth - 32);
+    card.style.left = Math.round(16 + Math.random() * Math.max(0, window.innerWidth - w - 32)) + 'px';
+    card.style.top = Math.round(window.innerHeight * (0.14 + Math.random() * 0.4)) + 'px';
+    card.style.display = '';
+    shownAt = performance.now();
+  }
+  function onTap(e) {
+    if (!e.isTrusted || !token || sending || performance.now() - shownAt < MIN_REPLY_MS) return;
+    sending = true;
+    api('/api/site-time/here', { method: 'POST', body: JSON.stringify({ token }) })
+      .then(r => { if (r && (r.ok || !r.check)) clear(); else if (r && r.check) token = r.check; })
+      .catch(() => {})
+      .finally(() => { sending = false; });
+  }
+  function ask(next) {
+    if (token === next && card) return;
+    token = next;
+    place();
+  }
+  function clear() {
+    token = null;
+    clearTimeout(retry);
+    retry = null;
+    if (card) { card.remove(); card = null; }
+  }
+  function sync() {             // leave the ordering screens alone, come back after
+    if (token && card && card.style.display !== 'none' && blocked()) place();
+  }
+  return { ask, clear, sync, waiting: () => !!token };
+})();
+const KetoParty = (() => {
+  const queue = [];             // rewards not celebrated yet
+  let welcome = null;           // YANGI5 waiting to join a Keto party
+  let helloPending = true;      // the visit's first beat (the first-visit gift) is on its way
+  let box = null, retry = null, closedAt = 0;
+  const bootAt = Date.now();
+  const reduced = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } };
+  // The 🎶 button's switch (Birdsong) — off means no tune here either.
+  const soundOff = () => { try { return localStorage.getItem('ketoshop_birds') === 'off'; } catch (_) { return false; } };
+  // Wait for /api/promo (it says whether YANGI5 is running), 8 s at most.
+  const promoKnown = () => !!(typeof promo !== 'undefined' && promo && promo.perks) || Date.now() - bootAt > 8000;
+  function busy() {
+    const gate = document.getElementById('start-gate');
+    return (gate && gate.style.display !== 'none') || document.getElementById('welcome-party') || box
+      || ['checkout', 'cheque', 'order-success'].includes(activePage)
+      || (activePage === 'games' && typeof gameState !== 'undefined' && gameState)
+      || document.querySelector('.modal-overlay.show, .map-modal.show, .dock-hand');
+  }
+  function pump() {
+    clearTimeout(retry);
+    retry = null;
+    if (!queue.length || box) return;
+    if (!promoKnown() || busy()) { retry = setTimeout(pump, 1500); return; }
+    show();
+  }
+  function add(awards, balance, next, info) {
+    queue.push({ awards, balance, next, info });
+    pump();
+  }
+  function showHeldWelcome() {
+    if (!welcome || box || queue.length) return;
+    const held = welcome;
+    welcome = null;
+    showWelcomeParty(held.w, held.endsAt);
+  }
+  function helloDone() {
+    helloPending = false;
+    if (welcome && !queue.length) showHeldWelcome();
+    else pump();
+  }
+  function joinWelcome(w, endsAt) {
+    if (box) { addYangi(box, w, endsAt); return true; }
+    if (!queue.length && !helloPending) return false;
+    welcome = { w, endsAt };
+    setTimeout(showHeldWelcome, 6000);   // the beat never came back: YANGI5 on its own
+    return true;
+  }
+  function addYangi(root, w, endsAt) {
+    const slot = root.querySelector('.kp-yangi-slot');
+    if (!slot || slot.childNodes.length) return;
+    slot.innerHTML =
+      '<p class="kp-also">' + escapeHtml(gx("🎁 Yana bir sovg'a — yangi a'zo sifatida", '🎁 И ещё подарок — как новому участнику')) + '</p>' +
+      '<div class="kp-yangi"><span class="kp-pct">−' + escapeHtml(String(w.percent)) + '%</span>' +
+        '<span class="kp-gift">' + escapeHtml(t.wpGift) + '</span>' +
+        '<span class="kp-code">' + escapeHtml(w.code) + '</span>' +
+        '<div class="kp-left">⏳ ' + escapeHtml(t.wpLeft) + '</div>' +
+        '<div class="kp-clock"></div>' +
+        '<p class="kp-note">' + escapeHtml(t.wpNote) + '</p></div>';
+    const clock = slot.querySelector('.kp-clock');
+    const tick = () => { clock.textContent = hmsLeft((endsAt - Date.now()) / 1000); };
+    tick();
+    const timer = setInterval(tick, 1000);
+    root._stops.push(() => clearInterval(timer));
+    const go = root.querySelector('.kp-go');
+    if (go) go.textContent = t.wpGo;
+  }
+  function show() {
+    const items = queue.splice(0);
+    const last = items[items.length - 1];
+    const awards = [].concat(...items.map(i => i.awards || []));
+    const total = awards.reduce((s, a) => s + (a.amount || 0), 0);
+    const top = Math.max(...awards.map(a => a.seconds || 0));
+    const still = reduced();
+    const why = top === 0
+      ? gx("Saytimizga xush kelibsiz! Tashrifingiz uchun kichik sovg'a — sog'lom mahsulotlarimiz bilan bemalol tanishing.",
+           'Добро пожаловать на наш сайт! Небольшой подарок за визит — знакомьтесь с полезными продуктами не спеша.')
+      : gx("Saytimizda sog'lom mahsulotlar bilan tanishishga jami {d} vaqt ajratdingiz. Rahmat — bu sizga sovg'amiz!",
+           'В сумме вы провели на нашем сайте {d}, знакомясь с полезными продуктами. Спасибо — это вам подарок!')
+          .replace('{d}', stDur(top, true, true));
+    box = document.createElement('div');
+    box.id = 'keto-party';
+    box._stops = [];
+    if (still) box.classList.add('still');
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.innerHTML =
+      '<canvas></canvas>' +
+      '<div class="kp-card">' +
+        '<div class="kp-coin" aria-hidden="true">K</div>' +
+        '<h2>' + escapeHtml(gx("🎉 +{n} Keto sovg'a!", '🎉 +{n} Keto в подарок!').replace('{n}', formatPrice(total))) + '</h2>' +
+        '<p class="kp-why">' + escapeHtml(why) + '</p>' +
+        '<div class="kp-balance">' + gx('👛 Balansingiz: <b>{b} Keto</b>', '👛 Ваш баланс: <b>{b} Keto</b>').replace('{b}', formatPrice(last.balance || 0)) + '</div>' +
+        '<div class="kp-yangi-slot"></div>' +
+        (last.next ? '<p class="kp-next">' + escapeHtml(stNextText(last.next)) + '</p>' +
+          '<p class="kp-hint">' + escapeHtml(gx("Mahsulot va retseptlarni bemalol ko'ring — faol vaqtingiz o'zi hisoblanadi.",
+                                                  'Смотрите товары и рецепты не спеша — активное время считается само.')) + '</p>' : '') +
+        '<button class="kp-go" type="button">' + escapeHtml(gx('Rahmat! 🛍 Davom etamiz', 'Спасибо! 🛍 Продолжим')) + '</button>' +
+        '<button class="kp-more" type="button" aria-expanded="false"></button>' +
+        '<div class="kp-details" hidden>' + ketoInfoHtml(last.info || SiteTime.info()) + '</div>' +
+      '</div>';
+    const card = box.querySelector('.kp-card');
+    if (!still) {
+      ['🎊', '✨', '⭐', '💛', '🎉'].forEach((c, i) => {
+        for (let k = 0; k < 3; k++) {
+          const s = document.createElement('span');
+          s.className = 'kp-rain';
+          s.textContent = c;
+          s.style.left = Math.round(Math.random() * 96) + 'vw';
+          s.style.animationDuration = (2.6 + Math.random() * 2.2).toFixed(2) + 's';
+          s.style.animationDelay = ((i * 3 + k) * 0.12).toFixed(2) + 's';
+          box.insertBefore(s, card);
+        }
+      });
+    }
+    document.body.appendChild(box);
+    if (welcome) { const held = welcome; welcome = null; addYangi(box, held.w, held.endsAt); }
+    const more = box.querySelector('.kp-more');
+    const details = box.querySelector('.kp-details');
+    const paintMore = () => {
+      more.textContent = details.hidden ? gx('Batafsil ▾', 'Подробнее ▾') : gx('Yopish ▴', 'Свернуть ▴');
+      more.setAttribute('aria-expanded', String(!details.hidden));
+    };
+    paintMore();
+    more.onclick = () => { details.hidden = !details.hidden; paintMore(); };
+    if (!still) box._stops.push(launchFireworks(box.querySelector('canvas')));
+    const mine = box;
+    if (!still && !soundOff()) Fanfare.play(() => box === mine);
+    try { tg.HapticFeedback.notificationOccurred('success'); } catch (_) {}
+    box.querySelector('.kp-go').onclick = () => close(last.next);
+    box.querySelector('.kp-go').focus({ preventScroll: true });
+  }
+  function close(next) {
+    if (!box) return;
+    box._stops.forEach(stop => { try { stop(); } catch (_) {} });
+    box.remove();
+    box = null;
+    closedAt = Date.now();
+    if (next) setTimeout(() => stPill(stNextText(SiteTime.next() || next)), 350);
+    SiteTime.renderProfile();
+    pump();
+  }
+  // On screen now, or closed less than `ms` ago (other sheets wait for that).
+  const recent = ms => !!box || (closedAt > 0 && Date.now() - closedAt < ms);
+  return { add, helloDone, joinWelcome, recent };
+})();
+const SiteTime = (() => {
+  const MINUTE_MS = 60000, TICK_MS = 1000, MIN_STEP_MS = 250, MAX_GAPS = 40;
+  const sid = Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  let started = false, enabled = true, timer = null;
+  let n = 0, gaps = [], lastAt = 0, focused = true, shownMs = 0, lastTick = 0;
+  let status = null, info = null, openDetails = false;
+
+  function onInteract(e) {
+    if (!e || !e.isTrusted) return;            // a person's own touch — never a script's
+    focused = true;
+    const now = performance.now();
+    if (lastAt && now - lastAt < MIN_STEP_MS) return;   // one swipe is one interaction, not fifty
+    if (lastAt) {
+      gaps.push(Math.round(now - lastAt));
+      if (gaps.length > MAX_GAPS) gaps.shift();
+    }
+    lastAt = now;
+    n++;
+  }
+  function tick() {
+    const now = performance.now();
+    const dt = lastTick ? Math.min(now - lastTick, 5000) : 0;
+    lastTick = now;
+    Presence.sync();
+    if (!enabled || document.visibilityState !== 'visible' || !focused || Presence.waiting()) return;
+    shownMs += dt;
+    if (shownMs < MINUTE_MS) return;
+    shownMs = 0;
+    if (n < 1) { gaps = []; return; }          // a minute nobody touched does not count
+    const beat = { sid, n, gaps: gaps.slice() };
+    n = 0;
+    gaps = [];
+    send(beat);
+  }
+  function send(beat) {
+    return api('/api/site-time', { method: 'POST', body: JSON.stringify(beat) })
+      .then(apply)
+      .catch(() => { /* the server keeps the time; the next minute tries again */ });
+  }
+  function apply(r) {
+    if (!r || r.enabled === false) { stop(); return; }
+    if (r.info) info = r.info;
+    status = r;
+    if (r.awards && r.awards.length) KetoParty.add(r.awards, r.balance, r.next, info);
+    if (r.check) Presence.ask(r.check);
+    else Presence.clear();
+    if (activePage === 'profile') renderProfile();
+  }
+  function stop() {
+    enabled = false;
+    clearInterval(timer);
+    timer = null;
+    Presence.clear();
+    renderProfile();
+  }
+  function start() {
+    if (started) return;
+    started = true;
+    ['pointerdown', 'touchmove', 'wheel', 'keydown'].forEach(ev =>
+      document.addEventListener(ev, onInteract, { capture: true, passive: true }));
+    window.addEventListener('blur', () => { focused = false; });
+    window.addEventListener('focus', () => { focused = true; });
+    lastTick = performance.now();
+    timer = setInterval(tick, TICK_MS);
+    // The visit's first beat: starts the server's clock, pays the first-visit
+    // gift once, and brings what «Batafsil» explains.
+    send({ sid, n: 0, gaps: [], hello: true }).finally(() => KetoParty.helloDone());
+  }
+  function renderProfile() {
+    const el = document.getElementById('st-profile');
+    if (!el) return;
+    if (!enabled || !status || !status.enabled) { el.innerHTML = ''; return; }
+    const active = status.active || 0, next = status.next;
+    let from = 0;
+    ((info && info.ladder) || []).forEach(s => { if (s.seconds <= active) from = s.seconds; });
+    if (next && next.seconds - 3600 > from) from = Math.max(from, next.seconds - 3600);
+    const pct = next ? Math.max(3, Math.min(100, Math.round((active - from) / Math.max(1, next.seconds - from) * 100))) : 100;
+    el.innerHTML =
+      '<div class="st-head"><span>' + gx('⏱ Saytdagi faol vaqtingiz: <b>{d}</b>', '⏱ Ваше активное время на сайте: <b>{d}</b>')
+        .replace('{d}', escapeHtml(stDur(active, true))) + '</span>' +
+        '<span class="st-bal">👛 ' + formatPrice(status.balance || 0) + ' Keto</span></div>' +
+      (next ? '<div class="st-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><i style="width:' + pct + '%"></i></div>' +
+        '<div class="st-next">' + escapeHtml(stNextText(next)) + '</div>' : '') +
+      '<div class="st-sub">' + escapeHtml(gx("Mahsulot va retseptlarni bemalol ko'ring — faol vaqtingiz o'zi hisoblanadi.",
+                                               'Смотрите товары и рецепты не спеша — активное время считается само.')) + '</div>' +
+      '<button class="kp-more" type="button" aria-expanded="' + openDetails + '">' +
+        escapeHtml(openDetails ? gx('Yopish ▴', 'Свернуть ▴') : gx('Batafsil ▾', 'Подробнее ▾')) + '</button>' +
+      '<div class="kp-details"' + (openDetails ? '' : ' hidden') + '>' + ketoInfoHtml(info) + '</div>';
+    el.querySelector('.kp-more').onclick = () => { openDetails = !openDetails; renderProfile(); };
+  }
+  return { start, renderProfile, info: () => info, next: () => status && status.next };
+})();
+
 // ===== AKSIYA / BONUS =====
 // One /api/promo read per session drives the home banner, the catalog strip,
 // the 🎁 badges on cards, and the aksiya sheet. Refreshed after every cart
@@ -6805,6 +7421,12 @@ function celebrateWelcome(w, endsAt) {
   const me = (tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) || 'x';
   const key = 'ketoshop_yangi5_party_' + me;
   try { if (localStorage.getItem(key)) return; localStorage.setItem(key, '1'); } catch (_) { /* once per launch */ }
+  // One party, not two (owner, 2026-11-15): when a Keto gift for the site
+  // is on its way or on screen, YANGI5 joins that celebration.
+  if (KetoParty.joinWelcome(w, endsAt)) return;
+  showWelcomeParty(w, endsAt);
+}
+function showWelcomeParty(w, endsAt) {
   const box = document.createElement('div');
   box.id = 'welcome-party';
   box.setAttribute('role', 'dialog');
@@ -6915,7 +7537,8 @@ const DockHint = (() => {
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   function blocked() {
     const gate = document.getElementById('start-gate');
-    return document.getElementById('welcome-party') || (gate && gate.style.display !== 'none')
+    return document.getElementById('welcome-party') || document.getElementById('keto-party')
+      || (gate && gate.style.display !== 'none')
       || document.querySelector('.modal-overlay.show, #detail-modal.show');
   }
   async function play() {
@@ -9984,6 +10607,7 @@ function renderProfilePage() {
   const name = user ? [user.first_name, user.last_name].filter(Boolean).join(' ') : '—';
   document.getElementById('profile-name').textContent = name;
   document.getElementById('profile-lang').textContent = t.profileLang;
+  SiteTime.renderProfile();
 
   if (user?.photo_url) {
     document.getElementById('profile-avatar').innerHTML = '<img src="' + user.photo_url + '" style="width:72px;height:72px;border-radius:50%;object-fit:cover">';
