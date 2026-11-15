@@ -256,6 +256,8 @@ async def main():
     dp.include_router(comment_followup_router)
     from push_cap import router as push_cap_router
     dp.include_router(push_cap_router)
+    from feedback_ask import router as feedback_ask_router
+    dp.include_router(feedback_ask_router)
     from gemini_compare import router as gemini_compare_router
     dp.include_router(gemini_compare_router)
     dp.include_router(webapp_data_router)
@@ -378,6 +380,9 @@ async def main():
     # 🔁 Bir oy oldin izoh qoldirganlarga qayta, samimiy yozish (kuniga 25 tagacha).
     from comment_followup import loop as comment_followup_loop
     asyncio.create_task(comment_followup_loop(bot))
+    # 🗣 2 kunda bir AI xaridorlardan oldingi mahsuloti haqida qisqa fikr so'raydi.
+    from feedback_ask import scheduler_loop as feedback_ask_loop
+    asyncio.create_task(feedback_ask_loop(bot))
 
     # Aksiya / Bonus — closes a campaign out the moment its window ends (so
     # bonuses stop being granted without anyone touching the admin panel) and
