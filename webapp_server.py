@@ -332,6 +332,9 @@ async def index(request: web.Request):
     # question every 2 days (daily_quiz.py).
     import quiz_bank
     html = html.replace("{{GAME_BANK}}", quiz_bank.bank_json())
+    import site_music
+    html = html.replace("{{MUSIC_PLAYLIST}}", json.dumps(site_music.playlist(), ensure_ascii=False)
+                        .replace("</", "<\\/"))
     # Yangi alifbo switch (alphabet.py) — the page converts its own text.
     import alphabet
     html = html.replace("{{NEW_ALPHABET}}", "1" if alphabet.is_on() else "0")
@@ -2258,6 +2261,8 @@ def create_webapp(bot: Bot, storage=None) -> web.Application:
     # bilan tekshiriladi, sessiya yoki initData emas (meta_comments.py).
     import meta_comments
     meta_comments.setup_routes(app)
+    import site_music
+    site_music.setup_routes(app)        # /music/<id>.mp3 — the site's background recordings
 
     # Serve the webapp/ directory at /static/ so we can self-host vendor
     # assets (Leaflet, etc) instead of relying on a CDN — flaky CDN
