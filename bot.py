@@ -127,6 +127,9 @@ async def main():
     # Qayta sotuv tables (retention.py) — before any handler can read an offer.
     import retention
     await retention.ensure_schema()
+    # Android app sessions (app_auth.py).
+    import app_auth
+    await app_auth.ensure_schema()
     logger.info("Database initialized")
 
     # Categories used to be a hardcoded list (locales.py); now admins can add
@@ -243,6 +246,11 @@ async def main():
     # Group link guard first — a non-admin's link in a group is deleted
     # before any other handler can react to it (see link_guard.py).
     dp.include_router(link_guard_router)
+    # 📱 /start applogin_… — the Android app's login confirmation (app_auth.py),
+    # before every private-chat router so the payload is never read as a
+    # blogger/ad code or swallowed by another flow.
+    import app_auth
+    dp.include_router(app_auth.router)
     # ⚖️ Yurist-agent: every message in its group topic is a question (yurist.py).
     from yurist import router as yurist_router
     dp.include_router(yurist_router)
