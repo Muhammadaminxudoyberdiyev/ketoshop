@@ -56,6 +56,9 @@ Routes (all mounted by setup_admin_routes):
   POST /admin/api/courier/orders/{id}/courier — {courier_id|null} -> claim/release a card
   GET  /admin/api/courier/couriers — registered couriers for the card picker
   POST /admin/api/courier/orders/{id}/location — push the buyer's map pin to the admins' Telegram
+  GET  /admin/api/portraits       — {q, page, filter} -> «🧑‍🤝‍🧑 Mijozlar»: everyone who talked with the
+                                    AI (bot + site), portrait coverage counters, 30 per page (read-only)
+  GET  /admin/api/portraits/{user_id} — one customer's card: portrait, AI notes, last 5 orders, Keto
 
 Images are stored in Postgres (web_images) because Railway's filesystem is
 ephemeral — see database.py.
@@ -76,6 +79,7 @@ from aiohttp import web
 
 import courier_board
 import database
+import portrait_web
 from config import ADMIN_WEB_PASSWORD, BOT_TOKEN, ADMIN_IDS, BOT_USERNAME
 from locales import CATEGORIES, get_item_unit
 # Same tolerant JSON encoder the Mini App uses: aiohttp's default dumps cannot
@@ -1414,6 +1418,29 @@ async def api_activity(request: web.Request):
 
 
 @require_auth
+async def api_portraits(request: web.Request):
+    """GET /admin/api/portraits?q=&page=&filter=all|portrait|no_portrait|orders —
+    «🧑‍🤝‍🧑 Mijozlar» (owner, 2026-11-16: "botning AI si bilan gaplashgan har
+    bir foydalanuvchining mijoz portretini ko'rish"). Read-only; opted-out
+    customers and staff are handled in portrait_web."""
+    try:
+        page = int(request.query.get("page") or 1)
+    except ValueError:
+        page = 1
+    return _json(await portrait_web.list_page(
+        request.query.get("q", ""), page, request.query.get("filter", "all")))
+
+
+@require_auth
+async def api_portrait_card(request: web.Request):
+    """GET /admin/api/portraits/{user_id} — one customer's full card."""
+    found = await portrait_web.card(int(request.match_info["user_id"]))
+    if found is None:
+        return _json({"error": "mijoz topilmadi"}, status=404)
+    return _json(found)
+
+
+@require_auth
 async def api_feedback(request: web.Request):
     """GET /admin/api/feedback — read-only: product reviews, site ratings and
     NPS answers (database.get_feedback_overview)."""
@@ -2349,6 +2376,8 @@ def setup_admin_routes(app: web.Application):
     app.router.add_get("/admin/api/site-analytics", api_site_analytics)
     app.router.add_get("/admin/api/shop-links", api_shop_links)
     app.router.add_get("/admin/api/feedback", api_feedback)
+    app.router.add_get("/admin/api/portraits", api_portraits)
+    app.router.add_get("/admin/api/portraits/{user_id:\\d+}", api_portrait_card)
     app.router.add_get("/admin/api/site-analytics/user/{user_id:\\d+}", api_site_user)
     app.router.add_get("/admin/api/promos", api_promos_list)
     app.router.add_post("/admin/api/promos", api_promos_create)
