@@ -84,6 +84,32 @@ class EmptyOfferTest(unittest.TestCase):
                  "taxmin qilib beramiz.")
         self.assertEqual(vary(reply, prev), "200 gramm uzoq yetadi.")
 
+    def test_an_also_we_can_tell_you_offer_goes_the_first_time(self):
+        # Egasi, 2026-11-16 (kanal guruhi): "farqini ham aytib beramiz" — keyin javobsiz.
+        self.assertEqual(
+            vary("Alluloza me'yorida zararsiz.\nAgar sizga tanlash kerak bo'lsa, alluloza, steviya yoki "
+                 "eritritol haqida qisqacha farqini ham aytib beramiz 😊", None),
+            "Alluloza me'yorida zararsiz.")
+        self.assertEqual(vary("Alluloza 500gr - 95 000 so'm.\n\nPishiriqda shakarga eng yaqin. Xohlasangiz, "
+                              "Eritritol bilan farqini ham yonma-yon aytib beramiz.", None),
+                         "Alluloza 500gr - 95 000 so'm.\n\nPishiriqda shakarga eng yaqin.")
+        self.assertEqual(vary("Pishiriqqa alluloza mos, agar xohlasangiz farqini ham aytib beramiz.", None),
+                         "Pishiriqqa alluloza mos.")                          # gapning boshi qoladi
+        self.assertEqual(vary("Хорошо подходит. Если хотите, также расскажем про стевию.", None),
+                         "Хорошо подходит.")
+        self.assertEqual(vary("Подходит для кексов.\n\nЕсли хотите, подскажем ещё, что лучше взять.", None),
+                         "Подходит для кексов.")
+        self.assertEqual(vary("Marhamat, @ketoshopbot ga yozing 😊\nAgar xohlasangiz, yetkazish yoki olib "
+                              "ketish variantini ham aytamiz.", None),
+                         "Marhamat, @ketoshopbot ga yozing 😊")
+        self.assertEqual(vary("Alluloza 500gr - 95 000 so'm.\n\nTa'mi shakarga eng yaqin. Qiziqsangiz, steviya "
+                              "va eritritol bilan farqini ham qisqa qilib aytib beramiz.", None),
+                         "Alluloza 500gr - 95 000 so'm.\n\nTa'mi shakarga eng yaqin.")
+
+    def test_a_first_offer_without_also_stays(self):
+        reply = "Mahsulot nomini yozsangiz, xohlasangiz narxini aytib beramiz."
+        self.assertEqual(vary(reply, None), reply)
+
     def test_offers_that_ask_to_act_stay(self):
         prev = "Agar xohlasangiz, retseptini ham aytib beramiz."
         reply = "Xohlasangiz, shu tarkibni savatga solib buyurtma kartasini ochib beramiz."
