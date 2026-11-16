@@ -450,7 +450,7 @@ class FlowTest(unittest.IsolatedAsyncioTestCase):
         await self.settle()
         self.assertEqual(self.public, [("18000000000000001", "Rahmat, sog' bo'ling! 🌿")])
         self.assertEqual(len(self.private), 1)
-        self.assertTrue(self.private[0][1].endswith("👉 https://t.me/ketoshopbot/shop"))
+        self.assertIn("🛍 Barcha mahsulotlarimiz va narxlari: https://t.me/ketoshopbot/shop", self.private[0][1])
         row = self.db.rows[1]
         self.assertEqual((row["status"], row["private_sent"], row["ai_confident"]), ("ai_answered", True, True))
         self.assertEqual(self.bot.sent, [])                      # no card: the AI handled it
@@ -491,8 +491,9 @@ class FlowTest(unittest.IsolatedAsyncioTestCase):
         self.draft = comment_ai.Draft("shikoyat", "Uzr so'raymiz 🙏", False, "gpt-5.4-mini")
         await mc.ingest(self.bot, self.comment(text="Buyurtmam 3 kundan beri kelmadi!"), source="webhook")
         await self.settle()
-        self.assertEqual(self.public, [])
-        self.assertEqual(len(self.bot.sent), 2)                  # one card per admin
+        self.assertEqual(len(self.public), 1)                    # holding reply — never unanswered
+        self.assertIn("Kechirasiz", self.public[0][1])
+        self.assertEqual(len(self.bot.sent), 2)                  # one card per admin — a human follows up
         text, kb = self.bot.sent[0][1], self.bot.sent[0][2]
         self.assertIn("AI loyiha", text)
         self.assertEqual(buttons(kb), ["mc:ok:1", "mc:ed:1", "mc:dm:1", "mc:t:narx:1", "mc:t:yetkazish:1",
@@ -551,7 +552,9 @@ class FlowTest(unittest.IsolatedAsyncioTestCase):
         self.draft = comment_ai.Draft("salomatlik", "…", False, "gpt-5.4-mini")
         await mc.ingest(self.bot, self.comment(text="Diabetga mumkinmi?"), source="webhook")
         await self.settle()
-        self.assertEqual(self.public, [])
+        # 2026-11-16: no comment stays unanswered — a warm holding reply, and admins still get the card.
+        self.assertEqual(len(self.public), 1)
+        self.assertIn("shifokor", self.public[0][1])
         self.assertEqual(len(self.bot.sent), 2)
 
     async def test_spam_gets_nothing(self):
@@ -611,11 +614,13 @@ class FlowTest(unittest.IsolatedAsyncioTestCase):
         await mc.ingest(self.bot, self.comment(comment_id="c", text="Rahmat", created_at=old),
                         source="backfill", our_reply="Sizga ham rahmat!", backfill=True)
         await self.settle()
-        self.assertEqual(self.public, [("a", "Раҳмат!")])
+        self.assertEqual([p[0] for p in self.public], ["a", "b"])  # the unsure old one gets a holding reply
+        self.assertEqual(self.public[0], ("a", "Раҳмат!"))
+        self.assertIn("Telegram ботимиз", self.public[1][1])
         self.assertEqual(self.private, [])                      # older than 7 days: Meta allows no Direct
         statuses = {r["comment_id"]: r["status"] for r in self.db.rows.values()}
-        self.assertEqual(statuses, {"a": "ai_answered", "b": "new", "c": "answered"})
-        self.assertEqual(self.bot.sent, [])                     # the unanswerable old one waits in /izohlar
+        self.assertEqual(statuses, {"a": "ai_answered", "b": "ai_answered", "c": "answered"})
+        self.assertEqual(self.bot.sent, [])                     # old ones never ping admins
 
     async def test_catch_up_answers_comments_from_before_this_change(self):
         # Rows the old rules left waiting (ai_confident is NULL), with cards out.

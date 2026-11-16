@@ -157,6 +157,13 @@ async def snapshot() -> dict:
         comments = await meta_comments.daily_summary()
     except Exception:
         logger.warning("Comment summary for the daily report could not be loaded", exc_info=True)
+    # Instagram Direct — nechta suhbatga javob, nechtasi odamga (2026-11-16).
+    ig_dm = {}
+    try:
+        import ig_direct
+        ig_dm = await ig_direct.day_stats()
+    except Exception:
+        logger.warning("Direct summary for the daily report could not be loaded", exc_info=True)
 
     return {
         "date": today,
@@ -195,6 +202,7 @@ async def snapshot() -> dict:
         "ai_month": ai_month,
         "ai_questions": ai_questions,
         "comments": comments,
+        "ig_direct": ig_dm,
     }
 
 
@@ -286,6 +294,13 @@ def build_message(snap: dict, slot: int) -> str:
             comment_block = []
         if comment_block:
             lines += [""] + comment_block
+        try:
+            import ig_direct
+            dm_line = ig_direct.summary_line(snap.get("ig_direct") or {})
+        except Exception:
+            dm_line = None
+        if dm_line:
+            lines += ([] if comment_block else [""]) + [dm_line]
     return "\n".join(lines)
 
 

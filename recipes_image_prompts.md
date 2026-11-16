@@ -12,6 +12,12 @@ Qoidalar:
 - Fayl: JPG, 1400×1045 px (4:3, gorizontal), ~250–300 KB.
 - Pastki o'ng burchakda o'sha dumaloq KETOSHOP logotipi (eski rasmlardagidek).
   Boshqa hech qanday yozuv, matn yoki watermark bo'lmasin.
+  Logotipni sun'iy intellektga chizdirmang (yozuvini buzadi): rasm logotipsiz
+  yaratiladi (promptga «keep the bottom-right corner plain, no logo»), keyin eski
+  rasmlardan kesib olingan asl logotip aynan o'sha joyga qo'yiladi — markazi
+  (1250, 894) px, radiusi 110,6 px, yengil soya bilan.
+- Holati (2026-11-16): keto-somsa, tungi-suli-botqa, dubay-shokolad, devzira-mastava,
+  grechka-lagmon — tayyor. Qolgan 10 tasi — Higgsfield kunlik limiti tufayli keyinroq.
 - Rasmda ko'rinadigan hamma narsa retseptda bor. Retseptda yo'q narsa (non, boshqa
   meva, yong'oq va h.k.) rasmga qo'shilmaydi. Har bir prompt oxirida «Do not show»
   ro'yxati shuning uchun.

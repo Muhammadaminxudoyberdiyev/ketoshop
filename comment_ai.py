@@ -136,6 +136,70 @@ _TEMPLATE_FOR = {"narx": "tpl_narx", "mavjudlik": "tpl_narx", "buyurtma": "tpl_b
                  "yetkazish": "tpl_yetkazish"}
 
 
+# Egasi, 2026-11-16: "Directda va izohda javob yozilmagan … izohsiz qolmasin javobsiz qolmasin".
+# AI aniq javob topa olmagan sog'liq / shikoyat / boshqa savolga — iliq oraliq javob (keyin odam qaraydi).
+HOLDING = {
+    "salomatlik": "Yaxshi savol 🌿 Bu borada aniq maslahatni shifokor beradi; mahsulot tarkibi va qanday "
+                  "ishlatilishi haqida Telegram botimiz @ketoshopbot da batafsil yozib beramiz.",
+    "shikoyat": "Kechirasiz, noqulaylik uchun 🙏 Iltimos, Direct'ga yoki Telegram botimiz @ketoshopbot ga "
+                "yozing — tezda hal qilamiz.",
+    "boshqa": "Savolingiz uchun rahmat 😊 Aniq javobni Telegram botimiz @ketoshopbot da beramiz — u yerga "
+              "yozsangiz, xodimimiz yordam beradi.",
+}
+
+
+def holding_reply(category: str | None) -> str | None:
+    """Spamdan boshqa har qanday izohga oxirgi zaxira javob."""
+    if category == "spam":
+        return None
+    return HOLDING.get(category or "", HOLDING["boshqa"])
+
+
+DM_LIMIT = 1000           # Instagram Direct matni
+
+
+async def dm_text_full(comment_text: str | None, dm: str | None, limit: int = DM_LIMIT) -> str:
+    """Izohdan keyingi bitta Direct xabari (egasi, 2026-11-16: "mahsulotlarimiz ro'yxatini …
+    hammasini va chegirmadagilarni alohida yubor faqat bu directdan"): rahmat, hamma
+    mahsulotlar havolasi (≈140 ta mahsulot 1000 belgiga sig'maydi) va chegirmadagilar
+    ro'yxati — sig'gancha. Meta izohga faqat bitta shaxsiy xabarga ruxsat beradi;
+    davomini odam javob yozgach Direct AI'si yuboradi."""
+    body = _URL.sub("", (dm or "").strip()).strip() or DEFAULT_DM
+    head = f"{body}\n\n🛍 Barcha mahsulotlarimiz va narxlari: {SHOP_LINK}"
+    lines = []
+    try:
+        import database
+        for p in await database.admin_list_products(include_inactive=False):
+            if p.get("b2b_only") or float(p.get("quantity") or 0) <= 0:
+                continue
+            pct = database.active_discount(p.get("discount_percent"), p.get("discount_until"))
+            if not pct:
+                continue
+            new = database.effective_price(float(p["price"]), pct, p.get("discount_until"))
+            lines.append((pct, f"• {p.get('name')} — {int(round(new)):,} so'm (−{int(pct)}%)".replace(",", " ")))
+    except Exception:
+        logger.warning("Direct: discounted products unavailable", exc_info=True)
+    text = head
+    if lines:
+        text += "\n\n🔥 Chegirmadagilar:"
+        for _pct, line in sorted(lines, key=lambda x: -x[0]):
+            if len(in_script_of(comment_text, text + "\n" + line)) > limit - 40:
+                text += "\n… va boshqalar — havolada"
+                break
+            text += "\n" + line
+    return direct_links(in_script_of(comment_text, text))[:limit]
+
+
+_TG_HANDLES = {"@ketoshopbot": "https://t.me/ketoshopbot", "@ketoshop_uz": "https://t.me/ketoshop_uz"}
+
+
+def direct_links(text: str) -> str:
+    """Instagram Direct'da @username bosilmaydi (egasi, 2026-11-16) — to'liq t.me havola."""
+    for handle, link in _TG_HANDLES.items():
+        text = re.sub(re.escape(handle) + r"\b", link, text, flags=re.IGNORECASE)
+    return text
+
+
 def template_reply(category: str | None, kb: dict) -> str | None:
     """Narx / bor-yo'qligi / buyurtma / yetkazish / manzil savoliga tayyor
     javob (2026-11-12: «Narxi qancha», «Нархи» kabi izohlar kutib qolgan edi).
@@ -213,6 +277,12 @@ QANDAY YOZISH — muloyim, jonli odamdek, biroz hamdardlik bilan
 - Odamni eshitganingni qisqa va tabiiy ko'rsat: savoliga qiziqish, tashvishiga tushunish ("Tushunaman,
   bu muhim"), maqtoviga samimiy minnatdorchilik. Ortiqcha shirinsuxanlik va mubolag'a yo'q.
 - Savolga aniq, foydali javob ber; kerak bo'lsa keyingi qadamni ayt (masalan, buyurtma — @ketoshopbot orqali).
+- AVVAL FOYDA, KEYIN MAHSULOT (egasi, 2026-11-16: "faqat sotuvga yo'naltiraverma bu qo'pollik,
+  tavsiyalar ham bergin va keto tavsiyalar ham"): biz sotuvchi emas, maslahatchimiz. O'rinli bo'lsa
+  javobga bitta qisqa amaliy maslahat qo'sh — keto/PP maslahati, mahsulotni qanday ishlatish, retsept
+  g'oyasi yoki almashtirish (shakar o'rniga eritritol, oq un o'rniga bodom uni). Mahsulotni faqat haqiqatan
+  foydali bo'lsa tilga ol, ko'pi bilan bittasini va yumshoq; har javobda sotuvga undama.
+  Rahmat va maqtovga — mahsulotsiz, iliq javob.
 - Qisqa: 1–3 gap. O'rinli bo'lsa 1–2 ta emoji.
 - Savol yoki muammoga "Assalomu alaykum" bilan boshlasang bo'ladi, lekin har doim shart emas;
   rahmat, maqtov va emojiga — qisqa, samimiy rahmat.
@@ -620,8 +690,9 @@ NIMA YOZISH — ESKI IZOH mazmuniga qarab bittasini tanla:
   dema. Odam olgan-olmaganini bilmaymiz, shuning uchun shartli so'ra: "Agar olgan bo'lsangiz, nima
   pishirdingiz, qanday chiqdi? Izohda bo'lishsangiz xursand bo'lamiz". Bepul retseptlarni Telegram botimiz
   @ketoshopbot va kanalimiz {kanal} da joylab borayotganimizni ayt va obuna bo'lishga iliq taklif qil.
-- Rahmat, maqtov yoki umumiy fikr bo'lsa: iliq salom va YANGI MAHSULOTLAR ichidan uning qiziqishiga (post
-  mavzusiga) mos 1–3 tasini ayt — "Ko'rdingizmi?" kabi. Mos yangi mahsulot bo'lmasa — bepul retseptlarni
+- Rahmat, maqtov yoki umumiy fikr bo'lsa: iliq salom va post mavzusiga mos bitta qisqa keto yoki PP
+  maslahati (foydali, sotuvsiz); o'rinli bo'lsa YANGI MAHSULOTLAR ichidan qiziqishiga mos 1–2 tasini
+  yumshoq ayt — "Ko'rdingizmi?" kabi. Mos yangi mahsulot bo'lmasa — bepul retseptlarni
   @ketoshopbot va {kanal} Telegram kanalimizda joylab borayotganimizni ayt va obuna bo'lishga taklif qil.
 - Shikoyat, norozilik yoki tanqid bo'lsa: samimiy — fikri uchun rahmat, uni e'tiborga olganimizni ayt; savoli
   yoki muammosi qolgan bo'lsa, iltimos yozishini so'ra. Mahsulot reklama qilma, "yaxshiladik" kabi
@@ -633,6 +704,8 @@ NIMA YOZISH — ESKI IZOH mazmuniga qarab bittasini tanla:
 MANIPULYATSIYASIZ
 - Shoshiltirma ("faqat bugun", "tez tugaydi", "oxirgi imkoniyat" yo'q), qo'rqitma, aybdor his qildirma.
 - "Sotib oling", "buyurtma bering" deb buyurma — faqat taklif va savol. Ortiqcha maqtov va mubolag'a yo'q.
+- Avval foyda: xabarda albatta bitta foydali narsa bo'lsin (maslahat, retsept g'oyasi, qanday ishlatish);
+  mahsulot — faqat o'rinli bo'lsa, qo'shimcha sifatida.
 - Bir xabarda ko'pi bilan bitta savol. 1–3 gap, 1–2 emoji. Har xabar o'ziga xos bo'lsin, shablon emas.
 - Faqat KATALOG, YANGI MAHSULOTLAR, AKSIYA va BILIM BAZASIdagi faktlar. Narxni faqat so'ralgan mahsulotga ayt.
 - Tabiiy yoz: "iltimos" faqat aniq bir ish so'raganda va o'rinli bo'lsa, ko'pi bilan bir marta; taklif va

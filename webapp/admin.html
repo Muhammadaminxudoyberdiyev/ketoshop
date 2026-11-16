@@ -734,6 +734,58 @@ body.kuryer-mode .kb-admin-only{display:none!important}
     #view-expenses .exp-actions{grid-column:1/-1}
     #view-expenses .row-actions{flex-wrap:wrap}
   }
+
+  /* ===== Mijozlar: AI portreti (2026-11-16) — telefonda ham yon tomonga siljimaydi ===== */
+  #view-mijozlar .hint{font-size:12.5px;color:var(--ink-2)}
+  .pm-goals{margin:-4px 0 14px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .pm-goals:empty{display:none}
+  .pm-filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 12px}
+  .pm-filters input[type=search]{flex:1 1 220px;max-width:340px;min-width:0}
+  .pm-filters .period-switch{margin:0;width:auto;max-width:100%;flex-wrap:wrap}
+  .pm-list{display:grid;gap:8px;transition:opacity .15s}
+  .pm-list.busy{opacity:.55}
+  .pm-row{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:center;width:100%;text-align:left;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--ink);font:inherit;transition:.15s}
+  .pm-row:hover{border-color:var(--accent);background:var(--surface-2)}
+  .pm-ava{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-size:20px;background:var(--chip-bg)}
+  .pm-ava.f{background:var(--amber-wash)}
+  .pm-ava.m{background:var(--green-wash)}
+  .pm-main{min-width:0;display:grid;gap:4px}
+  .pm-name{font-weight:700;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pm-name small{font-weight:500;color:var(--ink-3);font-size:12px}
+  .pm-meta{display:flex;flex-wrap:wrap;gap:5px 8px;align-items:center;font-size:12.5px;color:var(--ink-2)}
+  .pm-chip{display:inline-block;font-size:11.5px;font-weight:700;border-radius:20px;padding:2px 9px;background:var(--green-wash);color:var(--green);white-space:nowrap}
+  .pm-chip.topic{background:var(--chip-bg);color:var(--ink-2)}
+  .pm-off,.pm-none{font-size:12.5px;font-weight:700;color:var(--ink-3)}
+  .pm-none{font-weight:500;font-style:italic}
+  .pm-side{display:grid;gap:3px;justify-items:end;font-size:12px;color:var(--ink-2);white-space:nowrap;text-align:right}
+  .pm-side b{color:var(--ink)}
+  .pm-pager{display:flex;gap:10px;justify-content:center;align-items:center;margin-top:14px;font-size:13px;color:var(--ink-2)}
+  .pm-pager:empty{display:none}
+  .pm-links{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 4px}
+  .pm-links a{text-decoration:none}
+  .pm-sec{font-size:14px;margin:18px 0 8px}
+  .pm-sec small{font-weight:500;color:var(--ink-3)}
+  .pm-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+  .pm-fact{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:9px 11px;min-width:0}
+  .pm-fact .lab{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+  .pm-fact .val{font-size:14px;font-weight:700;margin-top:2px;overflow-wrap:anywhere}
+  .pm-fact .val small{font-weight:500;color:var(--ink-2);font-size:12px}
+  .pm-topics{margin-top:8px}
+  .pm-notes{display:grid;gap:6px}
+  .pm-note{font-size:13px;background:var(--surface-2);border-radius:9px;padding:7px 10px;overflow-wrap:anywhere}
+  .pm-note .k{display:block;font-size:11.5px;font-weight:700;color:var(--ink-3)}
+  .pm-order{border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:13px;display:grid;gap:4px}
+  .pm-order .h{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+  .pm-order .it{color:var(--ink-2);font-size:12.5px;overflow-wrap:anywhere}
+  .pm-locked{background:var(--chip-bg);border-radius:12px;padding:14px;font-weight:800;color:var(--ink-2);margin:12px 0 0}
+  .pm-locked p{margin:6px 0 0;font-weight:500;font-size:12.5px}
+  @media(max-width:640px){
+    .pm-row{grid-template-columns:36px minmax(0,1fr);gap:10px}
+    .pm-ava{width:36px;height:36px;font-size:18px}
+    .pm-side{grid-column:2;display:flex;flex-wrap:wrap;gap:2px 12px;justify-items:start;text-align:left;white-space:normal}
+    #pmModal .modal{padding:20px 16px}
+  }
 </style>
 </head>
 <body>
@@ -767,6 +819,7 @@ body.kuryer-mode .kb-admin-only{display:none!important}
     <button class="tab active" data-view="dashboard">📊 Dashboard</button>
     <button class="tab" data-view="faollik">📈 Faollik</button>
     <button class="tab" data-view="izohlar">💬 Izohlar</button>
+    <button class="tab" data-view="mijozlar">🧑‍🤝‍🧑 Mijozlar</button>
     <button class="tab" data-view="order-costs">🧾 Buyurtma tannarxi</button>
     <button class="tab" data-view="courier">🚚 Kuryer</button>
     <button class="tab" data-view="products">📦 Mahsulotlar</button>
@@ -1082,6 +1135,31 @@ body.kuryer-mode .kb-admin-only{display:none!important}
       </div>
       <p class="hint" id="izCount" style="margin:0 0 10px"></p>
       <div class="iz-feed" id="izFeed"></div>
+    </div>
+  </section>
+
+  <!-- ===== MIJOZLAR: AI PORTRETI (2026-11-16) ===== -->
+  <section class="view" id="view-mijozlar">
+    <p class="hint" style="margin:0 0 14px">
+      Bot va saytda AI sotuvchi bilan gaplashgan har bir mijoz: AI suhbat davomida yig'gan portret (ism, yosh, jins, maqsad),
+      suhbatlari va xaridlari. Foiz — AI bilan gaplashganlarga nisbatan. Admin va ichki akkauntlar kirmaydi;
+      ma'lumotini /malumotlarim orqali o'chirgan mijozning portreti ko'rsatilmaydi. Faqat ko'rish uchun.
+    </p>
+    <div class="kpi-grid" id="pmKpis"></div>
+    <div class="hint pm-goals" id="pmGoals"></div>
+    <div class="dash-card">
+      <div class="pm-filters">
+        <input type="search" id="pmSearch" placeholder="Ism, @username yoki ID…" autocomplete="off">
+        <div class="period-switch" id="pmFilter">
+          <button class="active" data-v="all">Hammasi</button>
+          <button data-v="portrait">🧩 Portreti bor</button>
+          <button data-v="no_portrait">Portretsiz</button>
+          <button data-v="orders">🛒 Xaridor</button>
+        </div>
+      </div>
+      <p class="hint" id="pmCount" style="margin:0 0 10px"></p>
+      <div class="pm-list" id="pmList"></div>
+      <div class="pm-pager" id="pmPager"></div>
     </div>
   </section>
 
@@ -1559,6 +1637,18 @@ body.kuryer-mode .kb-admin-only{display:none!important}
   <div class="modal" style="max-width:760px">
     <h2 id="custTitle">Mijoz</h2>
     <div id="custBody"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-o" data-close>Yopish</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MIJOZ PORTRETI (AI) KARTASI — faqat ko'rish ===== -->
+<div class="modal-bg" id="pmModal">
+  <div class="modal" style="max-width:720px">
+    <h2 id="pmTitle">Mijoz</h2>
+    <div class="hint" id="pmSub"></div>
+    <div id="pmBody"></div>
     <div class="modal-actions">
       <button type="button" class="btn btn-o" data-close>Yopish</button>
     </div>
@@ -2490,7 +2580,7 @@ $('#dashCustomDateBtn').addEventListener('click', () => {
 });
 
 /* ===== tabs ===== */
-const VIEWS=['dashboard','faollik','izohlar','order-costs','courier','products','sets','promos','keto','bloggers','reklama','retention','expenses','pickup'];
+const VIEWS=['dashboard','faollik','izohlar','mijozlar','order-costs','courier','products','sets','promos','keto','bloggers','reklama','retention','expenses','pickup'];
 function switchView(v){
   if(!VIEWS.includes(v))v='dashboard';
   if(!window.KURYER_MODE)localStorage.setItem('ketoshop_admin_view',v);
@@ -2502,6 +2592,7 @@ function switchView(v){
   if(v==='dashboard'){loadDashboard();loadFaStrip();loadIzohStrip();loadAdStrip();}
   if(v==='faollik')loadFaollik();
   if(v==='izohlar')loadIzohlar();
+  if(v==='mijozlar')loadMijozlar();
   if(v==='order-costs')$('#orderCostId').focus();
   if(v==='products')loadProducts();
   if(v==='sets')loadSets();
@@ -4040,6 +4131,179 @@ $$('#izRate button').forEach(b=>b.addEventListener('click',()=>{$$('#izRate butt
 ['#izText','#izInternal'].forEach(s=>$(s).addEventListener('change',()=>IZ&&renderIzoh()));
 $('#izSearch').addEventListener('input',()=>IZ&&renderIzoh());
 $('#izStripBtn').addEventListener('click',()=>switchView('izohlar'));
+
+/* ===== mijozlar: AI portreti (2026-11-16) =====
+   Egasi: "dashboardda botning AI si bilan gaplashgan har bir foydalanuvchining
+   mijoz portretini ko'rish imkonini qo'sh". Faqat o'qish: /admin/api/portraits
+   (portrait_web.py). Ma'lumotini o'chirgan mijozning portreti, mavzulari va
+   AI eslatmalarini server umuman bermaydi — bu yerda «ma'lumot o'chirilgan». */
+const PM={q:'',filter:'all',page:1,data:null,seq:0,timer:null};
+const PM_GENDER={f:'👩',m:'👨'}, PM_GENDER_UZ={f:'ayol',m:'erkak'};
+const PM_SOURCE_UZ={name:'ismdan taxmin',stated:"o'zi aytgan"};
+const PM_CHANNEL={bot:'🤖 Bot',site:'🖥 Sayt'};
+const PM_NOTE={interest:'🔎 Qiziqish',feedback:'💬 Fikr',note:'📝 Eslatma'};
+const PM_LANG={uz:"O'zbekcha",uz_cyr:'Ўзбекча (kirill)',ru:'Ruscha'};
+const PM_STATUS={pending:'⏳ Yangi',confirmed:'✅ Qabul qilindi',preparing:'🧺 Tayyorlanmoqda',ready:'📦 Tayyor',
+  shipped:'🚚 Yo‘lda',delivered:'✅ Yetkazildi',cancelled:'❌ Bekor qilingan'};
+const PM_OFF="🔐 Ma'lumot o'chirilgan";
+function pmPct(a,b){return b?Math.round((+a||0)/b*100)+'%':'0%';}
+function pmSom(n){return Math.round(+n||0).toLocaleString('ru-RU').replace(/\s/g,' ')+" so'm";}
+function pmWhen(iso,dateOnly){
+  if(!iso)return '—';
+  const s=String(iso), d=new Date(s.length<=10?s+'T00:00:00Z':s+'Z');
+  if(isNaN(d))return '—';
+  const o={timeZone:'Asia/Tashkent',day:'2-digit',month:'2-digit',year:'2-digit'};
+  if(!dateOnly){o.hour='2-digit';o.minute='2-digit';}
+  return d.toLocaleString('ru-RU',o);
+}
+function pmWho(r){return r.display_name||r.full_name||(r.username?'@'+r.username:'ID '+r.user_id);}
+function pmGenderSrc(r){
+  const conf=r.gender_source==='name'&&r.gender_confidence!=null?', ishonch '+Math.round(r.gender_confidence*100)+'%':'';
+  return (PM_SOURCE_UZ[r.gender_source]||'?')+conf;
+}
+function pmGenderTitle(r){
+  return PM_GENDER_UZ[r.gender]?`${PM_GENDER_UZ[r.gender]} (${pmGenderSrc(r)})`:'jinsi noma\'lum';
+}
+function pmRow(r){
+  const off=!!r.opted_out, g=off?'':(PM_GENDER[r.gender]?r.gender:'');
+  const tg=[r.display_name&&r.full_name&&r.full_name!==r.display_name?r.full_name:'',
+            r.username?'@'+r.username:''].filter(Boolean).join(' · ');
+  let meta;
+  if(off)meta=`<span class="pm-off">${PM_OFF}</span>`;
+  else{
+    const bits=[];
+    if(r.age!=null)bits.push(`<span>🎂 ${+r.age} yosh</span>`);
+    (r.goal_labels||[]).forEach(l=>bits.push(`<span class="pm-chip">${esc(l)}</span>`));
+    meta=bits.join('')||'<span class="pm-none">portret hali yo\'q</span>';
+  }
+  return `<button type="button" class="pm-row" data-uid="${+r.user_id}">
+    <span class="pm-ava ${g}" title="${esc(off?PM_OFF:pmGenderTitle(r))}">${off?'🔐':(PM_GENDER[r.gender]||'👤')}</span>
+    <span class="pm-main">
+      <span class="pm-name">${esc(pmWho(r))}${tg?` <small>${esc(tg)}</small>`:''}</span>
+      <span class="pm-meta">${meta}</span>
+    </span>
+    <span class="pm-side">
+      <span title="Oxirgi AI suhbati">💬 ${pmWhen(r.last_ai_at)} · ${+r.conversations||0} suhbat</span>
+      <span>${+r.orders?`🛒 <b>${+r.orders}</b> · ${pmSom(r.spent)}`:'🛒 xarid yo\'q'}</span>
+    </span>
+  </button>`;
+}
+function renderMijozlar(){
+  const d=PM.data||{}, s=d.stats||{}, n=+s.talked||0, f=+s.female||0, m=+s.male||0;
+  const kpi=(lab,val,sub)=>`<div class="kpi-card"><div class="lab">${lab}</div><div class="val">${val}</div>${sub?`<div class="sub">${sub}</div>`:''}</div>`;
+  const cov=k=>`${+s[k]||0} · ${pmPct(s[k],n)}`;
+  $('#pmKpis').innerHTML=[
+    kpi('🤖 AI bilan gaplashgan',`${n} ta`,`${+s.with_orders||0} tasi xarid qilgan`),
+    kpi('🧩 Portreti bor',cov('portraits')),
+    kpi('👤 Ism',cov('with_name')),
+    kpi('🎂 Yosh',cov('with_age')),
+    kpi('🚻 Jins',`${f+m} · ${pmPct(f+m,n)}`,`👩 ayol ${f} · 👨 erkak ${m}`),
+    kpi('🎯 Maqsad',cov('with_goals')),
+    kpi("🔐 O'chirgan",`${+s.opted_out||0} ta`,'/malumotlarim orqali'),
+  ].join('');
+  const goals=d.goals||[];
+  $('#pmGoals').innerHTML=goals.length?'<span>🎯 Maqsadlar:</span>'+goals.map(g=>`<span class="pm-chip">${esc(g.label)} · ${+g.n}</span>`).join(''):'';
+  const rows=d.rows||[], total=+d.total||0, page=+d.page||1, pages=+d.pages||1;
+  $('#pmCount').textContent=total?`${total} ta mijoz${pages>1?` · ${page}/${pages}-sahifa`:''} · oxirgi suhbat yangisi tepada`:'';
+  $('#pmList').innerHTML=rows.map(pmRow).join('')
+    ||`<p class="hint">${PM.q||PM.filter!=='all'?"Bu qidiruv yoki filtr bo'yicha mijoz yo'q.":"Hali hech kim AI bilan gaplashmagan."}</p>`;
+  $('#pmPager').innerHTML=pages>1?`<button type="button" class="btn btn-o btn-sm" data-page="${page-1}"${page<=1?' disabled':''}>← Oldingi</button>
+    <span class="tnum">${page} / ${pages}</span>
+    <button type="button" class="btn btn-o btn-sm" data-page="${page+1}"${page>=pages?' disabled':''}>Keyingi →</button>`:'';
+}
+async function loadMijozlar(){
+  const seq=++PM.seq, list=$('#pmList');
+  list.classList.add('busy');
+  try{
+    const qs=new URLSearchParams({q:PM.q,page:String(PM.page),filter:PM.filter});
+    const d=await api('/admin/api/portraits?'+qs.toString());
+    if(seq!==PM.seq)return;           // eskiroq so'rov keyin qaytdi — e'tiborsiz
+    PM.data=d;renderMijozlar();
+  }catch(e){
+    if(seq===PM.seq&&e.message!=='unauthorized')list.innerHTML='<p class="hint">⚠️ '+esc(e.message)+'</p>';
+  }finally{if(seq===PM.seq)list.classList.remove('busy');}
+}
+function pmFact(lab,val){return `<div class="pm-fact"><div class="lab">${lab}</div><div class="val">${val}</div></div>`;}
+function pmQty(q){const v=Number(q);return q!=null&&q!==''&&Number.isFinite(v)?(Number.isInteger(v)?String(v):String(+v.toFixed(3)).replace('.',',')):esc(q??'');}
+function pmOrder(o){
+  const items=(o.items||[]).map(i=>`${esc(i.name)} ×${pmQty(i.quantity)}${i.unit?' '+esc(i.unit):''}${i.gift?' 🎁':''}`).join(', ');
+  return `<div class="pm-order"><div class="h"><b>#${+o.id}</b><span>${pmWhen(o.created_at)}</span>
+    <span>${PM_STATUS[o.status]||esc(o.status)}</span><b class="tnum" style="margin-left:auto">${pmSom(o.total)}</b></div>
+    ${items?`<div class="it">${items}</div>`:''}</div>`;
+}
+function pmCard(c){
+  const out=[`<div class="pm-links">
+    <a class="btn btn-o btn-sm" href="${esc(c.tg_link)}">✉️ Telegramda ochish</a>
+    ${c.tme_link?`<a class="btn btn-o btn-sm" href="${esc(c.tme_link)}" target="_blank" rel="noopener">@${esc(c.username)}</a>`:''}
+  </div>`];
+  if(c.opted_out){
+    out.push(`<div class="pm-locked">${PM_OFF}<p>Mijoz /malumotlarim orqali o'z ma'lumotlarini o'chirgan — portret,
+      suhbat mavzulari va AI eslatmalari ko'rsatilmaydi. Buyurtmalar do'kon hisobida qoladi.</p></div>`);
+  }else{
+    const gender=PM_GENDER_UZ[c.gender]?`${PM_GENDER[c.gender]} ${PM_GENDER_UZ[c.gender]} <small>(${esc(pmGenderSrc(c))})</small>`:'—';
+    out.push(`<h3 class="pm-sec">🧩 Portret</h3><div class="pm-facts">
+      ${pmFact('👤 Murojaat',c.display_name?esc(c.display_name):'—')}
+      ${pmFact('🎂 Yosh',c.age!=null?`${+c.age} <small>(${esc(c.age_group||'')})</small>`:'—')}
+      ${pmFact('🚻 Jins',gender)}
+      ${pmFact('🎯 Maqsadlar',(c.goal_labels||[]).length?c.goal_labels.map(l=>`<span class="pm-chip">${esc(l)}</span>`).join(' '):'—')}
+    </div>`);
+  }
+  out.push(`<h3 class="pm-sec">🤖 AI bilan suhbat</h3><div class="pm-facts">
+    ${pmFact('Birinchi',pmWhen(c.first_ai_at))}
+    ${pmFact('Oxirgi',pmWhen(c.last_ai_at))}
+    ${pmFact('Suhbatlar',`${+c.conversations||0} ta <small>· ${+c.messages||0} javob</small>`)}
+    ${pmFact('Qayerda',(c.channels||[]).map(ch=>PM_CHANNEL[ch]||esc(ch)).join(', ')||'—')}
+  </div>`);
+  if(!c.opted_out&&(c.topics||[]).length)
+    out.push(`<div class="pm-meta pm-topics">${c.topics.map(t=>`<span class="pm-chip topic">${esc(t.title)} · ${+t.n}</span>`).join('')}</div>`);
+  out.push(`<h3 class="pm-sec">🛒 Xaridlar</h3><div class="pm-facts">
+    ${pmFact('Buyurtmalar',`${+c.orders||0} ta`)}
+    ${pmFact('Jami',pmSom(c.spent))}
+    ${pmFact('🎁 Keto',`${+c.keto_balance||0} <small>(jami ${+c.keto_lifetime||0})</small>`)}
+    ${pmFact("Botga qo'shilgan",`${pmWhen(c.joined_at,true)} <small>· ${esc(PM_LANG[c.language]||c.language||'—')}</small>`)}
+  </div>`);
+  if(!c.opted_out){
+    const notes=c.notes||[];
+    out.push(`<h3 class="pm-sec">📝 AI eslatmalari <small>(${notes.length})</small></h3>`+(notes.length
+      ?`<div class="pm-notes">${notes.map(x=>`<div class="pm-note"><span class="k">${PM_NOTE[x.kind]||esc(x.kind)} · ${pmWhen(x.created_at,true)}</span>${esc(x.text)}</div>`).join('')}</div>`
+      :'<p class="hint">AI hali hech narsa eslab qolmagan.</p>'));
+  }
+  const orders=c.recent_orders||[];
+  out.push(`<h3 class="pm-sec">📦 Oxirgi buyurtmalar</h3>`+(orders.length
+    ?`<div class="pm-notes">${orders.map(pmOrder).join('')}</div>`:'<p class="hint">Buyurtma yo\'q.</p>'));
+  return out.join('');
+}
+window.openPortrait=async function(uid){
+  const body=$('#pmBody');
+  $('#pmTitle').textContent='Mijoz';$('#pmSub').textContent='ID '+uid;
+  body.innerHTML='<p class="hint">Yuklanmoqda…</p>';
+  $('#pmModal').classList.add('open');
+  try{
+    const c=await api('/admin/api/portraits/'+(+uid));
+    $('#pmTitle').textContent=(c.opted_out?'🔐 ':(PM_GENDER[c.gender]||'👤')+' ')+pmWho(c);
+    $('#pmSub').textContent=[c.display_name&&c.full_name&&c.full_name!==c.display_name?'Telegram: '+c.full_name:'',
+      c.username?'@'+c.username:'','ID '+c.user_id].filter(Boolean).join(' · ');
+    body.innerHTML=pmCard(c);
+  }catch(e){
+    if(e.message!=='unauthorized')body.innerHTML='<p style="color:var(--red)">⚠️ '+esc(e.message)+'</p>';
+  }
+};
+$('#pmSearch').addEventListener('input',e=>{
+  clearTimeout(PM.timer);
+  const v=e.target.value;
+  PM.timer=setTimeout(()=>{PM.q=v.trim();PM.page=1;loadMijozlar();},300);
+});
+$$('#pmFilter button').forEach(b=>b.addEventListener('click',()=>{
+  $$('#pmFilter button').forEach(x=>x.classList.toggle('active',x===b));
+  PM.filter=b.dataset.v;PM.page=1;loadMijozlar();
+}));
+$('#pmList').addEventListener('click',e=>{const r=e.target.closest('[data-uid]');if(r)openPortrait(+r.dataset.uid);});
+$('#pmPager').addEventListener('click',e=>{
+  const b=e.target.closest('[data-page]');
+  if(!b||b.disabled)return;
+  PM.page=Math.max(1,+b.dataset.page);loadMijozlar();
+  const top=$('#pmCount');if(top&&top.scrollIntoView)top.scrollIntoView({block:'start',behavior:'smooth'});
+});
 
 /* ===== blogerlar =====
    Hamkor blogerlar: shaxsiy havola -> taklif qilingan mijozlar -> har bir
