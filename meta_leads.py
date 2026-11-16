@@ -53,7 +53,11 @@ PAGE_TOKEN = os.getenv("META_PAGE_TOKEN", "").strip()
 PAGE_ID = os.getenv("META_PAGE_ID", "582508891606220").strip()
 FORM_IDS = [f.strip() for f in os.getenv("META_LEAD_FORM_IDS", "").split(",") if f.strip()]
 POLL_SECONDS = max(20, int(os.getenv("META_POLL_SECONDS", "60")))
-API_VERSION = os.getenv("META_API_VERSION", "").strip().strip("/")
+# An unversioned Graph call runs on the app's default version, and Meta
+# refuses that one once it ages out — 2026-11-08: "(#2635) You are calling a
+# deprecated version of the Ads API". A pinned version keeps working until
+# Meta retires it (about two years); META_API_VERSION still overrides.
+API_VERSION = (os.getenv("META_API_VERSION", "").strip().strip("/") or "v23.0")
 
 GRAPH = "https://graph.facebook.com/" + (f"{API_VERSION}/" if API_VERSION else "")
 TZ = timezone(timedelta(hours=5))  # Asia/Tashkent, fixed UTC+5, no DST
@@ -351,10 +355,14 @@ async def mark_handled(callback: CallbackQuery):
 async def recent_leads(message: Message):
     if message.from_user.id not in ADMIN_IDS:
         return
+    await message.answer(await recent_text(), parse_mode="HTML")
+
+
+async def recent_text() -> str:
+    """The last 10 leads — /leads and «📋 Leadlar»."""
     rows = await database.get_recent_meta_leads(10)
     if not rows:
-        await message.answer("Hozircha lead yo'q.")
-        return
+        return "Hozircha lead yo'q."
 
     total = await database.count_meta_leads()
     lines = [f"📋 <b>Oxirgi {len(rows)} ta lead</b> (jami {total})", ""]
@@ -364,7 +372,7 @@ async def recent_leads(message: Message):
         name = html.escape(r.get("full_name") or "—")
         phone = html.escape(r.get("phone") or "—")
         lines.append(f"{mark} {when} · {name} · <code>{phone}</code>")
-    await message.answer("\n".join(lines), parse_mode="HTML")
+    return "\n".join(lines)
 
 
 @router.message(Command("leads_test"))

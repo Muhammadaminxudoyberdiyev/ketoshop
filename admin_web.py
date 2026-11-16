@@ -56,6 +56,9 @@ Routes (all mounted by setup_admin_routes):
   POST /admin/api/courier/orders/{id}/courier — {courier_id|null} -> claim/release a card
   GET  /admin/api/courier/couriers — registered couriers for the card picker
   POST /admin/api/courier/orders/{id}/location — push the buyer's map pin to the admins' Telegram
+  GET  /admin/api/portraits       — {q, page, filter} -> «🧑‍🤝‍🧑 Mijozlar»: everyone who talked with the
+                                    AI (bot + site), portrait coverage counters, 30 per page (read-only)
+  GET  /admin/api/portraits/{user_id} — one customer's card: portrait, AI notes, last 5 orders, Keto
 
 Images are stored in Postgres (web_images) because Railway's filesystem is
 ephemeral — see database.py.
@@ -67,6 +70,7 @@ import hmac
 import json
 import logging
 import math
+import re
 import time
 from pathlib import Path
 
@@ -75,6 +79,7 @@ from aiohttp import web
 
 import courier_board
 import database
+import portrait_web
 from config import ADMIN_WEB_PASSWORD, BOT_TOKEN, ADMIN_IDS, BOT_USERNAME
 from locales import CATEGORIES, get_item_unit
 # Same tolerant JSON encoder the Mini App uses: aiohttp's default dumps cannot
@@ -251,6 +256,67 @@ async def api_categories_create(request: web.Request):
     if cat.get("created_at"):
         cat["created_at"] = cat["created_at"].isoformat()
     return _json({"ok": True, "category": cat})
+
+
+# Bo'limlarni boshqarish (egasi, 2026-11-12: "admin panelga ortiqcha
+# bo'limlarni o'chirish va tahrirlash imkoniyatini ham qo'shgin").
+_CAT_KEY = re.compile(r"^[a-z0-9_]{1,64}$")
+
+
+@require_auth
+async def api_categories_list(request: web.Request):
+    """GET /admin/api/categories — hamma bo'limlar (yashiringanlari ham) va
+    har birida nechta mahsulot borligi."""
+    cats = await database.get_categories(active_only=False)
+    counts = await database.category_product_counts()
+    for c in cats:
+        c.update(counts.get(c["key"], {"total": 0, "active": 0}))
+    return _json({"categories": cats})
+
+
+@require_auth
+async def api_categories_update(request: web.Request):
+    """POST /admin/api/categories/{key} {name_uz?, name_ru?, is_active?}."""
+    key = request.match_info["key"]
+    if not _CAT_KEY.match(key):
+        return _json({"error": "bo'lim topilmadi"}, status=404)
+    try:
+        b = await request.json()
+    except Exception:
+        return _json({"error": "bad request"}, status=400)
+    name_uz = _clean_str(b.get("name_uz"), 200) if "name_uz" in b else None
+    name_ru = _clean_str(b.get("name_ru"), 200) if "name_ru" in b else None
+    if "name_uz" in b and not name_uz:
+        return _json({"error": "O'zbekcha nom bo'sh bo'lmasin"}, status=400)
+    is_active = b.get("is_active") if isinstance(b.get("is_active"), bool) else None
+    cat = await database.update_category(key, name_uz=name_uz, name_ru=name_ru or (None if "name_ru" not in b else name_uz),
+                                         is_active=is_active)
+    if cat is None:
+        return _json({"error": "bo'lim topilmadi yoki o'zgarish yo'q"}, status=404)
+    return _json({"ok": True, "category": cat})
+
+
+@require_auth
+async def api_categories_delete(request: web.Request):
+    """POST /admin/api/categories/{key}/delete {move_to?} — mahsuloti bor
+    bo'lim faqat mahsulotlar boshqa bo'limga ko'chirilsa o'chiriladi."""
+    key = request.match_info["key"]
+    if not _CAT_KEY.match(key):
+        return _json({"error": "bo'lim topilmadi"}, status=404)
+    try:
+        b = await request.json()
+    except Exception:
+        b = {}
+    move_to = (b or {}).get("move_to") or None
+    if move_to is not None and not _CAT_KEY.match(str(move_to)):
+        return _json({"error": "ko'chiriladigan bo'lim noto'g'ri"}, status=400)
+    result = await database.delete_category(key, move_to)
+    if result["error"] == "not_found":
+        return _json({"error": "bo'lim topilmadi"}, status=404)
+    if result["error"] == "has_products":
+        return _json({"error": f"Bu bo'limda {result['products']} ta mahsulot bor — avval ularni qaysi "
+                               f"bo'limga ko'chirishni tanlang", "products": result["products"]}, status=409)
+    return _json({"ok": True, **result})
 
 
 # ────────────────────────────── products ────────────────────────────────────
@@ -924,7 +990,7 @@ async def api_promos_announce(request: web.Request):
 
 # ───────────────────────────── expenses ──────────────────────────────────────
 
-def _expense_fields(body) -> tuple[str, float]:
+def _expense_fields(body) -> tuple[str, float, int | None]:
     if not isinstance(body, dict) or not isinstance(body.get("name"), str):
         raise ValueError
     name = body["name"].strip()
@@ -934,7 +1000,25 @@ def _expense_fields(body) -> tuple[str, float]:
     amount = float(raw_amount)
     if not name or len(name) > 200 or not math.isfinite(amount) or amount <= 0:
         raise ValueError
-    return name, amount
+    raw_cat = body.get("category_id")
+    if raw_cat in (None, "", 0, "0"):
+        category_id = None
+    elif isinstance(raw_cat, bool):
+        raise ValueError
+    else:
+        category_id = int(raw_cat)
+        if category_id <= 0:
+            raise ValueError
+    return name, amount, category_id
+
+
+def _category_name(body) -> str:
+    if not isinstance(body, dict) or not isinstance(body.get("name"), str):
+        raise ValueError
+    name = " ".join(body["name"].split())
+    if not name or len(name) > 60:
+        raise ValueError
+    return name
 
 
 ADMIN_MESSAGE_PART = 3900      # under Telegram's 4096-character limit
@@ -971,7 +1055,10 @@ async def api_admin_message(request: web.Request):
     message from the bot to every admin and to up to ADMIN_MESSAGE_MAX_EXTRA
     more Telegram ids (2026-11-05: reports for the team). HTML is allowed; a
     part Telegram cannot parse goes as plain text. Someone who never started
-    the bot cannot be reached and is counted in `failed`."""
+    the bot cannot be reached and is counted in `failed`.
+
+    "only": true sends to the listed user_ids alone, not to every admin
+    (2026-11-08: a pay calculation meant for two people, not the whole team)."""
     try:
         body = await request.json()
     except Exception:
@@ -987,7 +1074,10 @@ async def api_admin_message(request: web.Request):
         return _json({"error": "user_ids — Telegram ID raqamlari ro'yxati bo'lsin"}, status=400)
     if len(extra) > ADMIN_MESSAGE_MAX_EXTRA:
         return _json({"error": f"Ko'pi bilan {ADMIN_MESSAGE_MAX_EXTRA} ta qo'shimcha ID"}, status=400)
-    recipients = list(dict.fromkeys([*ADMIN_IDS, *extra]))
+    only = (body or {}).get("only") is True
+    if only and not extra:
+        return _json({"error": "only: true uchun user_ids kerak"}, status=400)
+    recipients = list(dict.fromkeys(extra if only else [*ADMIN_IDS, *extra]))
     parts = split_admin_message(text)
     bot = request.app["bot"]
     delivered, failed = [], []
@@ -1013,17 +1103,124 @@ async def api_admin_message(request: web.Request):
 
 
 @require_auth
+async def api_comments(request: web.Request):
+    """GET /admin/api/comments?scope=today|open|all&limit=200 — Instagram/
+    Facebook izohlari va AI javoblari (meta_comments.py), tahlil uchun."""
+    scope = request.query.get("scope", "today")
+    if scope not in ("today", "open", "all"):
+        return _json({"error": "scope: today | open | all"}, status=400)
+    try:
+        limit = max(1, min(1000, int(request.query.get("limit", "200"))))
+    except ValueError:
+        return _json({"error": "limit raqam bo'lsin"}, status=400)
+    rows = await database.meta_comments_report(scope, limit)
+    import meta_comments
+    try:
+        import comment_followup
+        followup = await database.meta_comment_followup_stats(comment_followup.DAYS)
+        followup.update(daily=comment_followup.DAILY, every_seconds=comment_followup.EVERY,
+                        hours=list(comment_followup.HOURS))
+    except Exception:
+        followup = None
+    return _json({"scope": scope, "count": len(rows), "comments": rows, "sync": meta_comments.sync_info(),
+                  "followup": followup})
+
+
+MANUAL_ORDER_BY = "🖥 Admin sayt"
+
+
+@require_auth
+async def api_manual_order(request: web.Request):
+    """POST /admin/api/manual-order — the bot's «📝 Qo'lda buyurtma» from the
+    dashboard (owner, 2026-11-09). Body: {name, phone, address, items:
+    [{product_id, quantity, price?}], payment, delivery, status}. Checked by
+    manual_order.parse — the bot's rules — and saved with add_manual_order,
+    so stock is untouched and the order is source='manual' like the bot's.
+    Every admin gets the same «Qo'lda buyurtma» card the bot sends.
+
+    "preview": true prices the order (UzPost fee included) without saving —
+    the form's running total; with "full": true it also checks the customer
+    fields, for the «Saqlansinmi?» summary shown before the real save."""
+    import manual_order
+    import order_admin_feed
+
+    try:
+        body = await request.json()
+    except Exception:
+        return _json({"error": "bad request"}, status=400)
+    if not isinstance(body, dict):
+        return _json({"error": "bad request"}, status=400)
+    preview = body.get("preview") is True
+
+    products: dict[int, dict] = {}
+    for raw in body.get("items") or []:
+        try:
+            pid = int((raw or {}).get("product_id"))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if pid not in products:
+            product = await database.get_product(pid)
+            if product:
+                products[pid] = product
+    try:
+        order = manual_order.parse(body, products,
+                                   need_customer=not preview or body.get("full") is True)
+    except manual_order.Invalid as exc:
+        return _json({"error": str(exc)}, status=400)
+
+    summary = {"name": order["customer_name"], "phone": order["phone"], "address": order["address"],
+               "items": order["items"], "subtotal": order["subtotal"],
+               "uzpost_fee": order["uzpost_fee"], "uzpost_kg": order["uzpost_kg"],
+               "total": order["total"]}
+    if preview:
+        return _json({"ok": True, "preview": True, **summary})
+
+    order_id = await database.add_manual_order(
+        admin_user_id=WEB_SELLER_ID,
+        customer_name=order["customer_name"],
+        phone=order["phone"],
+        address=order["address"],
+        items_data=order["items"],
+        total=order["total"],
+        payment_method=order["payment_method"],
+        delivery_method=order["delivery_method"],
+        status=order["status"],
+    )
+    logger.info("Manual order #%s saved from the admin site (%d line(s), %s so'm)",
+                order_id, len(order["items"]), order["total"])
+    order_admin_feed.manual_created(request.app.get("bot"), order_id, MANUAL_ORDER_BY)
+    return _json({"ok": True, "id": order_id, **summary})
+
+
+_EXPENSE_FILTER = re.compile(r"^(?:none|auto:[a-z]+|\d{1,9})$")
+
+
+@require_auth
 async def api_expenses_list(request: web.Request):
-    expenses = await database.get_expenses(100)
+    """GET /admin/api/expenses?category=<id|none|auto:…> — the newest 100."""
+    category = request.query.get("category") or None
+    if category and not _EXPENSE_FILTER.match(category):
+        return _json({"error": "Kategoriya noto'g'ri"}, status=400)
+    expenses = await database.get_expenses(100, category)
     return _json({"expenses": expenses})
+
+
+async def _category_problem(category_id: int | None):
+    if category_id is not None and not await database.expense_category_exists(category_id):
+        return _json({"error": "Kategoriya topilmadi"}, status=400)
+    return None
+
 
 @require_auth
 async def api_expenses_add(request: web.Request):
     try:
-        name, amount = _expense_fields(await request.json())
+        name, amount, category_id = _expense_fields(await request.json())
     except (TypeError, ValueError, OverflowError):
         return _json({"error": "Chiqim nomi va noldan katta, to'g'ri summani kiriting"}, status=400)
-    eid = await database.add_expense(name, amount)
+    problem = await _category_problem(category_id)
+    if problem is not None:      # a Response is falsy when empty (it is a MutableMapping)
+        return problem
+    eid = await database.add_expense(name, amount, category_id)
     return _json({"ok": True, "id": eid})
 
 
@@ -1031,16 +1228,77 @@ async def api_expenses_add(request: web.Request):
 async def api_expenses_update(request: web.Request):
     try:
         expense_id = int(request.match_info["id"])
-        name, amount = _expense_fields(await request.json())
+        name, amount, category_id = _expense_fields(await request.json())
     except (TypeError, ValueError, OverflowError):
         return _json({"error": "Chiqim nomi va noldan katta, to'g'ri summani kiriting"}, status=400)
+    problem = await _category_problem(category_id)
+    if problem is not None:      # a Response is falsy when empty (it is a MutableMapping)
+        return problem
     try:
-        changed = await database.update_expense(expense_id, name, amount)
+        changed = await database.update_expense(expense_id, name, amount, category_id)
     except ValueError as exc:
         return _json({"error": str(exc)}, status=409)
     if not changed:
         return _json({"error": "Chiqim topilmadi"}, status=404)
     return _json({"ok": True})
+
+
+# ── Chiqim kategoriyalari (owner, 2026-11-08: "xarajatlar bo'limiga
+# kategoriya qo'shish imkoniyatini qo'sh, shunda xarajatlarni ham kategoriya
+# bo'yicha belgilab boramiz") ──
+
+@require_auth
+async def api_expense_categories(request: web.Request):
+    """GET /admin/api/expense-categories — the admins' own list."""
+    return _json({"categories": await database.get_expense_categories()})
+
+
+@require_auth
+async def api_expense_category_add(request: web.Request):
+    """POST {name} — a new category; an existing name (any case) is returned as is."""
+    try:
+        name = _category_name(await request.json())
+    except (TypeError, ValueError):
+        return _json({"error": "Kategoriya nomini yozing (60 belgigacha)"}, status=400)
+    cid, created = await database.add_expense_category(name)
+    return _json({"ok": True, "id": cid, "created": created})
+
+
+@require_auth
+async def api_expense_category_rename(request: web.Request):
+    try:
+        cid = int(request.match_info["id"])
+        name = _category_name(await request.json())
+    except (TypeError, ValueError):
+        return _json({"error": "Kategoriya nomini yozing (60 belgigacha)"}, status=400)
+    try:
+        changed = await database.rename_expense_category(cid, name)
+    except ValueError as exc:
+        return _json({"error": str(exc)}, status=409)
+    if not changed:
+        return _json({"error": "Kategoriya topilmadi"}, status=404)
+    return _json({"ok": True})
+
+
+@require_auth
+async def api_expense_category_delete(request: web.Request):
+    """Its expenses stay, without a category."""
+    try:
+        cid = int(request.match_info["id"])
+    except (TypeError, ValueError):
+        return _json({"error": "Kategoriya raqami noto'g'ri"}, status=400)
+    if not await database.delete_expense_category(cid):
+        return _json({"error": "Kategoriya topilmadi"}, status=404)
+    return _json({"ok": True})
+
+
+@require_auth
+async def api_expense_totals(request: web.Request):
+    """GET /admin/api/expenses/by-category?period=7d|30d|all — where the money went."""
+    period = request.query.get("period", "30d")
+    if period not in ("today", "7d", "30d", "all"):
+        period = "30d"
+    return _json({"period": period, "totals": await database.get_expense_totals_by_category(period)})
 
 
 @require_auth
@@ -1160,6 +1418,29 @@ async def api_activity(request: web.Request):
 
 
 @require_auth
+async def api_portraits(request: web.Request):
+    """GET /admin/api/portraits?q=&page=&filter=all|portrait|no_portrait|orders —
+    «🧑‍🤝‍🧑 Mijozlar» (owner, 2026-11-16: "botning AI si bilan gaplashgan har
+    bir foydalanuvchining mijoz portretini ko'rish"). Read-only; opted-out
+    customers and staff are handled in portrait_web."""
+    try:
+        page = int(request.query.get("page") or 1)
+    except ValueError:
+        page = 1
+    return _json(await portrait_web.list_page(
+        request.query.get("q", ""), page, request.query.get("filter", "all")))
+
+
+@require_auth
+async def api_portrait_card(request: web.Request):
+    """GET /admin/api/portraits/{user_id} — one customer's full card."""
+    found = await portrait_web.card(int(request.match_info["user_id"]))
+    if found is None:
+        return _json({"error": "mijoz topilmadi"}, status=404)
+    return _json(found)
+
+
+@require_auth
 async def api_feedback(request: web.Request):
     """GET /admin/api/feedback — read-only: product reviews, site ratings and
     NPS answers (database.get_feedback_overview)."""
@@ -1179,6 +1460,24 @@ async def api_site_user(request: web.Request):
     profile (database.get_site_user)."""
     return _json(await database.get_site_user(int(request.match_info["user_id"]),
                                               request.query.get("period", "90d")))
+
+
+@require_auth
+async def api_shop_links(request: web.Request):
+    """GET /admin/api/shop-links?period=7|30|all — read-only: the tracked
+    shop links (t.me/<bot>/shop?startapp=<kod>, shop_links.py) with who
+    opened them, joined, stayed outside and bought — the same numbers as the
+    bot's /sayt_havolalar (owner, 2026-11-08: "statistikani shu yerda ayt")."""
+    import shop_links
+    from datetime import datetime, timedelta
+    period = request.query.get("period", "30")
+    _, days = shop_links.PERIODS.get(period, shop_links.PERIODS["30"])
+    since = datetime.utcnow() - timedelta(days=days) if days else None
+    rows = await shop_links.stats(since)
+    for r in rows:
+        r["link"] = shop_links.link(r["code"])
+        r["bot_link"] = shop_links.bot_link(r["code"])
+    return _json({"period": period if period in shop_links.PERIODS else "30", "links": rows})
 
 
 def _dashboard_period(request: web.Request) -> str | dict:
@@ -1348,6 +1647,30 @@ def _cents(v):
     """balance / amount_spent / spend_cap arrive in the currency's minor unit."""
     f = _f(v)
     return None if f is None else f / 100
+
+
+@require_auth
+async def api_ads_campaigns(request: web.Request):
+    """GET /admin/api/ads/campaigns?period=… — every Meta campaign next to the
+    bot's own START / shop count (ad_campaigns.collect). Fresh from Meta and the
+    database on every call — no cache (owner, 2026-11-08: "har safar kirganda
+    up to date raqamlar chiqishi kerak"). A Graph failure comes back as 200
+    with `error`, like /admin/api/ads."""
+    import ad_campaigns
+    import meta_ads
+    period = request.query.get("period", "today")
+    if period not in meta_ads.PRESETS:
+        period = "today"
+    if not meta_ads.is_enabled():
+        await meta_ads.load_token()
+    if not meta_ads.is_enabled():
+        return _json({"enabled": False, "period": period})
+    try:
+        data = await ad_campaigns.collect(period)
+    except Exception as exc:
+        logger.warning("Campaign report for the admin site failed", exc_info=True)
+        return _json({"enabled": True, "period": period, "error": str(exc)})
+    return _json(dict(data, enabled=True, first=data["first"].isoformat(), last=data["last"].isoformat()))
 
 
 @require_auth
@@ -2012,6 +2335,9 @@ def setup_admin_routes(app: web.Application):
     app.router.add_get("/admin/api/pickup", api_pickup_settings)
     app.router.add_post("/admin/api/pickup", api_pickup_settings_update)
     app.router.add_post("/admin/api/categories", api_categories_create)
+    app.router.add_get("/admin/api/categories", api_categories_list)
+    app.router.add_post("/admin/api/categories/{key}", api_categories_update)
+    app.router.add_post("/admin/api/categories/{key}/delete", api_categories_delete)
     app.router.add_get("/admin/api/products", api_products_list)
     app.router.add_post("/admin/api/translit", api_translit)
     app.router.add_get("/admin/api/products/descriptions", api_descriptions_export)
@@ -2029,8 +2355,15 @@ def setup_admin_routes(app: web.Application):
     app.router.add_post("/admin/api/reco/now", api_reco_send_now)
     app.router.add_post("/admin/api/reco/backfill", api_reco_backfill)
     app.router.add_get("/admin/api/expenses", api_expenses_list)
+    app.router.add_get("/admin/api/expenses/by-category", api_expense_totals)
+    app.router.add_get("/admin/api/expense-categories", api_expense_categories)
+    app.router.add_post("/admin/api/expense-categories", api_expense_category_add)
+    app.router.add_post("/admin/api/expense-categories/{id:\\d+}", api_expense_category_rename)
+    app.router.add_post("/admin/api/expense-categories/{id:\\d+}/delete", api_expense_category_delete)
     app.router.add_post("/admin/api/expenses", api_expenses_add)
     app.router.add_post("/admin/api/admin-message", api_admin_message)
+    app.router.add_post("/admin/api/manual-order", api_manual_order)
+    app.router.add_get("/admin/api/comments", api_comments)
     app.router.add_post("/admin/api/expenses/{id:\\d+}", api_expenses_update)
     app.router.add_post("/admin/api/expenses/{id:\\d+}/delete", api_expenses_delete)
     app.router.add_get("/admin/api/orders/{id:\\d+}/costs", api_order_line_costs)
@@ -2041,7 +2374,10 @@ def setup_admin_routes(app: web.Application):
     app.router.add_get("/admin/api/reviews", api_reviews)
     app.router.add_get("/admin/api/activity", api_activity)
     app.router.add_get("/admin/api/site-analytics", api_site_analytics)
+    app.router.add_get("/admin/api/shop-links", api_shop_links)
     app.router.add_get("/admin/api/feedback", api_feedback)
+    app.router.add_get("/admin/api/portraits", api_portraits)
+    app.router.add_get("/admin/api/portraits/{user_id:\\d+}", api_portrait_card)
     app.router.add_get("/admin/api/site-analytics/user/{user_id:\\d+}", api_site_user)
     app.router.add_get("/admin/api/promos", api_promos_list)
     app.router.add_post("/admin/api/promos", api_promos_create)
@@ -2053,6 +2389,7 @@ def setup_admin_routes(app: web.Application):
     app.router.add_get("/admin/api/keto/status", api_keto_status)
     app.router.add_post("/admin/api/keto/redemption", api_keto_redemption_toggle)
     app.router.add_get("/admin/api/ads", api_ads)
+    app.router.add_get("/admin/api/ads/campaigns", api_ads_campaigns)
     app.router.add_get("/admin/api/ads/status", api_ads_status)
     app.router.add_get("/admin/api/ads/leads", api_ads_leads)
     app.router.add_post("/admin/api/ads/leads/{lead_id}/handled", api_ads_lead_handled)

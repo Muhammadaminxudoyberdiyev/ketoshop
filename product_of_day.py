@@ -13,8 +13,9 @@ url button instead, t.me/<bot>?start=prod_<id>, which lands the reader on
 this very card in private (see product_card.open_from_link).
 
 Which product: every eligible product gets exactly one turn per cycle, and
-within a cycle the most promising go first — discounted, most-viewed and
-best-selling first, nearly-out-of-stock last. Once every product has had its
+within a cycle the ones the channel has never carried go first (2026-11-09),
+then the most promising — discounted, most-viewed and best-selling first,
+nearly-out-of-stock last. Once every product has had its
 turn the cycle rolls over and the ranking is recomputed from fresh numbers.
 State lives in the DB, so restarts and redeploys can't repeat a day.
 
@@ -101,8 +102,18 @@ async def pick_product() -> tuple[dict | None, int]:
         logger.warning("Spotlight: monthly sales lookup failed", exc_info=True)
         sold_month = {}
 
-    best = max(candidates, key=lambda p: (score(p, sold_month), p.get("views_30d") or 0, -p["id"]))
+    best = max(candidates, key=lambda p: rank(p, sold_month))
     return best, cycle
+
+
+def rank(product: dict, sold_month: dict[int, float]) -> tuple:
+    """Order within a cycle. A product the channel has never carried comes
+    before every repeat (owner, 2026-11-09: "kanalga kun mahsuloti sifatida
+    hali chiqmagan mahsulotlarni chiqar") — otherwise a new cycle opens with
+    the same bestsellers again while new or restocked goods wait at the back.
+    Among equals, the score decides as before."""
+    return (not product.get("in_channel"), score(product, sold_month),
+            product.get("views_30d") or 0, -product["id"])
 
 
 # ──────────────────────────────── sending ───────────────────────────────────
@@ -144,7 +155,10 @@ async def broadcast(bot: Bot, product: dict, day=None) -> tuple[int, int]:
     captions = product_card.CaptionCache(
         product, extra_for=lambda lang: product_ideas.recipe_block(product, lang, seed))
     sent = failed = 0
+    import push_cap
     for uid in user_ids:
+        if not await push_cap.claim(uid, "kun_mahsuloti"):
+            continue
         ok = await _send_to_user(bot, uid, product, langs.get(uid, "uz"), captions)
         sent += ok
         failed += not ok
@@ -178,6 +192,8 @@ async def post_to_channel(bot: Bot, product: dict, day=None) -> bool:
         caption = await product_card.build_caption(
             product, CHANNEL_LANG, rate,
             product_ideas.recipe_block(product, CHANNEL_LANG, _recipe_seed(day)))
+        import channel_voice
+        caption = await channel_voice.rewrite(caption, "kun_mahsuloti", 1024 - 120)
         caption = f"{caption.rstrip()}\n\n{channel_link_line(product['id'])}"
         await product_card.send_product_message(bot, REQUIRED_CHANNEL_ID, product, caption, None)
         return True
@@ -239,7 +255,8 @@ async def _tick(bot: Bot):
     p = result["product"]
     await _notify_admins(
         bot,
-        f"📦 <b>Kun mahsuloti:</b> {p.get('name')}\n"
+        f"📦 <b>Kun mahsuloti:</b> {p.get('name')}"
+        f"{'' if p.get('in_channel') else ' 🆕 kanalda birinchi marta'}\n"
         f"✅ {result['sent']} ta yetkazildi, ⚠️ {result['failed']} ta yetmadi.\n"
         f"📣 Kanal: {'yuborildi' if result['channel_ok'] else 'yuborilmadi'}\n"
         f"🔄 Aylanma: {result['cycle'] + 1}-doira",

@@ -128,6 +128,7 @@ class AnnounceTest(unittest.TestCase):
              patch.object(g, "_send_photo", side_effect=fake_send_photo), \
              patch.object(g, "SEND_DELAY", 0), \
              patch("config.REQUIRED_CHANNEL_ID", -100500), \
+             patch.object(database, "claim_user_push", AsyncMock(return_value=True)), \
              patch.object(database, "get_all_user_ids", AsyncMock(return_value=[1, 2, 3])), \
              patch.object(database, "get_user_languages", AsyncMock(return_value={1: "uz", 2: "ru", 3: "uz_cyr"})):
             stats = run(g.announce_extension(bot))

@@ -675,6 +675,40 @@ async def init_db():
             "ON keto_ledger(user_id) WHERE kind = 'welcome'"
         )
 
+        # Saytda faol vaqt uchun Keto (owner, 2026-11-15; site_time.py). One
+        # row per buyer: the active seconds the server credited (lifetime and
+        # today's share), the last beat's time, the "still there?" check and
+        # the same-pattern watch. Each rung of site_time.LADDER pays once:
+        # its key is the ledger note, unique per buyer for this kind.
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS site_time (
+                user_id BIGINT PRIMARY KEY,
+                active_seconds INTEGER NOT NULL DEFAULT 0,
+                paid_through INTEGER NOT NULL DEFAULT -1,
+                last_beat_at TIMESTAMP,
+                day_date DATE,
+                day_seconds INTEGER NOT NULL DEFAULT 0,
+                check_at INTEGER,
+                check_token TEXT,
+                check_issued_at TIMESTAMP,
+                pattern TEXT,
+                pattern_seconds INTEGER NOT NULL DEFAULT 0,
+                flagged_sid TEXT,
+                flags INTEGER NOT NULL DEFAULT 0,
+                flagged_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_keto_ledger_site_time_once "
+            "ON keto_ledger(user_id, note) WHERE kind = 'site_time'"
+        )
+        # Its own switch (/sayt_keto_on|off), under the program's /keto_off.
+        await conn.execute(
+            "ALTER TABLE gamification_state ADD COLUMN IF NOT EXISTS "
+            "site_time_enabled BOOLEAN NOT NULL DEFAULT TRUE"
+        )
+
         # Single-row contest state, same pattern as gamification_state/
         # broadcast_state. image_url points at a web_images row uploaded
         # through the admin panel. prize_1/2/3 are free-form text (can list
@@ -735,6 +769,17 @@ async def init_db():
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_product_views_time ON product_views(viewed_at)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_bot_activity_time ON bot_activity(created_at)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_bot_activity_kind_time ON bot_activity(kind, created_at)")
+        # Rejali xabarlar chegarasi (push_cap.py, 2026-11-15): kim oxirgi kunlarda faol.
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_bot_activity_user_time ON bot_activity(user_id, created_at)")
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_push_day (
+                user_id BIGINT NOT NULL,
+                day DATE NOT NULL,
+                count INTEGER NOT NULL DEFAULT 0,
+                kinds TEXT[] NOT NULL DEFAULT '{}',
+                PRIMARY KEY (user_id, day)
+            )
+        """)
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_site_activity_time ON site_activity(created_at)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_site_events_time ON site_events(created_at)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_site_events_user ON site_events(user_id, created_at)")
@@ -815,6 +860,21 @@ async def init_db():
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_expenses_delivery_order "
             "ON expenses(delivery_order_id) WHERE delivery_order_id IS NOT NULL"
         )
+
+        # Chiqim kategoriyalari (owner, 2026-11-08: "xarajatlar bo'limiga
+        # kategoriya qo'shish imkoniyatini qo'sh"). Admins make their own
+        # list; a manual expense may carry one. Order-linked expenses are
+        # labelled by their kind instead (EXPENSE_AUTO_CATEGORIES).
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS expense_categories (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await conn.execute(
+            "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS category_id INTEGER "
+            "REFERENCES expense_categories(id) ON DELETE SET NULL")
 
         # ===== Sovg'a kampaniyasi (2026-09-17) =====
         # One row per campaign key. started_at is stamped the first time the
@@ -1202,6 +1262,114 @@ async def init_db():
                 CONSTRAINT meta_ads_state_single CHECK (id = 1)
             )
         """)
+        # Instagram/Facebook izohlari botda (meta_comments.py, 2026-11-09).
+        # Bitta izoh — bitta qator: kim yozdi, qaysi reklama, kim/qachon/nima
+        # deb javob berdi, va har admindagi kartochka (tg_messages) — biri
+        # javob bersa, hammasida yangilanadi.
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS meta_comments (
+                id BIGSERIAL UNIQUE,
+                comment_id TEXT PRIMARY KEY,
+                platform TEXT NOT NULL,
+                parent_id TEXT,
+                media_id TEXT,
+                post_link TEXT,
+                ad_id TEXT,
+                ad_name TEXT,
+                from_id TEXT,
+                username TEXT,
+                text TEXT,
+                created_at TIMESTAMP,
+                received_at TIMESTAMP DEFAULT (NOW() AT TIME ZONE 'UTC'),
+                source TEXT,
+                status TEXT NOT NULL DEFAULT 'new',
+                category TEXT,
+                ai_draft TEXT,
+                ai_model TEXT,
+                note TEXT,
+                reply_text TEXT,
+                reply_kind TEXT,
+                replied_by BIGINT,
+                replied_at TIMESTAMP,
+                private_sent BOOLEAN NOT NULL DEFAULT FALSE,
+                hidden BOOLEAN NOT NULL DEFAULT FALSE,
+                tg_messages JSONB NOT NULL DEFAULT '[]'::jsonb
+            )
+        """)
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_meta_comments_status ON meta_comments(status, received_at)")
+        # 2026-11-11: AI hammasiga o'zi javob beradi — ai_confident NULL = AI
+        # hali ko'rmagan; Direct'dagi rahmat matni va vaqti (bir odamga 7 kunda bitta).
+        await conn.execute("ALTER TABLE meta_comments ADD COLUMN IF NOT EXISTS ai_confident BOOLEAN")
+        await conn.execute("ALTER TABLE meta_comments ADD COLUMN IF NOT EXISTS ai_dm TEXT")
+        await conn.execute("ALTER TABLE meta_comments ADD COLUMN IF NOT EXISTS dm_sent_at TIMESTAMP")
+        # 2026-11-13: bir oy oldingi izoh egalariga qayta yozish (comment_followup.py) —
+        # bir odamga bir marta; followup_text '' — AI yozmaslikni tanlagan yoki yuborilmagan.
+        await conn.execute("ALTER TABLE meta_comments ADD COLUMN IF NOT EXISTS followup_at TIMESTAMP")
+        await conn.execute("ALTER TABLE meta_comments ADD COLUMN IF NOT EXISTS followup_text TEXT")
+        # Izohlar tokeni (ads_read tokenidan ALOHIDA), AI rejimi, bilim bazasi.
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS meta_comments_state (
+                id INTEGER PRIMARY KEY DEFAULT 1,
+                token TEXT,
+                token_by BIGINT,
+                token_at TIMESTAMP,
+                ai_mode TEXT NOT NULL DEFAULT 'avto',
+                backfilled BOOLEAN NOT NULL DEFAULT FALSE,
+                last_webhook_at TIMESTAMP,
+                last_sync_at TIMESTAMP,
+                kb JSONB NOT NULL DEFAULT '{}'::jsonb,
+                CONSTRAINT meta_comments_state_single CHECK (id = 1)
+            )
+        """)
+        await conn.execute(
+            "INSERT INTO meta_comments_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING")
+        await conn.execute(
+            "ALTER TABLE meta_comments_state ADD COLUMN IF NOT EXISTS followup_on BOOLEAN NOT NULL DEFAULT TRUE")
+        # Adminlar chatida pin qilingan yangi buyurtma kartochkalari
+        # (order_pins.py, 2026-11-11) — buyurtma tasdiqlansa olinadi.
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS order_pins (
+                chat_id BIGINT NOT NULL,
+                message_id BIGINT NOT NULL,
+                order_id INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT (NOW() AT TIME ZONE 'UTC'),
+                PRIMARY KEY (chat_id, message_id)
+            )
+        """)
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_order_pins_order ON order_pins(order_id)")
+        # Har admin (va kuzatuvchi) chatidagi buyurtma kartochkasi — holat
+        # o'zgarsa yangi xabar emas, shu xabar tahrirlanadi (egasi, 2026-11-13:
+        # "qayta yubormagin huddi o'shani edit qil").
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS b2b_customers (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                phone TEXT,
+                address TEXT,
+                created_by BIGINT,
+                created_at TIMESTAMP DEFAULT (NOW() AT TIME ZONE 'UTC'),
+                last_order_at TIMESTAMP,
+                orders_count INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+        # Optom mijozlar (egasi, 2026-11-15: "b2b mijozlarni kiritib saqlab qolish
+        # va keyingi safar barcha mijozlar ismi va Yangi mijoz + belgisi") — bir ism
+        # bir marta; B2B buyurtma qaysi mijozniki — orders.b2b_customer_id.
+        await conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_b2b_customers_name ON b2b_customers (lower(name))")
+        await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS b2b_customer_id INTEGER")
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS order_cards (
+                order_id BIGINT NOT NULL,
+                chat_id BIGINT NOT NULL,
+                message_id BIGINT NOT NULL,
+                updated_at TIMESTAMP DEFAULT (NOW() AT TIME ZONE 'UTC'),
+                PRIMARY KEY (order_id, chat_id)
+            )
+        """)
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_order_cards_message ON order_cards(chat_id, message_id)")
         # AI sotuvchi (ai_sales.py): kunlik token/$ sarfi — kun+model bo'yicha
         # bitta qator, kunlik hisobot (targets.py) shundan o'qiydi.
         await conn.execute("""
@@ -1427,12 +1595,17 @@ async def get_user(user_id: int) -> dict | None:
         return dict(row) if row else None
 
 
-async def create_user(user_id: int, username: str = None, full_name: str = None, language: str = "uz"):
+async def create_user(user_id: int, username: str = None, full_name: str = None, language: str = "uz") -> bool:
+    """True when this call created the row — the bot's /start and the Mini
+    App can register the same person at the same moment, and only the side
+    that really inserted runs the new-joiner steps."""
     async with pool.acquire() as conn:
-        await conn.execute(
-            "INSERT INTO users (user_id, username, full_name, language) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING",
+        inserted = await conn.fetchval(
+            "INSERT INTO users (user_id, username, full_name, language) VALUES ($1, $2, $3, $4) "
+            "ON CONFLICT DO NOTHING RETURNING user_id",
             user_id, username, full_name, language
         )
+    return inserted is not None
 
 
 async def update_user_language(user_id: int, language: str):
@@ -1507,12 +1680,14 @@ async def get_products_by_category(category: str, page: int = 0, per_page: int =
             f"""SELECT p.*, u.full_name as seller_name, u.username as seller_username
                FROM products p
                JOIN users u ON p.seller_id = u.user_id
-               WHERE p.category = $1 AND p.is_active = 1{b2b_filter}
-               ORDER BY LOWER(p.name) ASC, p.id ASC
-               LIMIT $2 OFFSET $3""",
-            category, per_page, page * per_page
+               WHERE p.category = $1 AND p.is_active = 1{b2b_filter}""",
+            category
         )
-        return [dict(r) for r in rows], total
+    # Same-named packs side by side, smallest first (catalog_order.py) — a
+    # category holds a few dozen products, so the page is cut here.
+    from catalog_order import sort_key
+    ordered = sorted((dict(r) for r in rows), key=lambda r: sort_key(r.get("name"), r.get("id") or 0))
+    return ordered[page * per_page:(page + 1) * per_page], total
 
 
 async def get_category_tiles() -> dict:
@@ -2471,6 +2646,31 @@ async def get_last_order_prefs(user_id: int) -> dict | None:
         return dict(row) if row else None
 
 
+async def get_checkout_phone(user_id: int) -> str | None:
+    """The buyer's number for the Mini App's checkout field (2026-11-11):
+    the one on their latest own order, else the one they shared in the bot's
+    checkout (users.phone) — '+998XXXXXXXXX', or None. The field used to
+    open empty every time, so a returning buyer typed it again or pressed
+    «Buyurtmani tasdiqlash» on an empty field. Orders an admin typed in
+    (manual, b2b) or a test order carry someone else's number and are
+    skipped; a number that isn't Uzbek is too (the checkout would refuse it)."""
+    from phone_utils import normalize_uz_phone
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT phone FROM orders
+               WHERE user_id = $1 AND COALESCE(source, 'bot') NOT IN ('manual', 'b2b', 'test')
+                 AND COALESCE(phone, '') <> ''
+               ORDER BY created_at DESC LIMIT 3""",
+            user_id,
+        )
+        own = await conn.fetchval("SELECT phone FROM users WHERE user_id = $1", user_id)
+    for raw in [r["phone"] for r in rows] + [own]:
+        phone = normalize_uz_phone(raw)
+        if phone:
+            return phone
+    return None
+
+
 # ===== ORDER OPERATIONS =====
 
 class InsufficientStockError(Exception):
@@ -2692,7 +2892,8 @@ async def add_manual_order(admin_user_id: int, customer_name: str, phone: str,
 
 
 async def add_b2b_order(admin_user_id: int, company_name: str,
-                         items_data: list[dict], total: float) -> int:
+                         items_data: list[dict], total: float,
+                         phone: str | None = None, b2b_customer_id: int | None = None) -> int:
     """Insert an admin-entered B2B (wholesale/company) sale.
 
     Lives in the same orders table as manual orders (source='b2b') so it
@@ -2709,19 +2910,21 @@ async def add_b2b_order(admin_user_id: int, company_name: str,
         async with conn.transaction():
             items_data = await _snapshot_order_costs(conn, items_data)
             order_id = await conn.fetchval(
-                """INSERT INTO orders (user_id, customer_name, items, total, status,
-                                        source, confirmed_at, shipped_at, delivered_at)
-                   VALUES ($1, $2, $3, $4, 'delivered', 'b2b',
-                           CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """INSERT INTO orders (user_id, customer_name, phone, items, total, status,
+                                        source, confirmed_at, shipped_at, delivered_at, b2b_customer_id)
+                   VALUES ($1, $2, $3, $4, $5, 'delivered', 'b2b',
+                           CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, $6)
                    RETURNING id""",
-                admin_user_id, company_name,
-                json.dumps(items_data, ensure_ascii=False), total,
+                admin_user_id, company_name, phone,
+                json.dumps(items_data, ensure_ascii=False), total, b2b_customer_id,
             )
+            await _touch_b2b_customer(conn, b2b_customer_id)
             return order_id
 
 async def add_b2b_eritritol_order(admin_user_id: int, address: str, phone: str,
                                  quantity: float, total: float,
-                                 cost_per_kg: float = 0) -> int:
+                                 cost_per_kg: float = 0, customer_name: str | None = None,
+                                 b2b_customer_id: int | None = None) -> int:
     """Insert an admin-entered B2B Eritritol wholesale sale.
 
     The line carries its own cost_price (per kg) rather than pointing at a
@@ -2749,14 +2952,56 @@ async def add_b2b_eritritol_order(admin_user_id: int, address: str, phone: str,
         
         order_id = await conn.fetchval(
             """INSERT INTO orders (user_id, customer_name, address, phone, items, total, status,
-                                    source, confirmed_at, shipped_at, delivered_at)
-               VALUES ($1, 'B2B Eritritol', $2, $3, $4, $5, 'delivered', 'b2b',
-                       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                                    source, confirmed_at, shipped_at, delivered_at, b2b_customer_id)
+               VALUES ($1, $2, $3, $4, $5, $6, 'delivered', 'b2b',
+                       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, $7)
                RETURNING id""",
-            admin_user_id, address, phone,
-            json.dumps(items_data, ensure_ascii=False), total,
+            admin_user_id, customer_name or 'B2B Eritritol', address, phone,
+            json.dumps(items_data, ensure_ascii=False), total, b2b_customer_id,
         )
+        await _touch_b2b_customer(conn, b2b_customer_id)
         return order_id
+
+
+# ===== B2B mijozlar (handlers/admin.py — B2B buyurtma kiritish) =====
+
+async def _touch_b2b_customer(conn, customer_id: int | None) -> None:
+    if customer_id:
+        await conn.execute(
+            "UPDATE b2b_customers SET orders_count = orders_count + 1, "
+            "last_order_at = NOW() AT TIME ZONE 'UTC' WHERE id = $1", customer_id)
+
+
+async def list_b2b_customers() -> list[dict]:
+    """Hamma optom mijozlar — oxirgi buyurtma bergani birinchi, keyin ism bo'yicha."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM b2b_customers ORDER BY last_order_at DESC NULLS LAST, lower(name)")
+    return [dict(r) for r in rows]
+
+
+async def get_b2b_customer(customer_id: int) -> dict | None:
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM b2b_customers WHERE id = $1", customer_id)
+    return dict(row) if row else None
+
+
+async def save_b2b_customer(name: str, phone: str | None, address: str | None = None,
+                            by: int | None = None) -> dict:
+    """Yangi mijoz; shu ism bilan bor bo'lsa — o'sha (raqami va manzili yangilanadi)."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """INSERT INTO b2b_customers (name, phone, address, created_by) VALUES ($1, $2, $3, $4)
+               ON CONFLICT ((lower(name))) DO UPDATE
+                   SET phone = COALESCE(EXCLUDED.phone, b2b_customers.phone),
+                       address = COALESCE(EXCLUDED.address, b2b_customers.address)
+               RETURNING *""", name.strip(), phone, address, by)
+    return dict(row)
+
+
+async def set_b2b_customer_address(customer_id: int, address: str) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE b2b_customers SET address = $2 WHERE id = $1", customer_id, address)
 
 
 async def get_b2b_orders(period: str | dict = "all", limit: int = 200) -> list[dict]:
@@ -2850,6 +3095,73 @@ async def get_order(order_id: int) -> dict | None:
     async with pool.acquire() as conn:
         row = await conn.fetchrow("SELECT * FROM orders WHERE id = $1", order_id)
         return dict(row) if row else None
+
+
+# ===== Buyurtma kartochkalari (order_admin_feed.py) =====
+
+async def set_order_card(order_id: int, chat_id: int, message_id: int) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO order_cards (order_id, chat_id, message_id) VALUES ($1, $2, $3) "
+            "ON CONFLICT (order_id, chat_id) DO UPDATE SET message_id = EXCLUDED.message_id, "
+            "updated_at = NOW() AT TIME ZONE 'UTC'", order_id, chat_id, message_id)
+
+
+async def get_order_cards(order_id: int) -> dict[int, int]:
+    """{chat_id: message_id} — shu buyurtmaning har chatdagi kartochkasi."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT chat_id, message_id FROM order_cards WHERE order_id = $1", order_id)
+    return {int(r["chat_id"]): int(r["message_id"]) for r in rows}
+
+
+async def order_card_order(chat_id: int, message_id: int) -> int | None:
+    """Bu xabar qaysi buyurtmaning kartochkasi (yoki None)."""
+    async with pool.acquire() as conn:
+        value = await conn.fetchval(
+            "SELECT order_id FROM order_cards WHERE chat_id = $1 AND message_id = $2", chat_id, message_id)
+    return int(value) if value is not None else None
+
+
+async def delete_order_cards(order_id: int) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute("DELETE FROM order_cards WHERE order_id = $1", order_id)
+
+
+# ===== Yangi buyurtmalar pini (order_pins.py) =====
+
+async def add_order_pin(order_id: int, chat_id: int, message_id: int) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO order_pins (chat_id, message_id, order_id) VALUES ($1, $2, $3) "
+            "ON CONFLICT (chat_id, message_id) DO NOTHING", chat_id, message_id, order_id)
+
+
+async def take_order_pins(order_id: int) -> list[dict]:
+    """Shu buyurtmaning pinlari — o'qib, o'chiradi (ikki marta olinmaydi)."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "DELETE FROM order_pins WHERE order_id = $1 RETURNING chat_id, message_id", order_id)
+    return [dict(r) for r in rows]
+
+
+async def order_pins_to_release() -> list[int]:
+    """Pin qilingan, lekin endi 'pending' bo'lmagan yoki o'chirilgan buyurtmalar."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT DISTINCT p.order_id FROM order_pins p
+                 LEFT JOIN orders o ON o.id = p.order_id
+                WHERE o.id IS NULL OR o.status <> 'pending'""")
+    return [r["order_id"] for r in rows]
+
+
+async def pending_orders_without_pins(limit: int = 30) -> list[dict]:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT * FROM orders o
+                WHERE o.status = 'pending' AND COALESCE(o.source, '') NOT IN ('test', 'b2b')
+                  AND NOT EXISTS (SELECT 1 FROM order_pins p WHERE p.order_id = o.id)
+                ORDER BY o.created_at LIMIT $1""", limit)
+    return [dict(r) for r in rows]
 
 
 # Which lifecycle column each status stamps the first time it is reached.
@@ -3019,6 +3331,10 @@ async def sync_categories_to_locales() -> None:
     for cat in cats:
         locales.register_category(cat["key"], cat["name_uz"], cat["name_ru"])
     locales.reorder_categories([c["key"] for c in cats])
+    # Faqat bazadagi faol bo'limlar: yashirilgan yoki o'chirilgan bo'lim
+    # (hatto boshlang'ich ro'yxatdagisi ham) bot va sayt tugmalarida qolmasin.
+    if cats:
+        locales.keep_only_categories([c["key"] for c in cats])
 
 
 async def move_category_to_top(key: str) -> None:
@@ -3030,65 +3346,101 @@ async def move_category_to_top(key: str) -> None:
     await sync_categories_to_locales()
 
 
+async def category_product_counts() -> dict:
+    """{key: {"total": n, "active": m}} — bo'limlar oynasida ko'rsatish uchun."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT category, COUNT(*) AS total, COUNT(*) FILTER (WHERE is_active = 1) AS active "
+            "FROM products GROUP BY category")
+    return {r["category"]: {"total": int(r["total"]), "active": int(r["active"])} for r in rows}
+
+
+async def update_category(key: str, *, name_uz: str | None = None, name_ru: str | None = None,
+                          is_active: bool | None = None) -> dict | None:
+    """Admin saytida bo'limni tahrirlash (egasi, 2026-11-12): nomlar va
+    ko'rinishi. Bot va sayt darhol yangilanadi."""
+    sets, args = [], []
+    for col, val in (("name_uz", name_uz), ("name_ru", name_ru)):
+        if val is not None:
+            args.append(val)
+            sets.append(f"{col} = ${len(args)}")
+    if is_active is not None:
+        args.append(1 if is_active else 0)
+        sets.append(f"is_active = ${len(args)}")
+    if not sets:
+        return None
+    args.append(key)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            f"UPDATE categories SET {', '.join(sets)} WHERE key = ${len(args)} RETURNING *", *args)
+    if row is None:
+        return None
+    import locales
+    locales.register_category(row["key"], row["name_uz"], row["name_ru"])
+    await sync_categories_to_locales()
+    return dict(row)
+
+
+async def delete_category(key: str, move_to: str | None = None) -> dict:
+    """Bo'limni o'chiradi. Ichida mahsulot bo'lsa — faqat `move_to` berilganda
+    (mahsulotlar o'sha bo'limga ko'chiriladi), aks holda o'chirilmaydi.
+    {"deleted": bool, "moved": n, "products": n, "error": str|None}."""
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            exists = await conn.fetchval("SELECT 1 FROM categories WHERE key = $1", key)
+            if not exists:
+                return {"deleted": False, "moved": 0, "products": 0, "error": "not_found"}
+            n = int(await conn.fetchval("SELECT COUNT(*) FROM products WHERE category = $1", key) or 0)
+            moved = 0
+            if n:
+                if not move_to or move_to == key or not await conn.fetchval(
+                        "SELECT 1 FROM categories WHERE key = $1", move_to):
+                    return {"deleted": False, "moved": 0, "products": n, "error": "has_products"}
+                moved = int((await conn.execute(
+                    "UPDATE products SET category = $1 WHERE category = $2", move_to, key)).split()[-1])
+            await conn.execute("DELETE FROM categories WHERE key = $1", key)
+    import locales
+    locales.unregister_category(key)
+    await sync_categories_to_locales()
+    return {"deleted": True, "moved": moved, "products": n, "error": None}
+
+
 # ===== SEARCH =====
 
-# Trigram word-similarity cutoff. 0.3 catches typos like "aluloza"→"Alluloza"
-# and "eritrol"→"Eritritol" without dragging in unrelated products.
-SEARCH_SIMILARITY = 0.3
+async def _searchable_products() -> list[dict]:
+    """Every product a buyer can find, alphabetical — the shop's ~120 rows,
+    matched in Python by search_text (Latin and Cyrillic alike)."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT p.*, u.full_name as seller_name, u.username as seller_username
+               FROM products p
+               JOIN users u ON p.seller_id = u.user_id
+               WHERE p.is_active = 1 AND (p.b2b_only IS NOT TRUE)
+               ORDER BY LOWER(p.name) ASC, p.id ASC"""
+        )
+        return [dict(r) for r in rows]
 
 
 async def search_products(query: str, page: int = 0, per_page: int = 5) -> tuple[list[dict], int]:
-    """Typo-tolerant product search.
+    """Product search for the bot's 🔍 and the Mini App: (this page, total).
 
-    Matches by substring (ILIKE) first, then by pg_trgm word-similarity so a
-    misspelled query still returns the nearest-named products. Results are
-    ordered exact-substring-first, then by closeness. Falls back to plain
-    substring search if pg_trgm is unavailable.
-
-    The query may be in the 2026 alphabet ("şokolad"); the names are stored
-    in the old Latin, so it is read back into that first (translit).
+    Script-insensitive since 2026-11-11 (search_text.py): «кепак» finds
+    «Kepakli bug'doy uni», «жадвар» finds «Javdar uni», «şokolad» (2026
+    alphabet) finds «Shokolad», «kakos» finds «Kokos». It used to be ILIKE
+    plus pg_trgm on the name as typed, so a Cyrillic query found nothing.
+    An empty query lists every product, alphabetically.
     """
-    from translit import to_old_latin
-    query = to_old_latin(query or "")
-    async with pool.acquire() as conn:
-        search_term = f"%{query}%"
-        try:
-            where = """p.is_active = 1 AND (p.b2b_only IS NOT TRUE)
-                   AND (p.name ILIKE $1 OR p.description ILIKE $1
-                        OR word_similarity($2, p.name) > $3)"""
-            total = await conn.fetchval(
-                f"SELECT COUNT(*) FROM products p WHERE {where}",
-                search_term, query, SEARCH_SIMILARITY,
-            )
-            rows = await conn.fetch(
-                f"""SELECT p.*, u.full_name as seller_name, u.username as seller_username
-                   FROM products p
-                   JOIN users u ON p.seller_id = u.user_id
-                   WHERE {where}
-                   ORDER BY (p.name ILIKE $1) DESC,
-                            word_similarity($2, p.name) DESC,
-                            LOWER(p.name) ASC, p.id ASC
-                   LIMIT $4 OFFSET $5""",
-                search_term, query, SEARCH_SIMILARITY, per_page, page * per_page,
-            )
-            return [dict(r) for r in rows], total
-        except Exception:
-            # pg_trgm not available — fall back to plain substring search.
-            total = await conn.fetchval(
-                """SELECT COUNT(*) FROM products
-                   WHERE is_active = 1 AND (b2b_only IS NOT TRUE) AND (name ILIKE $1 OR description ILIKE $1)""",
-                search_term,
-            )
-            rows = await conn.fetch(
-                """SELECT p.*, u.full_name as seller_name, u.username as seller_username
-                   FROM products p
-                   JOIN users u ON p.seller_id = u.user_id
-                   WHERE p.is_active = 1 AND (p.b2b_only IS NOT TRUE) AND (p.name ILIKE $1 OR p.description ILIKE $1)
-                   ORDER BY LOWER(p.name) ASC, p.id ASC
-                   LIMIT $2 OFFSET $3""",
-                search_term, per_page, page * per_page,
-            )
-            return [dict(r) for r in rows], total
+    import search_text
+    found = search_text.find(query or "", await _searchable_products())
+    start = max(0, page) * per_page
+    return found[start:start + per_page], len(found)
+
+
+async def search_suggestions(query: str, limit: int = 4) -> list[dict]:
+    """The closest names when search_products found nothing — «balki
+    shulardir?» under an empty result (search_text.near)."""
+    import search_text
+    return search_text.near(query or "", await _searchable_products(), limit)
 
 
 # ===== REVIEWS =====
@@ -4081,23 +4433,40 @@ async def get_target_month_summary(first_day) -> dict:
         return dict(row) if row else {"days": 0, "orders": 0, "days_hit": 0, "best_day": 0}
 
 
-async def add_expense(name: str, amount: float) -> int:
+async def add_expense(name: str, amount: float, category_id: int | None = None) -> int:
     async with pool.acquire() as conn:
         return await conn.fetchval(
-            "INSERT INTO expenses (name, amount) VALUES ($1, $2) RETURNING id",
-            name, amount
+            "INSERT INTO expenses (name, amount, category_id) VALUES ($1, $2, $3) RETURNING id",
+            name, amount, category_id
         )
 
 
 _MANUAL_EXPENSE = "bonus_order_id IS NULL AND gift_order_id IS NULL AND delivery_order_id IS NULL"
 
+# Order-linked expenses have no category of their own — their kind is it.
+EXPENSE_AUTO_CATEGORIES = (
+    ("delivery_order_id", "auto:kuryer", "🚚 Kuryer (avtomatik)"),
+    ("gift_order_id", "auto:sovga", "🎁 Sovg'a (avtomatik)"),
+    ("bonus_order_id", "auto:aksiya", "🎁 Aksiya bonusi (avtomatik)"),
+)
 
-async def update_expense(expense_id: int, name: str, amount: float) -> bool:
+
+def expense_category_key(row: dict) -> str:
+    """'12' for a chosen category, 'auto:…' for an order-linked expense,
+    'none' for a manual one without a category."""
+    for column, key, _ in EXPENSE_AUTO_CATEGORIES:
+        if row.get(column) is not None:
+            return key
+    return str(row["category_id"]) if row.get("category_id") is not None else "none"
+
+
+async def update_expense(expense_id: int, name: str, amount: float,
+                         category_id: int | None = None) -> bool:
     """Edit only a manual expense, preserving its original booking date."""
     async with pool.acquire() as conn:
         changed = await conn.fetchval(
-            f"UPDATE expenses SET name=$2, amount=$3 WHERE id=$1 AND {_MANUAL_EXPENSE} RETURNING id",
-            expense_id, name, amount,
+            f"UPDATE expenses SET name=$2, amount=$3, category_id=$4 WHERE id=$1 AND {_MANUAL_EXPENSE} RETURNING id",
+            expense_id, name, amount, category_id,
         )
         if changed is not None:
             return True
@@ -4668,13 +5037,112 @@ async def get_cart_reminder_stats(days: int) -> dict:
         return {k: (float(v) if "value" in k else int(v)) for k, v in dict(row).items()}
 
 
-async def get_expenses(limit: int = 50) -> list[dict]:
+_AUTO_COLUMNS = {key: column for column, key, _ in EXPENSE_AUTO_CATEGORIES}
+
+
+async def get_expenses(limit: int = 50, category: str | None = None) -> list[dict]:
+    """Newest first. `category`: a category id, 'none' (manual, no category)
+    or an 'auto:…' kind — see expense_category_key."""
+    where, args = "", [limit]
+    if category == "none":
+        where = ("WHERE e.category_id IS NULL AND e.bonus_order_id IS NULL "
+                 "AND e.gift_order_id IS NULL AND e.delivery_order_id IS NULL")
+    elif category in _AUTO_COLUMNS:
+        where = f"WHERE e.{_AUTO_COLUMNS[category]} IS NOT NULL"
+    elif category:
+        args.append(int(category))
+        where = ("WHERE e.category_id = $2 AND e.bonus_order_id IS NULL "
+                 "AND e.gift_order_id IS NULL AND e.delivery_order_id IS NULL")
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT id, name, amount, created_at, bonus_order_id, gift_order_id, delivery_order_id "
-            "FROM expenses ORDER BY created_at DESC, id DESC LIMIT $1", limit)
-        return [dict(r, editable=all(r[key] is None for key in
-                    ("bonus_order_id", "gift_order_id", "delivery_order_id"))) for r in rows]
+            "SELECT e.id, e.name, e.amount, e.created_at, e.bonus_order_id, e.gift_order_id, "
+            "e.delivery_order_id, e.category_id, c.name AS category_name "
+            "FROM expenses e LEFT JOIN expense_categories c ON c.id = e.category_id "
+            f"{where} ORDER BY e.created_at DESC, e.id DESC LIMIT $1", *args)
+    out = []
+    for r in rows:
+        r = dict(r)
+        r["editable"] = all(r[key] is None for key in ("bonus_order_id", "gift_order_id", "delivery_order_id"))
+        r["category_key"] = expense_category_key(r)
+        if not r["editable"]:
+            r["category_name"] = next(label for _, key, label in EXPENSE_AUTO_CATEGORIES
+                                      if key == r["category_key"])
+        out.append(r)
+    return out
+
+
+# ===== Chiqim kategoriyalari =====
+
+async def get_expense_categories() -> list[dict]:
+    """Every category the admins made, with how many expenses carry it."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT c.id, c.name, COUNT(e.id) AS uses FROM expense_categories c "
+            "LEFT JOIN expenses e ON e.category_id = c.id "
+            "GROUP BY c.id, c.name ORDER BY LOWER(c.name), c.id")
+    return [dict(r, uses=int(r["uses"] or 0)) for r in rows]
+
+
+async def expense_category_exists(category_id: int) -> bool:
+    async with pool.acquire() as conn:
+        return await conn.fetchval("SELECT id FROM expense_categories WHERE id = $1", category_id) is not None
+
+
+async def add_expense_category(name: str) -> tuple[int, bool]:
+    """(id, created). The same name in another case is the same category."""
+    async with pool.acquire() as conn:
+        found = await conn.fetchval(
+            "SELECT id FROM expense_categories WHERE LOWER(name) = LOWER($1)", name)
+        if found is not None:
+            return found, False
+        return await conn.fetchval(
+            "INSERT INTO expense_categories (name) VALUES ($1) RETURNING id", name), True
+
+
+async def rename_expense_category(category_id: int, name: str) -> bool:
+    async with pool.acquire() as conn:
+        clash = await conn.fetchval(
+            "SELECT id FROM expense_categories WHERE LOWER(name) = LOWER($1) AND id <> $2", name, category_id)
+        if clash is not None:
+            raise ValueError("Bunday nomli kategoriya bor")
+        return await conn.fetchval(
+            "UPDATE expense_categories SET name = $2 WHERE id = $1 RETURNING id", category_id, name) is not None
+
+
+async def delete_expense_category(category_id: int) -> bool:
+    """The category goes; its expenses stay, without a category."""
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE expenses SET category_id = NULL WHERE category_id = $1", category_id)
+        return await conn.fetchval(
+            "DELETE FROM expense_categories WHERE id = $1 RETURNING id", category_id) is not None
+
+
+async def get_expense_totals_by_category(period: str | dict = "30d") -> list[dict]:
+    """How much went where in the period, biggest first: {key, name, total, count}."""
+    start_time, end_time = _period_range(period)
+    conds, args = [], []
+    if start_time:
+        args.append(start_time)
+        conds.append(f"e.created_at >= ${len(args)}")
+    if end_time:
+        args.append(end_time)
+        conds.append(f"e.created_at <= ${len(args)}")
+    where = (" WHERE " + " AND ".join(conds)) if conds else ""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT e.amount, e.bonus_order_id, e.gift_order_id, e.delivery_order_id, e.category_id, "
+            "c.name AS category_name FROM expenses e "
+            "LEFT JOIN expense_categories c ON c.id = e.category_id" + where, *args)
+    labels = {key: label for _, key, label in EXPENSE_AUTO_CATEGORIES}
+    totals: dict[str, dict] = {}
+    for r in rows:
+        r = dict(r)
+        key = expense_category_key(r)
+        name = labels.get(key) or r.get("category_name") or "Kategoriyasiz"
+        t = totals.setdefault(key, {"key": key, "name": name, "total": 0.0, "count": 0})
+        t["total"] += float(r["amount"] or 0)
+        t["count"] += 1
+    return sorted(totals.values(), key=lambda t: -t["total"])
 
 
 def _month_window_utc(year: int, month: int, cap_at_now: bool = False):
@@ -4745,6 +5213,54 @@ async def get_month_stats(year: int, month: int) -> dict:
     async with pool.acquire() as conn:
         stats = await _query_month(conn, start_utc, end_utc)
     return {"year": year, "month": month, "is_current": is_current, **stats}
+
+
+# ===== Rejali xabarlar chegarasi (push_cap.py) =====
+
+async def claim_user_push(user_id: int, kind: str, active_max: int, quiet_max: int, quiet_days: int,
+                          unless: list[str] | None = None) -> bool:
+    """Toshkent kuni bo'yicha shu userga yana bitta rejali xabar mumkinmi —
+    mumkin bo'lsa hisobga yozadi (bitta atomik so'rov, parallel yuboruvchilar
+    ham chegarani oshirolmaydi). Chegara: xaridor va oxirgi `quiet_days` kunda
+    botda yoki saytda faol — `active_max`, qolganlar — `quiet_max`. `unless` —
+    bugun shu turlardan biri ketgan bo'lsa, bu xabar yuborilmaydi (masalan,
+    fikr so'ralgan kuni umumiy maslahat ketmaydi)."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """WITH lim AS (
+                   SELECT CASE WHEN EXISTS (SELECT 1 FROM orders o
+                                            WHERE o.user_id = $1 AND o.status <> 'cancelled'
+                                              AND COALESCE(o.source, '') NOT IN ('manual', 'b2b', 'test'))
+                                AND (EXISTS (SELECT 1 FROM bot_activity a WHERE a.user_id = $1
+                                               AND a.created_at > NOW() - make_interval(days => $5::int))
+                                     OR EXISTS (SELECT 1 FROM site_events s WHERE s.user_id = $1
+                                               AND s.created_at > NOW() - make_interval(days => $5::int)))
+                               THEN $3::int ELSE $4::int END AS n
+               )
+               INSERT INTO user_push_day (user_id, day, count, kinds)
+               SELECT $1, (NOW() AT TIME ZONE 'Asia/Tashkent')::date, 1, ARRAY[$2::text]
+               FROM lim WHERE lim.n >= 1
+               ON CONFLICT (user_id, day) DO UPDATE
+                   SET count = user_push_day.count + 1, kinds = user_push_day.kinds || $2::text
+                   WHERE user_push_day.count < (SELECT n FROM lim)
+                     AND NOT (user_push_day.kinds && $6::text[])
+               RETURNING count""",
+            user_id, kind, active_max, quiet_max, quiet_days, list(unless or []))
+    return row is not None
+
+
+async def user_push_stats(days: int = 7) -> dict:
+    """Oxirgi `days` kunda rejali xabarlar: jami, o'rtacha (xabar olganlarga) va turlari."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """SELECT COALESCE(SUM(count), 0) AS total, COUNT(*) AS user_days,
+                      COUNT(DISTINCT user_id) AS users
+               FROM user_push_day WHERE day > (NOW() AT TIME ZONE 'Asia/Tashkent')::date - $1::int""", days)
+        kinds = await conn.fetch(
+            """SELECT k AS kind, COUNT(*) AS n FROM user_push_day, unnest(kinds) AS k
+               WHERE day > (NOW() AT TIME ZONE 'Asia/Tashkent')::date - $1::int GROUP BY k ORDER BY n DESC""", days)
+    return {"total": int(row["total"]), "user_days": int(row["user_days"]), "users": int(row["users"]),
+            "kinds": {r["kind"]: int(r["n"]) for r in kinds}}
 
 
 async def log_activity(user_id: int, kind: str, action: str) -> None:
@@ -5773,6 +6289,17 @@ async def cancel_order(order_id: int) -> dict | None:
 # Admin order editing (2026-09-30): an order can have its lines changed until
 # it leaves for delivery. After "shipped" the box is packed and on the road.
 ORDER_EDITABLE_STATUSES = ("pending", "confirmed", "preparing", "ready")
+# A manual order never moves stock, so a typo in it — the amount, the price,
+# a forgotten product — can be fixed after the goods went out too (owner,
+# 2026-11-08: "qo'lda buyurtma kiritishda buyurtmani o'zgartirish imkonini
+# ham ishlatib ber"). Only a cancelled one stays shut; B2B has its own books.
+MANUAL_EDITABLE_STATUSES = ORDER_EDITABLE_STATUSES + ("shipped", "delivered")
+
+
+def order_editable(status: str | None, source: str | None) -> bool:
+    if source == "b2b":
+        return False
+    return status in (MANUAL_EDITABLE_STATUSES if source == "manual" else ORDER_EDITABLE_STATUSES)
 
 
 class OrderChangedError(Exception):
@@ -5849,8 +6376,7 @@ async def admin_update_order_items(order_id: int, original_items: list[dict],
                 raise OrderChangedError("order not found")
             stored = row["items"]
             stored = json.loads(stored) if isinstance(stored, str) else (stored or [])
-            if (row["status"] not in ORDER_EDITABLE_STATUSES or stored != original_items
-                    or row.get("source") == "b2b"):
+            if not order_editable(row["status"], row.get("source")) or stored != original_items:
                 raise OrderChangedError("order changed since the editor opened")
 
             deltas = {} if row.get("source") == "manual" else order_edit_deltas(stored, new_items)
@@ -6378,14 +6904,18 @@ async def bump_product_of_day_cycle() -> int:
 async def get_product_of_day_candidates(cycle: int) -> list[dict]:
     """Products that may be today's spotlight: in stock, retail, and not yet
     shown in this cycle. `views_30d` rides along so the picker can rank by
-    how much attention each one is actually getting."""
+    how much attention each one is actually getting; `in_channel` says
+    whether the channel has ever carried it as kun mahsuloti — the picker
+    puts those that never made it there first."""
     async with pool.acquire() as conn:
         rows = await conn.fetch("""
             SELECT p.*, u.full_name AS seller_name, u.username AS seller_username,
                    (SELECT COUNT(*) FROM product_views v
                      WHERE v.product_id = p.id
                        AND v.viewed_at > (now() AT TIME ZONE 'utc') - INTERVAL '30 days'
-                   ) AS views_30d
+                   ) AS views_30d,
+                   EXISTS (SELECT 1 FROM product_of_day_log c
+                            WHERE c.product_id = p.id AND c.channel_ok) AS in_channel
               FROM products p
               JOIN users u ON p.seller_id = u.user_id
              WHERE p.is_active = 1
@@ -6418,6 +6948,23 @@ async def record_product_of_day(product_id: int, cycle: int, sent: int, failed: 
             await conn.execute(
                 "UPDATE product_of_day_state SET last_product_id = $1 WHERE id = 1",
                 product_id)
+
+
+async def get_product_of_day_channel_gap() -> dict:
+    """Retail products the channel has never carried as kun mahsuloti:
+    `in_stock` are next in line, `out_of_stock` wait for a restock."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            SELECT COUNT(*) FILTER (WHERE p.quantity > 0)       AS in_stock,
+                   COUNT(*) FILTER (WHERE NOT (p.quantity > 0)) AS out_of_stock
+              FROM products p
+              JOIN users u ON p.seller_id = u.user_id
+             WHERE p.is_active = 1
+               AND COALESCE(p.b2b_only, FALSE) = FALSE
+               AND NOT EXISTS (SELECT 1 FROM product_of_day_log c
+                                WHERE c.product_id = p.id AND c.channel_ok)
+        """)
+        return {"in_stock": int(row["in_stock"] or 0), "out_of_stock": int(row["out_of_stock"] or 0)}
 
 
 async def get_product_of_day_history(limit: int = 7) -> list[dict]:
@@ -6686,7 +7233,7 @@ async def _set_with_items(conn, row) -> dict:
     s = dict(row)
     items = await conn.fetch(
         """SELECT si.id AS item_id, si.product_id, si.quantity,
-                  p.name, p.name_ru, p.price, p.unit, p.image_url, p.is_active
+                  p.name, p.name_ru, p.price, p.unit, p.image_url, p.photo_id, p.is_active
            FROM product_set_items si
            JOIN products p ON p.id = si.product_id
            WHERE si.set_id = $1
@@ -6956,6 +7503,73 @@ async def set_gamification_enabled(enabled: bool) -> None:
 async def set_redemption_enabled(enabled: bool) -> None:
     async with pool.acquire() as conn:
         await conn.execute("UPDATE gamification_state SET redemption_enabled = $1 WHERE id = 1", enabled)
+
+
+# ===== SAYTDA FAOL VAQT (2026-11-15, site_time.py) =====
+
+SITE_TIME_COLUMNS = (
+    "active_seconds", "last_beat_at", "day_date", "day_seconds", "check_at", "check_token",
+    "check_issued_at", "pattern", "pattern_seconds", "flagged_sid", "flags", "flagged_at",
+)
+
+
+async def update_site_time(user_id: int, change):
+    """Run change(state) on this buyer's site_time row (created if missing)
+    under a row lock, then save what it left in `state`. Returns
+    (change's result, state). Two beats of the same buyer at once wait for
+    each other here, so neither can count the same seconds twice.
+    paid_through is not saved here — set_site_time_paid_through moves it."""
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute(
+                "INSERT INTO site_time (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", user_id)
+            row = await conn.fetchrow("SELECT * FROM site_time WHERE user_id = $1 FOR UPDATE", user_id)
+            state = dict(row)
+            result = change(state)
+            sets = ", ".join(f"{c} = ${i + 2}" for i, c in enumerate(SITE_TIME_COLUMNS))
+            await conn.execute(f"UPDATE site_time SET {sets} WHERE user_id = $1",
+                               user_id, *[state.get(c) for c in SITE_TIME_COLUMNS])
+    return result, state
+
+
+async def set_site_time_paid_through(user_id: int, seconds: int) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE site_time SET paid_through = GREATEST(paid_through, $2) WHERE user_id = $1",
+            user_id, seconds)
+
+
+async def set_site_time_enabled(enabled: bool) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE gamification_state SET site_time_enabled = $1 WHERE id = 1", enabled)
+
+
+async def get_site_time_stats() -> dict:
+    """/sayt_keto: how many took part, how much time and Keto, and how many
+    sessions were stopped as scripted."""
+    today = (datetime.utcnow() + timedelta(hours=5)).date()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """SELECT COUNT(*) AS users,
+                      COALESCE(SUM(active_seconds), 0) AS seconds,
+                      COUNT(*) FILTER (WHERE day_date = $1 AND day_seconds > 0) AS today_users,
+                      COALESCE(SUM(day_seconds) FILTER (WHERE day_date = $1), 0) AS today_seconds,
+                      COALESCE(SUM(flags), 0) AS flags,
+                      MAX(flagged_at) AS last_flag
+                 FROM site_time""",
+            today,
+        )
+        keto = await conn.fetchval(
+            "SELECT COALESCE(SUM(amount), 0) FROM keto_ledger WHERE kind = 'site_time'")
+    return {
+        "users": int(row["users"] or 0),
+        "seconds": int(row["seconds"] or 0),
+        "today_users": int(row["today_users"] or 0),
+        "today_seconds": int(row["today_seconds"] or 0),
+        "flags": int(row["flags"] or 0),
+        "last_flag": row["last_flag"],
+        "keto": int(keto or 0),
+    }
 
 
 async def get_keto_balances_list() -> list[dict]:
@@ -8106,6 +8720,325 @@ async def set_meta_ads_token(token: str | None, admin_id: int) -> None:
                    SET ads_token = $1, updated_by = $2, updated_at = NOW() AT TIME ZONE 'UTC'""",
             token, admin_id,
         )
+
+
+# ===== Instagram/Facebook izohlari (meta_comments.py) =====
+
+def _jsonish(value, default):
+    if value is None:
+        return default
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except ValueError:
+            return default
+    return value
+
+
+def _comment_row(row) -> dict | None:
+    if row is None:
+        return None
+    d = dict(row)
+    d["tg_messages"] = _jsonish(d.get("tg_messages"), [])
+    return d
+
+
+async def get_meta_comments_state() -> dict:
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM meta_comments_state WHERE id = 1")
+        if row is None:
+            await conn.execute(
+                "INSERT INTO meta_comments_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING")
+            row = await conn.fetchrow("SELECT * FROM meta_comments_state WHERE id = 1")
+    d = dict(row)
+    d["kb"] = _jsonish(d.get("kb"), {})
+    return d
+
+
+async def set_meta_comments_token(token: str | None, admin_id: int) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE meta_comments_state SET token = $1, token_by = $2, "
+            "token_at = NOW() AT TIME ZONE 'UTC' WHERE id = 1", token, admin_id)
+
+
+async def set_meta_comments_ai_mode(mode: str) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE meta_comments_state SET ai_mode = $1 WHERE id = 1", mode)
+
+
+async def set_meta_comments_kb(kb: dict) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE meta_comments_state SET kb = $1::jsonb WHERE id = 1",
+                           json.dumps(kb, ensure_ascii=False))
+
+
+async def set_meta_comments_followup(on: bool) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE meta_comments_state SET followup_on = $1 WHERE id = 1", on)
+
+
+async def meta_comment_followup_candidates(days: int, limit: int = 10) -> list[dict]:
+    """Qayta yozish uchun: `days` kundan oldin izoh qoldirgan va o'shanda javob
+    olgan odamlar — har biridan oxirgi eski izohi. Bir odamga bir marta: unga
+    ilgari qayta yozilgan yoki oxirgi `days` kunda o'zi izoh qoldirgan bo'lsa
+    (yangi javob olgan) — tanlanmaydi. Yangiroqlari oldin."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT * FROM (
+                   SELECT DISTINCT ON (lower(m.username)) m.*
+                   FROM meta_comments m
+                   WHERE m.username IS NOT NULL AND m.username <> ''
+                     AND m.status IN ('answered', 'ai_answered')
+                     AND COALESCE(m.category, '') <> 'spam'
+                     AND COALESCE(m.created_at, m.received_at)
+                         <= (NOW() AT TIME ZONE 'UTC') - make_interval(days => $1)
+                     AND NOT EXISTS (
+                         SELECT 1 FROM meta_comments o
+                         WHERE lower(o.username) = lower(m.username)
+                           AND (o.followup_at IS NOT NULL
+                                OR COALESCE(o.created_at, o.received_at)
+                                   > (NOW() AT TIME ZONE 'UTC') - make_interval(days => $1)))
+                   ORDER BY lower(m.username), COALESCE(m.created_at, m.received_at) DESC
+               ) t
+               ORDER BY COALESCE(t.created_at, t.received_at) DESC
+               LIMIT $2""", days, limit)
+    return [_comment_row(r) for r in rows]
+
+
+async def mark_meta_comment_followup(key: int, text: str) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE meta_comments SET followup_at = NOW() AT TIME ZONE 'UTC', followup_text = $2 WHERE id = $1",
+            key, text)
+
+
+async def meta_comment_followup_stats(days: int) -> dict:
+    """Bugun (Toshkent) va jami yuborilganlar, navbatdagilar soni, oxirgi 3 tasi."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """SELECT COUNT(*) FILTER (WHERE followup_text <> ''
+                         AND followup_at >= date_trunc('day', NOW() AT TIME ZONE 'Asia/Tashkent')
+                                            - INTERVAL '5 hours') AS today,
+                      COUNT(*) FILTER (WHERE followup_text <> '') AS total,
+                      COUNT(*) FILTER (WHERE followup_at IS NOT NULL AND followup_text = '') AS skipped
+               FROM meta_comments""")
+        queue = await conn.fetchval(
+            """SELECT COUNT(DISTINCT lower(m.username)) FROM meta_comments m
+               WHERE m.username IS NOT NULL AND m.username <> ''
+                 AND m.status IN ('answered', 'ai_answered') AND COALESCE(m.category, '') <> 'spam'
+                 AND COALESCE(m.created_at, m.received_at) <= (NOW() AT TIME ZONE 'UTC') - make_interval(days => $1)
+                 AND NOT EXISTS (
+                     SELECT 1 FROM meta_comments o WHERE lower(o.username) = lower(m.username)
+                       AND (o.followup_at IS NOT NULL
+                            OR COALESCE(o.created_at, o.received_at)
+                               > (NOW() AT TIME ZONE 'UTC') - make_interval(days => $1)))""", days)
+        last = await conn.fetch(
+            """SELECT username, text, followup_text, post_link FROM meta_comments
+               WHERE followup_text <> '' ORDER BY followup_at DESC LIMIT 3""")
+    out = {k: int(row[k] or 0) for k in ("today", "total", "skipped")}
+    out["queue"] = int(queue or 0)
+    out["last"] = [dict(r) for r in last]
+    return out
+
+
+async def mark_meta_comments_state(*, backfilled: bool | None = None,
+                                   webhook: bool = False, synced: bool = False) -> None:
+    sets = []
+    if backfilled is not None:
+        sets.append("backfilled = TRUE" if backfilled else "backfilled = FALSE")
+    if webhook:
+        sets.append("last_webhook_at = NOW() AT TIME ZONE 'UTC'")
+    if synced:
+        sets.append("last_sync_at = NOW() AT TIME ZONE 'UTC'")
+    if not sets:
+        return
+    async with pool.acquire() as conn:
+        await conn.execute(f"UPDATE meta_comments_state SET {', '.join(sets)} WHERE id = 1")
+
+
+async def insert_meta_comment(c: dict) -> dict | None:
+    """The stored row when this comment is new, None when it was already
+    there — a webhook and the next sync both see the same comment."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """INSERT INTO meta_comments (comment_id, platform, parent_id, media_id, post_link,
+                                          ad_id, ad_name, from_id, username, text, created_at,
+                                          source, status, reply_text, reply_kind, note)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+               ON CONFLICT (comment_id) DO NOTHING
+               RETURNING *""",
+            c["comment_id"], c["platform"], c.get("parent_id"), c.get("media_id"),
+            c.get("post_link"), c.get("ad_id"), c.get("ad_name"), c.get("from_id"),
+            c.get("username"), c.get("text"), c.get("created_at"), c.get("source"),
+            c.get("status") or "new", c.get("reply_text"), c.get("reply_kind"), c.get("note"))
+    return _comment_row(row)
+
+
+async def get_meta_comment(key: int) -> dict | None:
+    async with pool.acquire() as conn:
+        return _comment_row(await conn.fetchrow("SELECT * FROM meta_comments WHERE id = $1", key))
+
+
+async def find_meta_comment_by_card(chat_id: int, message_id: int) -> dict | None:
+    async with pool.acquire() as conn:
+        return _comment_row(await conn.fetchrow(
+            "SELECT * FROM meta_comments WHERE tg_messages @> $1::jsonb",
+            json.dumps([{"c": chat_id, "m": message_id}])))
+
+
+async def update_meta_comment(key: int, **fields) -> dict | None:
+    """Set the given columns; `tg_messages` is stored as JSON."""
+    allowed = {"status", "category", "ai_draft", "ai_model", "note", "reply_text", "reply_kind",
+               "replied_by", "private_sent", "hidden", "tg_messages", "ad_name", "post_link",
+               "ai_confident", "ai_dm"}
+    cols, args = [], []
+    for name, value in fields.items():
+        if name not in allowed:
+            raise ValueError(name)
+        args.append(json.dumps(value) if name == "tg_messages" else value)
+        cols.append(f"{name} = ${len(args)}" + ("::jsonb" if name == "tg_messages" else ""))
+    if fields.get("reply_text") is not None:
+        cols.append("replied_at = NOW() AT TIME ZONE 'UTC'")
+    if fields.get("private_sent") is True:
+        cols.append("dm_sent_at = NOW() AT TIME ZONE 'UTC'")
+    args.append(key)
+    async with pool.acquire() as conn:
+        return _comment_row(await conn.fetchrow(
+            f"UPDATE meta_comments SET {', '.join(cols)} WHERE id = ${len(args)} RETURNING *", *args))
+
+
+async def claim_meta_comment(key: int, from_statuses: tuple, to_status: str) -> bool:
+    """Move a comment on only if nobody else did first — two admins tapping
+    «Yuborish» at once, or an admin and the AI, post one reply, not two."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "UPDATE meta_comments SET status = $1 WHERE id = $2 AND status = ANY($3::text[]) RETURNING id",
+            to_status, key, list(from_statuses))
+    return row is not None
+
+
+async def meta_comment_counts() -> dict:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT platform, status, COUNT(*) AS n FROM meta_comments GROUP BY platform, status")
+    return {(r["platform"], r["status"]): int(r["n"]) for r in rows}
+
+
+async def list_meta_comments_unchecked(limit: int = 40) -> list[dict]:
+    """Javobsiz va AI hali ko'rmagan izohlar (ai_confident NULL), eskisi oldin."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM meta_comments WHERE status IN ('new', 'pending') AND ai_confident IS NULL "
+            "ORDER BY COALESCE(created_at, received_at) LIMIT $1", limit)
+    return [_comment_row(r) for r in rows]
+
+
+async def list_meta_comments_with_cards(received_before=None) -> list[dict]:
+    """Kartochkasi bor izohlar; received_before — faqat shu vaqtdan oldin kelganlari."""
+    async with pool.acquire() as conn:
+        if received_before is None:
+            rows = await conn.fetch("SELECT * FROM meta_comments WHERE tg_messages <> '[]'::jsonb")
+        else:
+            rows = await conn.fetch("SELECT * FROM meta_comments WHERE tg_messages <> '[]'::jsonb "
+                                    "AND received_at < $1", received_before)
+    return [_comment_row(r) for r in rows]
+
+
+async def reset_meta_comments_unconfident() -> int:
+    """Javobsiz va AI «topa olmadi» degan izohlarni qayta ko'rishga qo'yadi
+    (AI qoidasi yoki konteksti o'zgarganda — bir marta)."""
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "UPDATE meta_comments SET ai_confident = NULL "
+            "WHERE status IN ('new', 'pending') AND ai_confident = FALSE")
+    return int(result.split()[-1]) if result else 0
+
+
+async def meta_comment_same_author_texts(from_id: str | None, media_id: str | None, key: int) -> list[str]:
+    """Shu odamning shu post ostidagi, javob berilgan (yoki berilayotgan) boshqa izohlari matni."""
+    if not from_id or not media_id:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT text FROM meta_comments WHERE from_id = $1 AND media_id = $2 AND id <> $3 "
+            "AND status IN ('ai_answered', 'answered', 'sending')", from_id, media_id, key)
+    return [r["text"] or "" for r in rows]
+
+
+async def meta_comment_open_breakdown() -> dict:
+    """Javobsizlar: AI hali ko'rmagan / javob topa olmagan / yuborib bo'lmagan + oxirgi xato."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """SELECT COUNT(*) FILTER (WHERE ai_confident IS NULL) AS unchecked,
+                      COUNT(*) FILTER (WHERE ai_confident IS FALSE) AS unanswerable,
+                      COUNT(*) FILTER (WHERE ai_confident IS TRUE) AS failed
+                 FROM meta_comments WHERE status IN ('new', 'pending')""")
+        last = await conn.fetchval(
+            "SELECT note FROM meta_comments WHERE note LIKE '❌%' OR note LIKE '📩 Direct yuborilmadi%' "
+            "ORDER BY COALESCE(replied_at, received_at) DESC, id DESC LIMIT 1")
+    out = {k: int(row[k] or 0) for k in ("unchecked", "unanswerable", "failed")} if row else {}
+    out["last_error"] = last
+    return out
+
+
+async def list_meta_comments_failed(limit: int = 200) -> list[dict]:
+    """AI javobi bor, lekin Meta'ga yuborib bo'lmagan javobsiz izohlar."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM meta_comments WHERE status IN ('new', 'pending') AND ai_confident IS TRUE "
+            "AND ai_draft IS NOT NULL AND note LIKE '❌ AI yubora olmadi%' "
+            "ORDER BY COALESCE(created_at, received_at) LIMIT $1", limit)
+    return [_comment_row(r) for r in rows]
+
+
+async def meta_comments_report(scope: str = "today", limit: int = 500) -> list[dict]:
+    """/izoh_hisobot va /admin/api/comments uchun. scope: 'today' — bugun
+    (Toshkent) AI javob berganlari; 'open' — javobsizlar; 'all' — oxirgilari."""
+    where = {
+        "today": f"status = 'ai_answered' AND (replied_at + INTERVAL '5 hours')::date = {_AI_DAY}",
+        "open": "status IN ('new', 'pending')",
+        "all": "TRUE",
+    }.get(scope, "TRUE")
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"""SELECT id, platform, media_id, post_link, ad_name, username, text, status, category,
+                       ai_confident, ai_draft, reply_text, reply_kind, note, private_sent,
+                       created_at, replied_at, source
+                  FROM meta_comments WHERE {where}
+                 ORDER BY COALESCE(replied_at, created_at, received_at) DESC LIMIT $1""", limit)
+    return [dict(r) for r in rows]
+
+
+async def meta_comment_dm_recent(from_id: str | None, days: int = 7) -> bool:
+    """Shu odamga oxirgi `days` kunda Direct ketganmi (bitta odamga bitta rahmat)."""
+    if not from_id:
+        return False
+    async with pool.acquire() as conn:
+        return bool(await conn.fetchval(
+            "SELECT 1 FROM meta_comments WHERE from_id = $1 AND private_sent AND "
+            "dm_sent_at > (NOW() AT TIME ZONE 'UTC') - make_interval(days => $2) LIMIT 1", from_id, days))
+
+
+async def meta_comment_today() -> dict:
+    """Bugun (Toshkent) AI javob bergan izohlar va ketgan Direct'lar soni."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            f"""SELECT COUNT(*) FILTER (WHERE status = 'ai_answered'
+                                         AND (replied_at + INTERVAL '5 hours')::date = {_AI_DAY}) AS ai_answered,
+                       COUNT(*) FILTER (WHERE private_sent
+                                         AND (dm_sent_at + INTERVAL '5 hours')::date = {_AI_DAY}) AS dms,
+                       COUNT(*) FILTER (WHERE private_sent) AS dms_all
+                  FROM meta_comments""")
+    return {k: int(row[k] or 0) for k in ("ai_answered", "dms", "dms_all")} if row else {}
+
+
+async def list_meta_comments(statuses: tuple, limit: int = 10) -> list[dict]:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM meta_comments WHERE status = ANY($1::text[]) "
+            "ORDER BY COALESCE(created_at, received_at) DESC LIMIT $2", list(statuses), limit)
+    return [_comment_row(r) for r in rows]
 
 
 async def get_ad_source_for_user(user_id: int) -> dict | None:

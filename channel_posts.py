@@ -96,7 +96,9 @@ async def post_to_channel(bot: Bot, slug: str) -> int | None:
         logger.warning("REQUIRED_CHANNEL_ID yo'q — kanal posti o'tkazib yuborildi")
         return None
     import bot_discount
-    text = build_text(slug)
+    import channel_voice
+    # Jonli, norasmiy va har xil uzunlikda (egasi, 2026-11-15) — shart buzilsa shablon.
+    text = await channel_voice.rewrite(build_text(slug), "kontent", 4096)
     # "Bot orqali buyurtma — 10% chegirma" under every post while it is on.
     footer = await bot_discount.channel_footer()
     if len(text) + len(footer) <= 4096:

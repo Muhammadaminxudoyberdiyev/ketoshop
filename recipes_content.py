@@ -22,6 +22,9 @@ bo'lsa (200 g / 500 g / 1 kg) — omborda bor eng hamyonbopi savatga tushadi.
 
 Rasm promptlari (Higgsfield, gpt_image_2_5) retsept matniga mos yozilgan:
 rasmda ko'rinadigan narsa (kunjut, kokos, sous...) retseptda ham bor.
+2026-11-13 dagi 15 tasining to'liq promptlari — recipes_image_prompts.md.
+Rasmi (webapp/recipes/<slug>.jpg) qo'shilmagan retsept saytga ham, kanalga
+ham chiqmaydi — navbatini kutadi (recipes.py, «Jadval»).
 """
 
 _ALMOND = [["bodom", "uni"], ["бодом", "уни"]]
@@ -46,6 +49,35 @@ _FLAX_FLOUR = [["zig'ir", "uni"], ["зиғир", "уни"]]
 _GREEN_BUCKWHEAT = [["yashil", "grechka", "don"], ["яшил", "гречка", "дон"]]
 _BLACK_RICE = [["qora", "guruch"], ["қора", "гуруч"]]
 _PISTACHIO = [["pista", "mag'z"], ["писта", "мағз"]]
+# 2026-11-13 recipes — shop products the first 15 did not use
+_XANTHAN = [["ksantan"], ["ксантан"]]
+_NIGELLA = [["qora", "sedana"], ["қора", "седана"]]
+_WHITE_FLAX_FLOUR = [["oq", "zig'ir", "uni"], ["оқ", "зиғир", "уни"]]
+_PSYLLIUM_HUSK = [["psillium", "shelux"], ["псиллиум", "шелух"], ["psillium"], ["псиллиум"]]
+_BUCKWHEAT_NOODLES = [["grechka", "vermishel"], ["гречка", "вермишел"]]
+_DEVZIRA = [["devzira"], ["девзира"]]
+_COCONUT_CREAM = [["kokos", "slivka"], ["кокос", "сливк"]]
+_COCONUT_OIL = [["kokos", "yog'"], ["kakos", "yog'"], ["кокос", "ёғ"]]
+_SALMON = [["lasos"], ["лосос"], ["ласос"]]
+_SOY_FLOUR = [["soya", "uni"], ["соя", "уни"]]
+_PEANUT_PASTE = [["yeryong'oq", "pasta"], ["ерёнғоқ", "паста"]]
+# Plain allulose only: "Alluloza +Steviya" is a sweeter blend, the amounts would be off.
+_ALLULOSE = [["alluloza 200"], ["alluloza 500"], ["alluloza 1000"], ["аллюлоза"]]
+_CHOCOLATE = [["победа", "no sugar"], ["победа", "100%"]]
+_PISTACHIO_PASTE = [["xandonpista", "pasta"], ["хандонписта", "паста"]]
+_OAT_FLOUR = [["ovsyanka", "uni"], ["овсянка", "уни"]]
+_CINNAMON = [["dolchin"], ["долчин"], ["koritsa"], ["корица"]]
+_BUCKWHEAT_FLOUR = [["grechka", "uni"], ["гречка", "уни"]]
+# The Stevia 200/500 g blends, not the pure extract ("Toza steviya") — a pinch of that is a whole spoon of these.
+_STEVIA = [["stevia", "200"], ["stevia", "500"], ["стевия"]]
+_CHICKPEA_FLOUR = [["no'xat", "uni"], ["нўхат", "уни"]]
+_OATS = [["suli", "yorma"], ["сули", "ёрма"]]
+_MILK_THISTLE = [["rastaropsha", "uni"], ["растаропша", "уни"], ["расторопш"]]
+_RYE_FLOUR = [["javdar", "uni"], ["жавдар", "уни"]]
+_BRAN_WHEAT_FLOUR = [["kepakli", "bug'doy"], ["кепакли", "буғдой"]]
+_MALT = [["qora", "solod"], ["қора", "солод"]]
+_CORN_FLOUR = [["makkajo'xori", "uni"], ["маккажўхори", "уни"]]
+_BULGUR = [["bulgur"], ["булгур"]]
 
 
 def _i(amount_uz, amount_ru, name_uz, name_ru, match=None, why_uz=None, why_ru=None):
@@ -819,5 +851,859 @@ RECIPES = [
                   "Для бургера: котлета, сыр, лист салата, помидор и маринованный огурец — всё кето."),
         "image_prompt": "keto burger buns made from flaxseed flour and psyllium with white sesame on top, one bun "
                         "made into a burger with beef patty, cheese, lettuce and tomato",
+    },
+    # ─── 2026-11-13: 15 more (owner: new recipes — the library ran out on
+    # 05.11 and old ones were repeating). Each features shop products the
+    # first 15 did not; they come out from 15.11 in this order, each one
+    # only once its photo webapp/recipes/<slug>.jpg is added (recipes.py
+    # «Jadval»). Photo prompts: recipes_image_prompts.md.
+    {
+        "slug": "keto-somsa",
+        "title": _s("Go'shtli keto somsa", "Кето-самса с мясом"),
+        "intro": _s(
+            "Uchburchak, qizarib pishgan, ichi sersuv — xuddi tandir somsasidek, faqat bug'doy unisiz. "
+            "Xamiri bodom uni va pishloqdan, ksantan uni egiluvchan qiladi. Bitta somsada ~3 g uglevod.",
+            "Треугольная, румяная, сочная внутри — как самса из тандыра, только без пшеничной муки. "
+            "Тесто из миндальной муки и сыра, а ксантан делает его эластичным. В одной самсе ~3 г углеводов."),
+        "minutes": 60,
+        "servings": _s("8 dona", "8 штук"),
+        "per_serving": {"carbs": 3, "kcal": 290},
+        "ingredients": [
+            _i("100 g", "100 г", "Bodom uni", "Миндальная мука", _ALMOND,
+               "Xamirning asosi: bug'doy unidan ancha kam uglevodli.",
+               "Основа теста: углеводов намного меньше, чем в пшеничной муке."),
+            _i("1/2 ch.q.", "1/2 ч.л.", "Ksantan kamedi", "Ксантановая камедь", _XANTHAN,
+               "Glyuten o'rnini bosadi: xamir cho'ziladi va buklaganda yorilmaydi.",
+               "Заменяет глютен: тесто тянется и не трескается при складывании."),
+            _i("1 ch.q.", "1 ч.л.", "Qora sedana (ustiga)", "Чёрный тмин (сверху)", _NIGELLA,
+               "Somsaning o'sha tanish hidi va ko'rinishi.",
+               "Тот самый знакомый аромат и вид самсы."),
+            _i("1 ch.q.", "1 ч.л.", "Oq kunjut (ustiga)", "Белый кунжут (сверху)", _SESAME_WHITE,
+               "Qobiqqa qarsillash qo'shadi.", "Добавляет корочке хруста."),
+            _i("1 ch.q.", "1 ч.л.", "Himalay tuzi", "Гималайская соль", _SALT,
+               "Ichlik va xamir ta'mini ochadi.", "Раскрывает вкус начинки и теста."),
+            _i("150 g", "150 г", "Mozzarella", "Моцарелла"),
+            _i("2 ta", "2 шт", "Tuxum (biri xamirga, ikkinchisining sarig'i ustiga)",
+               "Яйца (одно в тесто, желток второго — для смазки)"),
+            _i("300 g", "300 г", "Qo'y yoki mol go'shti qiymasi", "Фарш из баранины или говядины"),
+            _i("40 g", "40 г", "Dumba yog'i", "Курдючный жир"),
+            _i("1 ta (100 g)", "1 шт (100 г)", "Piyoz", "Лук"),
+            _i("1 ch.q.", "1 ч.л.", "Zira", "Зира"),
+            _i("1/2 ch.q.", "1/2 ч.л.", "Qora qalampir", "Чёрный перец"),
+        ],
+        "steps": [
+            _s("Ichlik: piyozni mayda to'g'rang, dumba yog'ini mayda kubik qiling. Qiyma, zira, qora qalampir va "
+               "yarim choy qoshiq tuz bilan aralashtiring. 1 osh qoshiq sovuq suv qo'shsangiz, somsa sersuv bo'ladi.",
+               "Начинка: мелко нарежьте лук, курдюк — мелким кубиком. Смешайте с фаршем, зирой, чёрным перцем и "
+               "половиной ложки соли. Столовая ложка холодной воды сделает самсу сочнее."),
+            _s("Mozzarellani qirg'ichdan o'tkazib, mikroto'lqinli pechda 1 daqiqa (yoki suv hammomida) to'liq eriting.",
+               "Натрите моцареллу и полностью растопите в микроволновке 1 минуту (или на водяной бане)."),
+            _s("Erigan pishloqqa bodom uni, ksantan, 1 ta tuxum va qolgan tuzni qo'shib, avval qoshiq, keyin qo'l "
+               "bilan bir xil xamir qoring. Yopishsa, qo'lni ho'llang.",
+               "Добавьте к сыру миндальную муку, ксантан, 1 яйцо и оставшуюся соль и замесите сначала ложкой, "
+               "затем руками однородное тесто. Если липнет — смочите руки."),
+            _s("Pechni 190°C ga qizdiring. Xamirni 8 bo'lakka bo'lib, har birini ikki pergament orasida "
+               "12–13 sm kvadrat qilib, 3 mm qalinlikda yoying.",
+               "Разогрейте духовку до 190°C. Разделите тесто на 8 частей и раскатайте каждую между двумя листами "
+               "пергамента в квадрат 12–13 см толщиной 3 мм."),
+            _s("Har bir kvadrat o'rtasiga 2 osh qoshiq ichlik qo'yib, uchburchak qilib buklang va chetlarini qisib "
+               "chiqing. Somsalarni choki pastga qaratib, pergament to'shalgan laganga tering.",
+               "Положите в центр каждого квадрата 2 ст. ложки начинки, сложите треугольником и защипните края. "
+               "Выложите самсу швом вниз на противень с пергаментом."),
+            _s("Ustiga tuxum sarig'ini surting, qora sedana va kunjut seping.",
+               "Смажьте желтком и посыпьте чёрным тмином и кунжутом."),
+            _s("190°C da 25–30 daqiqa pishiring; usti tez qizarsa, oxirgi 10 daqiqada folga bilan yoping. "
+               "5 daqiqa tindirib, issiq holda torting.",
+               "Выпекайте 25–30 минут при 190°C; если верх быстро румянится, последние 10 минут накройте фольгой. "
+               "Дайте постоять 5 минут и подавайте горячей."),
+        ],
+        "tip": _s("Qo'y go'shti o'rniga tovuq son go'shti ham bo'ladi. Pishmagan somsani muzlatib qo'ysangiz, "
+                  "kerak paytda to'g'ridan-to'g'ri pechga qo'yasiz — 5–7 daqiqa ko'proq pishadi.",
+                  "Вместо баранины подойдёт мясо куриных бёдер. Сырую самсу можно заморозить и печь прямо из "
+                  "морозилки — на 5–7 минут дольше."),
+        "image_prompt": "golden triangular keto samsa from almond flour and mozzarella dough, nigella and sesame "
+                        "on top, one broken open with juicy minced lamb and onion filling",
+    },
+    {
+        "slug": "tungi-suli-botqa",
+        "title": _s("Bankada tungi suli bo'tqasi", "Ленивая овсянка в банке"),
+        "intro": _s(
+            "Pishirish shart emas: kechqurun 5 daqiqada bankaga solasiz, ertalab nonushta tayyor turadi. "
+            "Suli yormasi uzoq to'q tutadi, rastaropsha uni esa tola qo'shadi.",
+            "Варить не нужно: вечером за 5 минут сложили всё в банку — утром завтрак уже ждёт. "
+            "Овсяные хлопья надолго насыщают, а мука расторопши добавляет клетчатки."),
+        "minutes": 5,
+        "rest": _s("+ muzlatkichda tun bo'yi", "+ ночь в холодильнике"),
+        "servings": _s("2 kishilik", "2 порции"),
+        "per_serving": {"carbs": 34, "kcal": 300},
+        "ingredients": [
+            _i("80 g", "80 г", "Suli yormasi", "Овсяные хлопья", _OATS,
+               "Sekin hazm bo'ladi: ertalabdan tushgacha to'q yurasiz.",
+               "Медленно усваиваются: сытость до самого обеда."),
+            _i("1 osh q.", "1 ст.л.", "Rastaropsha uni", "Мука расторопши", _MILK_THISTLE,
+               "Tolaga boy qo'shimcha; bir qoshig'i ta'mni deyarli o'zgartirmaydi.",
+               "Добавка, богатая клетчаткой; одна ложка почти не меняет вкус."),
+            _i("1 osh q.", "1 ст.л.", "Chia urug'i", "Семена чиа", _CHIA,
+               "Suyuqlikni shimib, bo'tqani quyuq va kremdek qiladi.",
+               "Впитывает жидкость — каша становится густой и кремовой."),
+            _i("ta'bga ko'ra", "по вкусу", "Steviya", "Стевия", _STEVIA,
+               "Shakarsiz shirinlik — juda oz ketadi.", "Сладость без сахара — нужно совсем немного."),
+            _i("1/2 ch.q.", "1/2 ч.л.", "Dolchin", "Корица", _CINNAMON,
+               "Bo'tqaga iliq, shirinroq ta'm beradi.", "Тёплый вкус — каша кажется слаще."),
+            _i("200 ml", "200 мл", "Sut", "Молоко"),
+            _i("100 g", "100 г", "Tabiiy yogurt yoki qatiq", "Натуральный йогурт или катык"),
+            _i("1 hovuch (100 g)", "1 горсть (100 г)", "Rezavor (muzlatilgani ham bo'ladi)",
+               "Ягоды (можно замороженные)"),
+        ],
+        "steps": [
+            _s("Ikkita bankaga suli yormasi, rastaropsha uni, chia, dolchin va steviyani teng bo'lib soling va "
+               "quruq holda aralashtiring.",
+               "Разложите по двум банкам овсяные хлопья, муку расторопши, чиа, корицу и стевию и перемешайте всухую."),
+            _s("Sut va yogurtni qo'shib, qoshiq bilan yaxshilab aralashtiring — tagida quruq yorma qolmasin.",
+               "Добавьте молоко и йогурт и хорошо перемешайте ложкой, чтобы на дне не осталось сухих хлопьев."),
+            _s("Bankalarni yopib muzlatkichga qo'ying; 10 daqiqadan keyin yana bir bor aralashtiring — chia bir "
+               "joyga yopishib qolmaydi.",
+               "Закройте банки и уберите в холодильник; через 10 минут перемешайте ещё раз — так чиа не слипнется."),
+            _s("Tun bo'yi (kamida 6 soat) muzlatkichda qoldiring — yorma yumshaydi, bo'tqa quyuqlashadi.",
+               "Оставьте на ночь (минимум на 6 часов) — хлопья размякнут, каша загустеет."),
+            _s("Ertalab aralashtiring; juda quyuq bo'lsa, 2–3 osh qoshiq sut qo'shing.",
+               "Утром перемешайте; если слишком густо — добавьте 2–3 ст. ложки молока."),
+            _s("Ustiga rezavor solib, sovuq holda yoki mikroto'lqinli pechda 1 daqiqa isitib yeng.",
+               "Выложите сверху ягоды и ешьте холодной или подогрейте 1 минуту в микроволновке."),
+        ],
+        "tip": _s("Har kuni boshqacha qiling: bir kun rezavor, ertasiga to'g'ralgan olma va dolchin, keyingi kun "
+                  "1 choy qoshiq kakao nibs. Muzlatkichda 3 kungacha turadi.",
+                  "Меняйте каждый день: сегодня ягоды, завтра яблоко с корицей, послезавтра ложка какао-крупки. "
+                  "В холодильнике хранится до 3 дней."),
+        "image_prompt": "two glass jars of overnight oats with a yogurt layer, berries on top, cinnamon and chia",
+    },
+    {
+        "slug": "lasos-kotlet",
+        "title": _s("Lasos baliqli keto kotletlar", "Кето-котлеты из лосося"),
+        "intro": _s(
+            "Baliqni bolalar ham yeydigan qilishning eng oson yo'li: tayyor lasos tushonkasidan 25 daqiqada "
+            "kotlet. Un ham, non ushog'i ham yo'q — oqsil va omega-3 esa ko'p.",
+            "Самый простой способ, чтобы рыбу ели и дети: котлеты из готовой тушёнки лосося за 25 минут. "
+            "Ни муки, ни сухарей — зато много белка и омега-3."),
+        "minutes": 25,
+        "servings": _s("3 kishilik (9 dona)", "3 порции (9 штук)"),
+        "per_serving": {"carbs": 8, "kcal": 450},
+        "ingredients": [
+            _i("1 banka (700 ml)", "1 банка (700 мл)", "Lasos baliq tushonkasi", "Тушёнка из лосося", _SALMON,
+               "Baliq allaqachon pishgan: tozalab, qaynatib o'tirmaysiz — faqat suvini to'kasiz.",
+               "Рыба уже готова: не нужно чистить и варить — только слить жидкость."),
+            _i("3 osh q. (30 g)", "3 ст.л. (30 г)", "Soya uni", "Соевая мука", _SOY_FLOUR,
+               "Massani bog'laydi; bug'doy unidan uglevodi ancha kam, oqsili ko'p.",
+               "Связывает массу; углеводов намного меньше, чем в пшеничной муке, а белка больше."),
+            _i("2 osh q.", "2 ст.л.", "Zaytun yog'i (qovurish uchun)", "Оливковое масло (для жарки)", _OLIVE_FRY,
+               "O'rtacha olovda qovurishga chidamli.", "Подходит для жарки на среднем огне."),
+            _i("1/2 ch.q.", "1/2 ч.л.", "Himalay tuzi", "Гималайская соль", _SALT,
+               "Baliq ta'mini ochadi.", "Раскрывает вкус рыбы."),
+            _i("2 ta", "2 шт", "Tuxum", "Яйца"),
+            _i("1 ta kichik", "1 маленькая", "Piyoz", "Луковица"),
+            _i("1/2 bog'", "1/2 пучка", "Shivit", "Укроп"),
+            _i("1 ta", "1 шт", "Limon (sharbati va bo'laklari)", "Лимон (сок и дольки)"),
+            _i("bir chimdim", "щепотка", "Qora qalampir", "Чёрный перец"),
+            _i("150 g", "150 г", "Qatiq yoki suzma (sous)", "Катык или сюзьма (соус)"),
+            _i("1 ta", "1 шт", "Bodring (sous va tortish uchun)", "Огурец (для соуса и подачи)"),
+            _i("1 tishcha", "1 зубчик", "Sarimsoq (sous)", "Чеснок (соус)"),
+        ],
+        "steps": [
+            _s("Tushonkaning suvini to'kib, baliqni idishga soling va vilka bilan ezing; yirik suyak uchrasa, "
+               "olib tashlang.",
+               "Слейте жидкость, выложите рыбу в миску и разомните вилкой; крупные косточки уберите."),
+            _s("Piyozni juda mayda to'g'rang (yoki qirg'ichdan o'tkazing), shivitni maydalang.",
+               "Очень мелко нарежьте лук (или натрите), измельчите укроп."),
+            _s("Baliqqa tuxum, piyoz, shivit, soya uni, 1 osh qoshiq limon sharbati, tuz va qalampirni qo'shib "
+               "yaxshilab aralashtiring. 10 daqiqa qoldiring — soya uni namni shimib, massa quyuqlashadi.",
+               "Добавьте к рыбе яйца, лук, укроп, соевую муку, 1 ст. ложку лимонного сока, соль и перец и хорошо "
+               "перемешайте. Оставьте на 10 минут — мука впитает влагу, масса загустеет."),
+            _s("Ho'l qo'l bilan 9 ta kotlet yasang (diametri 6 sm, qalinligi 1,5 sm).",
+               "Влажными руками сформуйте 9 котлет (диаметр 6 см, толщина 1,5 см)."),
+            _s("Tovada yog'ni o'rtacha olovda qizdirib, kotletlarni har tomonini 3–4 daqiqadan, oltinrang "
+               "bo'lguncha qovuring. Kurakcha bilan ehtiyotkorlik bilan ag'daring.",
+               "Разогрейте масло на среднем огне и обжарьте котлеты по 3–4 минуты с каждой стороны до золотистого "
+               "цвета. Переворачивайте аккуратно лопаткой."),
+            _s("Sous: qatiqqa mayda to'g'ralgan yarim bodring, ezilgan sarimsoq va bir chimdim tuz qo'shib "
+               "aralashtiring.",
+               "Соус: смешайте катык с мелко нарезанной половиной огурца, давленым чесноком и щепоткой соли."),
+            _s("Kotletlarni sous, qolgan bodring bo'laklari va limon bo'lagi bilan torting.",
+               "Подавайте котлеты с соусом, ломтиками оставшегося огурца и долькой лимона."),
+        ],
+        "tip": _s("Massa suyuqroq chiqsa, yana 1 osh qoshiq soya uni qo'shing. Pechda ham bo'ladi: 200°C da "
+                  "15–18 daqiqa, o'rtasida bir marta ag'darib.",
+                  "Если масса жидковата, добавьте ещё 1 ст. ложку соевой муки. Можно в духовке: 200°C, "
+                  "15–18 минут, один раз перевернув."),
+        "image_prompt": "golden pan-fried salmon patties with dill, lemon wedges, yogurt-cucumber-garlic sauce",
+    },
+    {
+        "slug": "dubay-shokolad",
+        "title": _s("Uyda shakarsiz «Dubay shokoladi»", "Домашний «дубайский шоколад» без сахара"),
+        "intro": _s(
+            "Hamma gapirayotgan shokolad — uyda va shakarsiz: qora shokolad qobig'i ichida xandonpista kremi va "
+            "qarsildoq qovurilgan kokos. 30 daqiqa ish, qolganini muzlatkich qiladi.",
+            "Тот самый шоколад, о котором все говорят, — дома и без сахара: в оболочке из горького шоколада "
+            "фисташковый крем и хрустящий обжаренный кокос. 30 минут работы, остальное сделает холодильник."),
+        "minutes": 30,
+        "rest": _s("+ muzlatkichda 1 soat", "+ 1 час в холодильнике"),
+        "servings": _s("1 plitka, 12 bo'lak", "1 плитка, 12 кусочков"),
+        "per_serving": {"carbs": 3.5, "kcal": 155},
+        "ingredients": [
+            _i("150 g", "150 г", "«Pobeda» shakarsiz qora shokoladi", "Горький шоколад «Победа» без сахара",
+               _CHOCOLATE,
+               "Qobiq uchun: qotgach qattiq va yaltiroq bo'ladi.",
+               "Для оболочки: застывает твёрдой и глянцевой."),
+            _i("100 g", "100 г", "Xandonpista pastasi", "Фисташковая паста", _PISTACHIO_PASTE,
+               "Ichidagi yashil krem — mashhur ta'mning siri.", "Зелёный крем внутри — секрет знаменитого вкуса."),
+            _i("40 g", "40 г", "Kokos chipsi yoki qirindisi", "Кокосовые чипсы или стружка", _COCONUT_FLAKES,
+               "Asl retseptdagi xamir iplari o'rnida: qovurilgach xuddi shunday qarsillaydi.",
+               "Вместо теста катаифи из оригинала: после обжарки хрустит так же."),
+            _i("2 osh q.", "2 ст.л.", "Eritritol (kukun qilingan)", "Эритрит (смолотый в пудру)", _ERYTHRITOL,
+               "Kremni shirin qiladi; kofe maydalagichda kukun qilsangiz, tishda g'ichirlamaydi.",
+               "Подслащивает крем; смолотый в кофемолке, не хрустит на зубах."),
+            _i("1 osh q.", "1 ст.л.", "Sariyog'", "Сливочное масло"),
+            _i("bir chimdim", "щепотка", "Tuz", "Соль"),
+        ],
+        "steps": [
+            _s("Kokos chipsini sariyog'da past olovda 3–4 daqiqa, oltinrang bo'lguncha qovuring va soviting.",
+               "Обжарьте кокосовые чипсы на сливочном масле на слабом огне 3–4 минуты до золотистого цвета и остудите."),
+            _s("Xandonpista pastasi, kukun eritritol va bir chimdim tuzni aralashtiring, keyin qovurilgan kokosni "
+               "qo'shing — qalin, qarsildoq krem bo'ladi.",
+               "Смешайте фисташковую пасту, эритрит-пудру и щепотку соли, затем вмешайте обжаренный кокос — "
+               "получится густой хрустящий крем."),
+            _s("Shokoladni bo'laklab, suv hammomida (yoki mikroto'lqinli pechda 20 soniyadan, har safar "
+               "aralashtirib) eriting. Juda qizdirmang — shokolad oqarib qoladi.",
+               "Растопите шоколад кусочками на водяной бане (или в микроволновке по 20 секунд, каждый раз "
+               "перемешивая). Не перегревайте — шоколад поседеет."),
+            _s("Shokoladning 2/3 qismini silikon qolip (yoki pergament to'shalgan kichik idish) tubi va "
+               "devorlariga qoshiq bilan surting va 10 daqiqa muzlatkichda qotiring.",
+               "Двумя третями шоколада промажьте ложкой дно и стенки силиконовой формы (или небольшой ёмкости с "
+               "пергаментом) и уберите в холодильник на 10 минут."),
+            _s("Ichiga pista-kokos kremini zich qilib, tekis yoying.",
+               "Плотно и ровно выложите внутрь фисташково-кокосовый крем."),
+            _s("Ustidan qolgan shokoladni quyib tekislang va muzlatkichda kamida 1 soat qotiring.",
+               "Залейте оставшимся шоколадом, разровняйте и уберите в холодильник минимум на час."),
+            _s("Qolipdan chiqarib, issiq pichoq bilan 12 bo'lakka kesing — kesimida yashil krem ko'rinib turadi.",
+               "Достаньте из формы и нарежьте горячим ножом на 12 кусочков — на срезе виден зелёный крем."),
+        ],
+        "tip": _s("Shokolad juda achchiq tuyulsa, eritganda unga ham 1 osh qoshiq kukun eritritol qo'shing. "
+                  "Muzlatkichda yopiq idishda 1 haftagacha saqlanadi.",
+                  "Если шоколад кажется слишком горьким, добавьте и в него при растапливании 1 ст. ложку "
+                  "эритрита-пудры. В холодильнике в закрытой ёмкости хранится до недели."),
+        "image_prompt": "homemade sugar-free dubai chocolate bar cut open, green pistachio cream with toasted "
+                        "coconut inside a dark chocolate shell",
+    },
+    {
+        "slug": "devzira-mastava",
+        "title": _s("Devzira guruchli mastava", "Мастава с рисом девзира"),
+        "intro": _s(
+            "Onalarimiz pishiradigan mastavaning ta'mi, faqat guruchi — bo'yalmagan, yog'lanmagan qizil devzira. "
+            "Go'sht va sabzavot ko'p, guruch oz: yengil, lekin to'yimli sho'rva.",
+            "Вкус маставы, как у мамы, только рис — неокрашенная, непромасленная красная девзира. "
+            "Мяса и овощей много, риса мало: лёгкий, но сытный суп."),
+        "minutes": 75,
+        "servings": _s("4 kishilik", "4 порции"),
+        "per_serving": {"carbs": 22, "kcal": 290},
+        "ingredients": [
+            _i("80 g", "80 г", "Qizil guruch (devzira)", "Красный рис девзира", _DEVZIRA,
+               "Qaynaganda ham donador qoladi — mastava bo'tqaga aylanib ketmaydi.",
+               "Остаётся рассыпчатым даже в супе — мастава не превращается в кашу."),
+            _i("1 osh q.", "1 ст.л.", "GHEE", "Гхи", _GHEE,
+               "Qovurishda tutun chiqarmaydi va sho'rvaga yumshoq qaymoqli ta'm beradi.",
+               "Не дымит при обжарке и даёт супу мягкий сливочный вкус."),
+            _i("1 ch.q.", "1 ч.л.", "Himalay tuzi", "Гималайская соль", _SALT,
+               "Ta'mni ochadi.", "Раскрывает вкус."),
+            _i("300 g", "300 г", "Mol yoki qo'y go'shti", "Говядина или баранина"),
+            _i("1 ta", "1 шт", "Piyoz", "Лук"),
+            _i("1 ta", "1 шт", "Sabzi", "Морковь"),
+            _i("1 ta", "1 шт", "Bulg'or qalampiri", "Болгарский перец"),
+            _i("2 ta", "2 шт", "Pomidor", "Помидоры"),
+            _i("2 tishcha", "2 зубчика", "Sarimsoq", "Чеснок"),
+            _i("1,5 l", "1,5 л", "Issiq suv", "Горячая вода"),
+            _i("1 ch.q.", "1 ч.л.", "Zira", "Зира"),
+            _i("4 osh q.", "4 ст.л.", "Qatiq (tortish uchun)", "Катык (для подачи)"),
+            _i("1 bog'", "1 пучок", "Shivit va kashnich", "Укроп и кинза"),
+        ],
+        "steps": [
+            _s("Guruchni suvi tiniq bo'lguncha 3–4 marta yuving va 30 daqiqa iliq suvda ivitib qo'ying.",
+               "Промойте рис 3–4 раза до прозрачной воды и замочите в тёплой воде на 30 минут."),
+            _s("Go'shtni 1,5 sm kubik, piyozni yarim halqa, sabzi va bulg'or qalampirini kubik qilib, pomidorni "
+               "mayda to'g'rang.",
+               "Нарежьте мясо кубиком 1,5 см, лук — полукольцами, морковь и перец — кубиком, помидоры — мелко."),
+            _s("Qozonda GHEE yog'ini qizdirib, go'shtni 7–8 daqiqa qizarguncha qovuring. Piyozni qo'shib 3 daqiqa, "
+               "keyin sabzi va qalampirni qo'shib yana 4 daqiqa qovuring.",
+               "Разогрейте гхи в казане и обжарьте мясо 7–8 минут до румяности. Добавьте лук — 3 минуты, затем "
+               "морковь и перец — ещё 4 минуты."),
+            _s("Pomidor va maydalangan sarimsoqni qo'shib 3 daqiqa qovuring. 1,5 l issiq suv quying, tuz va zira "
+               "soling, qaynab chiqqach past olovda 25 daqiqa qaynating.",
+               "Добавьте помидоры и измельчённый чеснок, жарьте 3 минуты. Влейте 1,5 л горячей воды, добавьте соль "
+               "и зиру и после закипания варите на слабом огне 25 минут."),
+            _s("Guruchni suvidan olib qozonga soling va yana 25 daqiqa, guruch yumshaguncha pishiring — devzira "
+               "oddiy guruchdan sekinroq pishadi.",
+               "Откиньте рис, всыпьте в казан и варите ещё 25 минут до мягкости — девзира варится дольше обычного риса."),
+            _s("Olovni o'chirib, 5 daqiqa dam bering. Kosalarga quyib, ustiga qatiq va to'g'ralgan ko'kat solib "
+               "torting.",
+               "Выключите огонь и дайте настояться 5 минут. Разлейте по пиалам, добавьте катык и рубленую зелень."),
+        ],
+        "tip": _s("Qatiqni qozonga emas, kosaga soling — shunda ivib qolmaydi. Mastava ertasiga quyuqlashadi: "
+                  "isitganda ozgina qaynoq suv qo'shing.",
+                  "Катык кладите в пиалу, а не в казан — так он не свернётся. Назавтра мастава загустеет: при "
+                  "разогреве добавьте немного кипятка."),
+        "image_prompt": "uzbek mastava soup with red devzira rice, beef cubes, vegetables, a spoon of qatiq and "
+                        "herbs in a ceramic kosa",
+    },
+    {
+        "slug": "javdar-non",
+        "title": _s("Javdar unli solodli PP non", "ПП-хлеб из ржаной муки с солодом"),
+        "intro": _s(
+            "Qoramtir, xushbo'y, qobig'i qarsildoq non — Borodinskiy nonga o'xshaydi, faqat uyda va oq unsiz. "
+            "Javdar uni va qora solod uni to'yimli qiladi: bir bo'lagi bilan ham uzoq to'q yurasiz.",
+            "Тёмный, ароматный хлеб с хрустящей корочкой — похож на «Бородинский», только домашний и без белой "
+            "муки. Ржаная мука и чёрный солод делают его сытным: даже одного ломтика хватает надолго."),
+        "minutes": 80,
+        "rest": _s("+ 1,5 soat ko'tarilishi va 3 soat sovishi", "+ 1,5 часа на подъём и 3 часа на остывание"),
+        "servings": _s("12 bo'lak", "12 ломтиков"),
+        "per_serving": {"carbs": 20, "kcal": 130},
+        "ingredients": [
+            _i("250 g", "250 г", "Javdar uni", "Ржаная мука", _RYE_FLOUR,
+               "Tolaga boy: non zich, namli va to'yimli chiqadi.",
+               "Много клетчатки: хлеб получается плотным, влажным и сытным."),
+            _i("150 g", "150 г", "Kepakli bug'doy uni", "Пшеничная мука с отрубями", _BRAN_WHEAT_FLOUR,
+               "Javdar xamirini ko'tarishga yordam beradi — non og'ir bo'lib qolmaydi.",
+               "Помогает ржаному тесту подняться — хлеб не будет тяжёлым."),
+            _i("2 osh q. (20 g)", "2 ст.л. (20 г)", "Qora fermentlangan solod", "Чёрный ферментированный солод",
+               _MALT,
+               "To'q rang va o'sha tanish nordon-shirin ta'm beradi.",
+               "Тёмный цвет и тот самый кисло-сладкий вкус."),
+            _i("1 osh q.", "1 ст.л.", "Olma sirkasi", "Яблочный уксус", _VINEGAR,
+               "Javdar xamiriga yoqimli nordonlik beradi.", "Даёт ржаному тесту приятную кислинку."),
+            _i("1 ch.q.", "1 ч.л.", "Himalay tuzi", "Гималайская соль", _SALT,
+               "Ta'mni ochadi.", "Раскрывает вкус."),
+            _i("1 ch.q. (5 g)", "1 ч.л. (5 г)", "Quruq xamirturush", "Сухие дрожжи"),
+            _i("100 ml + 200 ml", "100 мл + 200 мл", "Qaynoq suv (solodga) va iliq suv",
+               "Кипяток (для солода) и тёплая вода"),
+            _i("1 osh q.", "1 ст.л.", "O'simlik yog'i", "Растительное масло"),
+            _i("1 ch.q.", "1 ч.л.", "Kashnich urug'i (ustiga)", "Семена кориандра (сверху)"),
+        ],
+        "steps": [
+            _s("Qora solodni 100 ml qaynoq suvda aralashtirib, 15 daqiqa damlang va iliq bo'lguncha soviting.",
+               "Заварите чёрный солод 100 мл кипятка, оставьте на 15 минут и остудите до тёплого."),
+            _s("200 ml iliq suvda xamirturushni eritib, 10 daqiqa qo'ying — ustida ko'pik paydo bo'ladi.",
+               "Растворите дрожжи в 200 мл тёплой воды и оставьте на 10 минут — появится пенка."),
+            _s("Katta idishda javdar uni, kepakli un va tuzni aralashtiring. Solod, xamirturushli suv, olma "
+               "sirkasi va yog'ni qo'shing.",
+               "В большой миске смешайте ржаную муку, муку с отрубями и соль. Добавьте солод, воду с дрожжами, "
+               "уксус и масло."),
+            _s("Qoshiq bilan 3–4 daqiqa yaxshilab aralashtiring. Javdar xamiri yopishqoq bo'ladi — bu normal, "
+               "un qo'shmang.",
+               "Хорошо перемешайте ложкой 3–4 минуты. Ржаное тесто липкое — это нормально, муку не добавляйте."),
+            _s("Yog'langan 20×10 sm qolipga solib, ho'l qo'l bilan tekislang va ustiga kashnich urug'ini seping. "
+               "Iliq joyda 1–1,5 soat, hajmi 1,5 baravar oshguncha ko'tarilsin.",
+               "Переложите в смазанную форму 20×10 см, разровняйте мокрой рукой и посыпьте кориандром. Оставьте "
+               "в тепле на 1–1,5 часа, пока объём не увеличится в 1,5 раза."),
+            _s("Pechni 200°C ga qizdiring. Nonni 15 daqiqa 200°C da, keyin 180°C da yana 35 daqiqa pishiring.",
+               "Разогрейте духовку до 200°C. Выпекайте 15 минут при 200°C, затем ещё 35 минут при 180°C."),
+            _s("Qolipdan chiqarib, sochiqqa o'rab to'liq soviting (kamida 3 soat) — javdar noni issiqligida "
+               "kesilmaydi.",
+               "Достаньте из формы, заверните в полотенце и полностью остудите (минимум 3 часа) — горячим ржаной "
+               "хлеб не режут."),
+        ],
+        "tip": _s("Javdar noni ertasiga yanada mazali bo'ladi. Bo'laklab muzlatib qo'ying — tosterda 2 daqiqada "
+                  "yangi yopilgandek bo'ladi.",
+                  "Ржаной хлеб на следующий день ещё вкуснее. Нарежьте и заморозьте — в тостере за 2 минуты он "
+                  "как свежий."),
+        "image_prompt": "dark rye malt bread loaf baked in a tin, crushed coriander seeds on top, dense moist slices",
+    },
+    {
+        "slug": "keto-manti",
+        "title": _s("Qovoq va go'shtli keto manti", "Кето-манты с тыквой и мясом"),
+        "intro": _s(
+            "Manti xamirini bug'doy unisiz qilib bo'lmaydi deysizmi? Oq zig'ir uni va psilliumdan qilingan xamir "
+            "yupqa yoyiladi va bug'da yirtilmaydi. Ichida go'sht, qovoq va piyoz — butun oilaga kechki ovqat.",
+            "Думаете, тесто для мантов без пшеничной муки не сделать? Тесто из белой льняной муки и псиллиума "
+            "тонко раскатывается и не рвётся на пару. Внутри мясо, тыква и лук — ужин для всей семьи."),
+        "minutes": 90,
+        "servings": _s("4 kishilik (16 dona)", "4 порции (16 штук)"),
+        "per_serving": {"carbs": 9, "kcal": 465},
+        "ingredients": [
+            _i("150 g", "150 г", "Oq zig'ir uni", "Мука из белого льна", _WHITE_FLAX_FLOUR,
+               "Xamirning asosi: uglevodi juda kam, rangi och — manti chiroyli chiqadi.",
+               "Основа теста: очень мало углеводов, светлый цвет — манты выглядят красиво."),
+            _i("2,5 osh q. (25 g)", "2,5 ст.л. (25 г)", "Psillium (sheluxa)", "Псиллиум (шелуха)", _PSYLLIUM_HUSK,
+               "Glyuten o'rnini bosadi: xamir cho'ziladi va qisganda yorilmaydi.",
+               "Заменяет глютен: тесто тянется и не трескается при защипывании."),
+            _i("1 ch.q.", "1 ч.л.", "Himalay tuzi", "Гималайская соль", _SALT,
+               "Xamirga ham, ichlikka ham.", "И в тесто, и в начинку."),
+            _i("1 ta", "1 шт", "Tuxum", "Яйцо"),
+            _i("150 ml", "150 мл", "Qaynoq suv", "Кипяток"),
+            _i("400 g", "400 г", "Mol yoki qo'y go'shti", "Говядина или баранина"),
+            _i("150 g", "150 г", "Qovoq (tozalangan)", "Тыква (очищенная)"),
+            _i("1 ta katta (120 g)", "1 крупная (120 г)", "Piyoz", "Луковица"),
+            _i("30 g", "30 г", "Sariyog'", "Сливочное масло"),
+            _i("1 ch.q.", "1 ч.л.", "Zira", "Зира"),
+            _i("1/2 ch.q.", "1/2 ч.л.", "Qora qalampir", "Чёрный перец"),
+            _i("4 osh q.", "4 ст.л.", "Qatiq yoki qaymoq (tortish uchun)", "Катык или сметана (для подачи)"),
+        ],
+        "steps": [
+            _s("Xamir: oq zig'ir uni, psillium va yarim choy qoshiq tuzni aralashtirib, tuxumni qo'shing.",
+               "Тесто: смешайте льняную муку, псиллиум и половину ложки соли, добавьте яйцо."),
+            _s("Qaynoq suvni quyib, qoshiq bilan tez aralashtiring. Biroz sovigach qo'l bilan 1–2 daqiqa qoring, "
+               "plyonkaga o'rab 15 daqiqa dam bering.",
+               "Влейте кипяток и быстро перемешайте ложкой. Когда немного остынет, вымесите руками 1–2 минуты, "
+               "заверните в плёнку и оставьте на 15 минут."),
+            _s("Ichlik: go'shtni mayda to'g'rang (yoki yirik qiyma qiling), qovoq va piyozni 0,5 sm kubik qiling. "
+               "Zira, qalampir, qolgan tuz va mayda to'g'ralgan sariyog'ni qo'shib aralashtiring.",
+               "Начинка: мелко нарубите мясо (или прокрутите на крупный фарш), тыкву и лук нарежьте кубиком "
+               "0,5 см. Добавьте зиру, перец, оставшуюся соль и мелко нарезанное сливочное масло, перемешайте."),
+            _s("Xamirni 2 ga bo'lib, har birini ikki pergament orasida 1,5–2 mm qalinlikda yoying va 10 sm li "
+               "kvadratlarga kesing (16 ta chiqadi).",
+               "Разделите тесто на 2 части, каждую раскатайте между листами пергамента толщиной 1,5–2 мм и "
+               "нарежьте квадратами 10 см (выйдет 16 штук)."),
+            _s("Har bir kvadratga 1 osh qoshiq ichlik qo'ying, qarama-qarshi burchaklarini o'rtada birlashtirib, "
+               "chetlarini qisib chiqing. Xamir yorilsa, ho'l barmoq bilan yopishtiring.",
+               "Положите на каждый квадрат столовую ложку начинки, соедините противоположные углы в центре и "
+               "защипните края. Если тесто треснет — залепите мокрым пальцем."),
+            _s("Qasqon qavatlarini yog'lab, mantilarni bir-biriga tegmaydigan qilib tering va qaynab turgan suv "
+               "ustida 40–45 daqiqa bug'da pishiring.",
+               "Смажьте ярусы мантоварки маслом, выложите манты так, чтобы они не касались друг друга, и готовьте "
+               "на пару над кипящей водой 40–45 минут."),
+            _s("Qatiq yoki qaymoq va bir chimdim qora qalampir bilan issiq holda torting.",
+               "Подавайте горячими с катыком или сметаной и щепоткой чёрного перца."),
+        ],
+        "tip": _s("Pishmagan mantilarni laganga terib muzlating, keyin paketga soling — kerak bo'lganda "
+                  "muzlaganicha qasqonga qo'yib, 50 daqiqa pishirasiz.",
+                  "Сырые манты заморозьте на подносе, затем пересыпьте в пакет — готовьте прямо из морозилки "
+                  "50 минут."),
+        "image_prompt": "keto manti dumplings from white flax flour and psyllium dough, one cut open with meat and "
+                        "pumpkin filling, bowl of qatiq",
+    },
+    {
+        "slug": "noxat-quymoq",
+        "title": _s("No'xat unidan sabzavotli quymoq", "Овощные оладьи из нутовой муки"),
+        "intro": _s(
+            "Tuxumsiz, lekin oqsilga boy nonushta: no'xat uni, ko'kat va sabzavot. 25 daqiqada tayyor, qatiq "
+            "bilan juda mazali. Glyutensiz.",
+            "Завтрак без яиц, но с белком: нутовая мука, зелень и овощи. Готово за 25 минут, особенно вкусно "
+            "с катыком. Без глютена."),
+        "minutes": 25,
+        "servings": _s("3 kishilik (9 dona)", "3 порции (9 штук)"),
+        "per_serving": {"carbs": 29, "kcal": 320},
+        "ingredients": [
+            _i("150 g", "150 г", "No'xat uni", "Нутовая мука", _CHICKPEA_FLOUR,
+               "O'simlik oqsiliga boy va glyutensiz; tuxumsiz ham xamirni ushlab turadi.",
+               "Много растительного белка, без глютена; держит тесто даже без яиц."),
+            _i("2 osh q.", "2 ст.л.", "Zaytun yog'i (qovurish uchun)", "Оливковое масло (для жарки)", _OLIVE_FRY,
+               "Quymoqlar tovaga yopishmaydi va bir tekis qizaradi.",
+               "Оладьи не прилипают и румянятся равномерно."),
+            _i("1 ch.q.", "1 ч.л.", "Himalay tuzi", "Гималайская соль", _SALT,
+               "Ta'mni ochadi.", "Раскрывает вкус."),
+            _i("200 ml", "200 мл", "Iliq suv", "Тёплая вода"),
+            _i("1 ta kichik", "1 маленькая", "Piyoz", "Луковица"),
+            _i("1 ta", "1 шт", "Pomidor", "Помидор"),
+            _i("1/2 ta", "1/2 шт", "Bulg'or qalampiri", "Болгарский перец"),
+            _i("1/2 bog'", "1/2 пучка", "Kashnich yoki shivit", "Кинза или укроп"),
+            _i("1/2 ch.q.", "1/2 ч.л.", "Zira va kurkuma", "Зира и куркума"),
+            _i("150 g", "150 г", "Qatiq (tortish uchun)", "Катык (для подачи)"),
+        ],
+        "steps": [
+            _s("No'xat uni, tuz, zira va kurkumani idishda aralashtiring.",
+               "Смешайте в миске нутовую муку, соль, зиру и куркуму."),
+            _s("Iliq suvni asta-sekin quyib, quyuq qaymoqdek silliq xamir qoring va 10 daqiqa dam bering.",
+               "Постепенно вливая тёплую воду, замесите гладкое тесто густотой со сметану и оставьте на 10 минут."),
+            _s("Piyoz, pomidor va qalampirni mayda kubik qilib to'g'rang, ko'katni maydalang va xamirga qo'shing.",
+               "Мелко нарежьте лук, помидор и перец, измельчите зелень и добавьте в тесто."),
+            _s("Tovada yog'ni o'rtacha olovda qizdiring. Har bir quymoq uchun 2 osh qoshiq xamir solib, 1 sm "
+               "qalinlikda tekislang.",
+               "Разогрейте масло на среднем огне. Выкладывайте по 2 ст. ложки теста и разравнивайте до толщины 1 см."),
+            _s("Har tomonini 3–4 daqiqadan, oltinrang bo'lguncha qovuring — ichi pishishi uchun olovni baland "
+               "qilmang.",
+               "Жарьте по 3–4 минуты с каждой стороны до золотистого цвета — огонь не сильный, чтобы середина "
+               "пропеклась."),
+            _s("Qatiq va ko'kat bilan issiq holda torting.", "Подавайте горячими с катыком и зеленью."),
+        ],
+        "tip": _s("Xamirga 50 g qirg'ichdan o'tkazilgan pishloq qo'shsangiz, bolalar ham sevib yeydi. Xamirni "
+                  "kechqurun qorib qo'ysangiz, muzlatkichda ertalabgacha turadi.",
+                  "Добавьте в тесто 50 г тёртого сыра — дети тоже съедят с удовольствием. Тесто можно замесить "
+                  "с вечера: в холодильнике оно спокойно дождётся утра."),
+        "image_prompt": "golden savory chickpea flour fritters with tomato, onion, pepper and herbs, bowl of qatiq",
+    },
+    {
+        "slug": "yeryongoq-pechenye",
+        "title": _s("Yeryong'oq pastali keto pechenye", "Кето-печенье с арахисовой пастой"),
+        "intro": _s(
+            "Bor-yo'g'i 5 masalliq va 25 daqiqa: yumshoq, yeryong'oq hidi anqib turadigan pechenye. Un ham, shakar "
+            "ham yo'q — alluloza shirinligi shakarnikiga juda yaqin.",
+            "Всего 5 ингредиентов и 25 минут: мягкое печенье с ярким арахисовым ароматом. Ни муки, ни сахара — "
+            "сладость аллюлозы очень близка к сахарной."),
+        "minutes": 25,
+        "servings": _s("12 dona", "12 штук"),
+        "per_serving": {"carbs": 2, "kcal": 105},
+        "ingredients": [
+            _i("200 g", "200 г", "Yeryong'oq pastasi", "Арахисовая паста", _PEANUT_PASTE,
+               "Pechenyening asosi: un ham, yog' ham shu — oqsil va foydali yog'larga boy.",
+               "Основа печенья: она и мука, и масло — много белка и полезных жиров."),
+            _i("60 g", "60 г", "Alluloza", "Аллюлоза", _ALLULOSE,
+               "Shakardek shirin va pishganda chiroyli qizaradi; kaloriyasi deyarli yo'q.",
+               "Сладкая, как сахар, красиво румянится при выпечке; калорий почти нет."),
+            _i("1 ta", "1 шт", "Tuxum", "Яйцо"),
+            _i("1/2 ch.q.", "1/2 ч.л.", "Soda", "Сода"),
+            _i("bir chimdim", "щепотка", "Tuz", "Соль"),
+        ],
+        "steps": [
+            _s("Pechni 175°C ga qizdiring, laganga pergament to'shang.",
+               "Разогрейте духовку до 175°C, застелите противень пергаментом."),
+            _s("Yeryong'oq pastasi, alluloza, tuxum, soda va tuzni qoshiq bilan silliq bo'lguncha aralashtiring. "
+               "Pasta qattiq bo'lsa, 10 soniya mikroto'lqinli pechda yumshating.",
+               "Перемешайте ложкой арахисовую пасту, аллюлозу, яйцо, соду и соль до однородности. Если паста "
+               "густая, размягчите её 10 секунд в микроволновке."),
+            _s("Xamirni 10 daqiqa muzlatkichga qo'ying — sharcha yasash osonlashadi.",
+               "Уберите тесто в холодильник на 10 минут — шарики будет легче катать."),
+            _s("12 ta yong'oqdek sharcha yasab, laganga 4 sm oraliqda tering.",
+               "Скатайте 12 шариков размером с грецкий орех и выложите на противень на расстоянии 4 см."),
+            _s("Har birini vilka bilan ikki yo'nalishda bosib, to'r naqsh tushiring.",
+               "Придавите каждый шарик вилкой крест-накрест, чтобы остался узор-сеточка."),
+            _s("175°C da 10–12 daqiqa pishiring: chetlari qizarsa — tayyor, o'rtasi hali yumshoq bo'ladi.",
+               "Выпекайте 10–12 минут при 175°C: края подрумянились — готово, середина ещё мягкая."),
+            _s("Laganning o'zida 15 daqiqa soviting — sovigach qotadi. Issiqligida ko'chirsangiz, sinib ketadi.",
+               "Остудите прямо на противне 15 минут — остыв, печенье затвердеет. Горячим не перекладывайте — "
+               "сломается."),
+        ],
+        "tip": _s("Pishirishdan oldin har biriga bir chimdim tuz sepsangiz, ta'm yanada boyiydi. Yopiq idishda "
+                  "5 kungacha saqlanadi.",
+                  "Если перед выпечкой посыпать каждое печенье крупинками соли, вкус станет ещё ярче. "
+                  "В закрытой банке хранится до 5 дней."),
+        "image_prompt": "peanut butter cookies with criss-cross fork pattern on parchment, jar of peanut paste",
+    },
+    {
+        "slug": "qovoq-krem-shorva",
+        "title": _s("Kokos slivkali qovoq krem-sho'rvasi", "Тыквенный крем-суп на кокосовых сливках"),
+        "intro": _s(
+            "Kuzgi qovoqdan bir kosa iliqlik: baxmaldek mayin, kokos slivkasi bilan qaymoqli, ustida qarsildoq "
+            "qovoq urug'i. Sut ham, un ham ishlatilmaydi.",
+            "Осенняя тыква в тарелке: бархатный суп, сливочный благодаря кокосовым сливкам, сверху хрустящие "
+            "тыквенные семечки. Ни молока, ни муки."),
+        "minutes": 40,
+        "servings": _s("4 kishilik", "4 порции"),
+        "per_serving": {"carbs": 13, "kcal": 210},
+        "ingredients": [
+            _i("200 ml", "200 мл", "Kokos slivkasi", "Кокосовые сливки", _COCONUT_CREAM,
+               "Sut va qaymoq o'rnida: sho'rvaga mayinlik va yengil kokos ta'mi beradi.",
+               "Вместо молока и сливок: бархатность и лёгкий кокосовый вкус."),
+            _i("1 osh q.", "1 ст.л.", "Kokos yog'i", "Кокосовое масло", _COCONUT_OIL,
+               "Piyoz va qovoqni shu yog'da qovursangiz, ta'm chuqurlashadi.",
+               "Если обжарить на нём лук и тыкву, вкус станет глубже."),
+            _i("2 osh q.", "2 ст.л.", "Qovoq urug'i (ustiga)", "Тыквенные семечки (сверху)", _PUMPKIN,
+               "Qarsillash qo'shadi, magniyga boy.", "Добавляют хруст, богаты магнием."),
+            _i("1 ch.q.", "1 ч.л.", "Himalay tuzi", "Гималайская соль", _SALT,
+               "Qovoqning tabiiy shirinligini ochadi.", "Подчёркивает природную сладость тыквы."),
+            _i("600 g", "600 г", "Qovoq (tozalangan)", "Тыква (очищенная)"),
+            _i("1 ta", "1 шт", "Piyoz", "Лук"),
+            _i("2 tishcha", "2 зубчика", "Sarimsoq", "Чеснок"),
+            _i("500 ml", "500 мл", "Issiq suv yoki tovuq sho'rvasi", "Горячая вода или куриный бульон"),
+            _i("bir chimdim", "по щепотке", "Muskat yong'og'i, qora qalampir", "Мускатный орех, чёрный перец"),
+            _i("bir necha barg", "несколько листиков", "Petrushka (bezash uchun)", "Петрушка (для подачи)"),
+        ],
+        "steps": [
+            _s("Qovoqni 2 sm kubik qilib, piyozni mayda to'g'rang, sarimsoqni maydalang.",
+               "Нарежьте тыкву кубиком 2 см, лук — мелко, чеснок измельчите."),
+            _s("Qozonda kokos yog'ini eritib, piyozni 4 daqiqa, yumshaguncha qovuring; sarimsoqni qo'shib yana "
+               "1 daqiqa qovuring.",
+               "Растопите кокосовое масло в кастрюле и обжарьте лук 4 минуты до мягкости, добавьте чеснок и "
+               "жарьте ещё минуту."),
+            _s("Qovoqni qo'shib 3 daqiqa aralashtirib turing. Issiq suv quyib, tuz soling va qopqoq ostida "
+               "20 daqiqa, qovoq butunlay yumshaguncha qaynating.",
+               "Добавьте тыкву и помешивайте 3 минуты. Влейте горячую воду, посолите и варите под крышкой "
+               "20 минут, пока тыква полностью не размякнет."),
+            _s("Olovdan olib, blender bilan silliq pyure qiling.",
+               "Снимите с огня и пробейте блендером до гладкости."),
+            _s("Slivkaning 2 osh qoshig'ini bezash uchun olib qo'ying, qolganini sho'rvaga quying. Muskat va "
+               "qalampir seping va qaynatmasdan 2–3 daqiqa isiting — qaynasa, slivka ajralib qoladi.",
+               "Отложите 2 ст. ложки сливок для подачи, остальные влейте в суп. Добавьте мускат и перец и "
+               "прогрейте 2–3 минуты, не доводя до кипения, — иначе сливки расслоятся."),
+            _s("Qovoq urug'ini quruq tovada 2–3 daqiqa, chirsillaguncha qovuring.",
+               "Обжарьте тыквенные семечки на сухой сковороде 2–3 минуты, пока не начнут потрескивать."),
+            _s("Sho'rvani kosalarga quyib, ustiga bir qoshiq slivka, qovoq urug'i va petrushka solib torting.",
+               "Разлейте суп по тарелкам, добавьте ложку сливок, семечки и петрушку."),
+        ],
+        "tip": _s("Ta'mi yanada boy bo'lsin desangiz, qovoqni avval pechda 200°C da 25 daqiqa pishirib oling — "
+                  "sho'rvaga karamelli ta'm qo'shiladi.",
+                  "Для более насыщенного вкуса сначала запеките тыкву 25 минут при 200°C — появится карамельная "
+                  "нотка."),
+        "image_prompt": "creamy pumpkin soup with a coconut cream swirl, toasted pumpkin seeds and parsley",
+    },
+    {
+        "slug": "grechka-lagmon",
+        "title": _s("Grechka vermishelidan PP lag'mon", "ПП-лагман с гречневой вермишелью"),
+        "intro": _s(
+            "Lag'monning hamma narsasi joyida: go'sht, bulg'or qalampiri, sabzavotli quyuq vaju. Faqat oq un "
+            "ugrasi o'rnida grechka unli vermishel — to'yimliroq va ta'mi lag'monga juda mos.",
+            "В лагмане всё на месте: мясо, болгарский перец, густая овощная подлива. Только вместо лапши из "
+            "белой муки — гречневая вермишель: сытнее, а вкус отлично подходит к лагману."),
+        "minutes": 50,
+        "servings": _s("4 kishilik", "4 порции"),
+        "per_serving": {"carbs": 42, "kcal": 450},
+        "ingredients": [
+            _i("200 g", "200 г", "Grechka unli vermishel", "Гречневая вермишель", _BUCKWHEAT_NOODLES,
+               "Oq un ugrasidan to'yimliroq; yong'oqsimon ta'mi vajuga juda mos.",
+               "Сытнее лапши из белой муки; ореховый вкус отлично сочетается с подливой."),
+            _i("2 osh q.", "2 ст.л.", "Zaytun yog'i (qovurish uchun)", "Оливковое масло (для жарки)", _OLIVE_FRY,
+               "Go'sht va sabzavotni baland olovda qovurishga chidamli.",
+               "Выдерживает жарку мяса и овощей на сильном огне."),
+            _i("1 ch.q.", "1 ч.л.", "Himalay tuzi", "Гималайская соль", _SALT,
+               "Ta'mni ochadi.", "Раскрывает вкус."),
+            _i("400 g", "400 г", "Mol go'shti (yog'siz)", "Постная говядина"),
+            _i("1 ta", "1 шт", "Piyoz", "Лук"),
+            _i("1 ta kichik", "1 маленькая", "Sabzi", "Морковь"),
+            _i("2 ta", "2 шт", "Bulg'or qalampiri (qizil va yashil)", "Болгарский перец (красный и зелёный)"),
+            _i("100 g", "100 г", "Ko'k turp", "Зелёная редька"),
+            _i("2 ta", "2 шт", "Pomidor", "Помидоры"),
+            _i("1 osh q.", "1 ст.л.", "Tomat pastasi", "Томатная паста"),
+            _i("3 tishcha", "3 зубчика", "Sarimsoq", "Чеснок"),
+            _i("400 ml", "400 мл", "Issiq suv", "Горячая вода"),
+            _i("1 ch.q.", "1 ч.л.", "Zira, qora qalampir", "Зира, чёрный перец"),
+            _i("1/2 bog'", "1/2 пучка", "Kashnich", "Кинза"),
+        ],
+        "steps": [
+            _s("Go'shtni 4 sm uzunlikda somoncha qilib to'g'rang. Piyoz, qalampir, sabzi va turpni ham somoncha, "
+               "pomidorni kubik qilib to'g'rang.",
+               "Нарежьте мясо соломкой длиной 4 см. Лук, перец, морковь и редьку — тоже соломкой, помидоры — кубиком."),
+            _s("Qozonda yog'ni qizdirib, go'shtni baland olovda 5–6 daqiqa qovuring, keyin piyozni qo'shib yana "
+               "3 daqiqa qovuring.",
+               "Разогрейте масло в казане и обжарьте мясо на сильном огне 5–6 минут, затем добавьте лук и жарьте "
+               "ещё 3 минуты."),
+            _s("Sabzi, turp va qalampirni qo'shib 5 daqiqa, so'ng pomidor, tomat pastasi va maydalangan "
+               "sarimsoqni qo'shib yana 3 daqiqa qovuring.",
+               "Добавьте морковь, редьку и перец — на 5 минут, затем помидоры, томатную пасту и измельчённый "
+               "чеснок — ещё на 3 минуты."),
+            _s("Tuz, zira va qalampir seping, issiq suv quyib, qopqoq ostida past olovda 20 daqiqa dimlang — "
+               "quyuq vaju tayyor.",
+               "Посолите, добавьте зиру и перец, влейте горячую воду и тушите под крышкой на слабом огне "
+               "20 минут — густая подлива готова."),
+            _s("Shu vaqtda vermishelni qaynab turgan tuzli suvda qadoqda yozilganidan 1 daqiqa kam qaynating. "
+               "Suvini to'kib, sovuq suvda chaying — bir-biriga yopishmaydi.",
+               "Тем временем отварите вермишель в кипящей подсоленной воде на минуту меньше, чем указано на "
+               "упаковке. Откиньте и промойте холодной водой — не слипнется."),
+            _s("Vermishelni chuqur kosalarga solib, ustidan issiq vaju quying va to'g'ralgan kashnich seping.",
+               "Разложите вермишель по глубоким пиалам, залейте горячей подливой и посыпьте рубленой кинзой."),
+        ],
+        "tip": _s("Vaju muzlatkichda 2 kun turadi: bugun lag'mon, ertasiga xuddi shu vaju bilan qovurma lag'mon "
+                  "qiling.",
+                  "Подлива хранится в холодильнике 2 дня: сегодня лагман, завтра с той же подливой — жареный "
+                  "лагман."),
+        "image_prompt": "lagman with buckwheat vermicelli in a deep bowl, beef, bell pepper and tomato sauce, coriander",
+    },
+    {
+        "slug": "olmali-sharlotka",
+        "title": _s("Suli unidan olmali PP sharlotka", "ПП-шарлотка с яблоками на овсяной муке"),
+        "intro": _s(
+            "Bolalikdagi sharlotka — oq un va shakarsiz. Suli uni, olma va dolchin hidi: choyga bir bo'lak — "
+            "ko'ngil ham to'ladi, ratsion ham buzilmaydi.",
+            "Шарлотка из детства — без белой муки и сахара. Овсяная мука, яблоки и аромат корицы: кусочек к "
+            "чаю — и душа довольна, и рацион в порядке."),
+        "minutes": 60,
+        "servings": _s("8 bo'lak (22 sm qolip)", "8 кусков (форма 22 см)"),
+        "per_serving": {"carbs": 18, "kcal": 135},
+        "ingredients": [
+            _i("150 g", "150 г", "Suli (ovsyanka) uni", "Овсяная мука", _OAT_FLOUR,
+               "Oq un o'rnida: tolasi ko'proq, sharlotkaga yengil yong'oqsimon ta'm beradi.",
+               "Вместо белой муки: больше клетчатки и лёгкий ореховый вкус."),
+            _i("80 g", "80 г", "Eritritol", "Эритрит", _ERYTHRITOL,
+               "Shakar o'rnida: shirinlik beradi, kaloriyasi deyarli yo'q.",
+               "Вместо сахара: сладость почти без калорий."),
+            _i("1 ch.q.", "1 ч.л.", "Dolchin", "Корица", _CINNAMON,
+               "Olmaning eng yaxshi hamrohi — shirinlikni kuchaytiradi.",
+               "Лучшая пара для яблок — усиливает ощущение сладости."),
+            _i("3 ta", "3 шт", "Tuxum", "Яйца"),
+            _i("3 ta (450 g)", "3 шт (450 г)", "Nordonroq olma", "Кисловатые яблоки"),
+            _i("1 ch.q.", "1 ч.л.", "Pishirish kukuni (razrixlitel)", "Разрыхлитель"),
+            _i("1 osh q.", "1 ст.л.", "Limon sharbati", "Лимонный сок"),
+            _i("5 g", "5 г", "Sariyog' (qolip uchun)", "Сливочное масло (для формы)"),
+        ],
+        "steps": [
+            _s("Pechni 180°C ga qizdiring. 22 sm li qolipni sariyog' bilan yog'lab, tubiga pergament to'shang.",
+               "Разогрейте духовку до 180°C. Смажьте форму 22 см маслом и застелите дно пергаментом."),
+            _s("Olmani urug'idan tozalab, yupqa bo'laklarga to'g'rang va limon sharbati hamda yarim choy qoshiq "
+               "dolchin bilan aralashtiring — qoraymaydi.",
+               "Очистите яблоки от семян, нарежьте тонкими дольками и смешайте с лимонным соком и половиной ложки "
+               "корицы — не потемнеют."),
+            _s("Tuxum va eritritolni mikserda 5–7 daqiqa, hajmi 2–3 baravar oshib, oqarib ko'pirguncha uring.",
+               "Взбейте яйца с эритритом миксером 5–7 минут, пока масса не посветлеет и не увеличится в 2–3 раза."),
+            _s("Suli uni, pishirish kukuni va qolgan dolchinni elab qo'shing va kurakcha bilan pastdan yuqoriga "
+               "ehtiyotkorlik bilan aralashtiring — ko'pik o'tirib qolmasin.",
+               "Просейте овсяную муку, разрыхлитель и оставшуюся корицу и аккуратно вмешайте лопаткой снизу вверх, "
+               "чтобы масса не осела."),
+            _s("Olmaning yarmini qolipga tering, ustidan xamirni quying va qolgan olmani ustiga tering.",
+               "Выложите половину яблок в форму, залейте тестом, сверху выложите оставшиеся яблоки."),
+            _s("180°C da 35–40 daqiqa pishiring; dastlabki 25 daqiqada pech eshigini ochmang. Yog'och cho'p quruq "
+               "chiqsa — tayyor.",
+               "Выпекайте 35–40 минут при 180°C; первые 25 минут не открывайте духовку. Сухая шпажка — готово."),
+            _s("Qolipda 15 daqiqa soviting, keyin chiqarib, 8 bo'lakka kesing.",
+               "Остудите в форме 15 минут, затем достаньте и нарежьте на 8 кусков."),
+        ],
+        "tip": _s("Olmaning bir qismini nok bilan almashtirsangiz, ta'mi yanada yumshoq bo'ladi. Sharlotka "
+                  "ertasiga yanada nam va xushbo'y bo'ladi.",
+                  "Замените часть яблок грушей — вкус станет мягче. На следующий день шарлотка ещё влажнее и "
+                  "ароматнее."),
+        "image_prompt": "apple charlotte cake made with oat flour, apple slices on top, cinnamon, one slice cut out, tea",
+    },
+    {
+        "slug": "bulgur-salat",
+        "title": _s("Bulgurli ko'katli PP salat", "ПП-салат с булгуром и зеленью"),
+        "intro": _s(
+            "Yengil, yangi va to'yimli: bulgur, pomidor, bodring va ko'p ko'kat, ustidan limon va zaytun yog'i. "
+            "Tushlikka alohida taom yoki go'shtga garnir.",
+            "Лёгкий, свежий и сытный: булгур, помидоры, огурцы и много зелени, заправка из лимона и оливкового "
+            "масла. Отдельное блюдо на обед или гарнир к мясу."),
+        "minutes": 35,
+        "servings": _s("4 kishilik", "4 порции"),
+        "per_serving": {"carbs": 24, "kcal": 225},
+        "ingredients": [
+            _i("120 g", "120 г", "Bulgur", "Булгур", _BULGUR,
+               "Qaynatish shart emas — qaynoq suvda damlanadi; oddiy guruchdan tolaga boy.",
+               "Варить не нужно — достаточно запарить кипятком; клетчатки больше, чем в рисе."),
+            _i("3 osh q.", "3 ст.л.", "Zaytun yog'i (sovuq siqim)", "Оливковое масло (холодного отжима)", _OLIVE,
+               "Sousning asosi: yangi, yengil ta'm.", "Основа заправки: свежий, мягкий вкус."),
+            _i("1 ch.q.", "1 ч.л.", "Himalay tuzi", "Гималайская соль", _SALT,
+               "Sabzavot ta'mini ochadi.", "Раскрывает вкус овощей."),
+            _i("200 ml", "200 мл", "Qaynoq suv", "Кипяток"),
+            _i("3 ta (300 g)", "3 шт (300 г)", "Pomidor", "Помидоры"),
+            _i("2 ta (200 g)", "2 шт (200 г)", "Bodring", "Огурцы"),
+            _i("1 bog'", "1 пучок", "Petrushka", "Петрушка"),
+            _i("1/2 bog'", "1/2 пучка", "Yalpiz", "Мята"),
+            _i("3–4 dona", "3–4 шт", "Ko'k piyoz", "Зелёный лук"),
+            _i("1 ta", "1 шт", "Limon", "Лимон"),
+            _i("bir chimdim", "щепотка", "Qora qalampir", "Чёрный перец"),
+        ],
+        "steps": [
+            _s("Bulgurni yuvib idishga soling, yarim choy qoshiq tuz seping va 200 ml qaynoq suv quying. Yopib, "
+               "20 daqiqa damlang.",
+               "Промойте булгур, выложите в миску, добавьте половину ложки соли и залейте 200 мл кипятка. Накройте "
+               "и оставьте на 20 минут."),
+            _s("Shu vaqtda pomidor va bodringni 0,5 sm kubik qilib to'g'rang; pomidorning ortiqcha suvini to'kib "
+               "tashlang.",
+               "Тем временем нарежьте помидоры и огурцы кубиком 0,5 см; лишний сок помидоров слейте."),
+            _s("Petrushka, yalpiz va ko'k piyozni juda mayda to'g'rang — bu salatda ko'kat bulgurdan ko'p bo'ladi.",
+               "Очень мелко нарежьте петрушку, мяту и зелёный лук — зелени в этом салате больше, чем булгура."),
+            _s("Sous: limon sharbati, zaytun yog'i, qolgan tuz va qora qalampirni aralashtiring.",
+               "Заправка: смешайте лимонный сок, оливковое масло, оставшуюся соль и чёрный перец."),
+            _s("Damlangan bulgurni vilka bilan aralashtirib, donalarini ajrating va to'liq soviting.",
+               "Разрыхлите запаренный булгур вилкой и полностью остудите."),
+            _s("Bulgur, sabzavot va ko'katni aralashtiring, sousni quying va 10 daqiqa tindirib, limon bo'lagi "
+               "bilan torting.",
+               "Смешайте булгур, овощи и зелень, полейте заправкой, дайте постоять 10 минут и подавайте с долькой "
+               "лимона."),
+        ],
+        "tip": _s("Salatni oldindan tayyorlasangiz, pomidorni tortishdan oldin qo'shing — aks holda suv chiqaradi. "
+                  "Go'sht yoki baliq bilan to'liq tushlik bo'ladi.",
+                  "Если готовите заранее, помидоры добавьте перед подачей — иначе дадут сок. С мясом или рыбой — "
+                  "полноценный обед."),
+        "image_prompt": "bulgur salad with lots of chopped parsley, mint, tomato and cucumber, lemon and olive oil",
+    },
+    {
+        "slug": "grechka-blinchik",
+        "title": _s("Grechka unidan tvorogli blinchiklar", "Гречневые блинчики с творогом"),
+        "intro": _s(
+            "Yupqa, egiluvchan va yong'oqsimon ta'mli blinchiklar — bug'doy unisiz. Ichida vanilli tvorog: "
+            "nonushtaga ham, choyga ham. Glyutensiz.",
+            "Тонкие, эластичные блинчики с ореховым вкусом — без пшеничной муки. Внутри ванильный творог: и на "
+            "завтрак, и к чаю. Без глютена."),
+        "minutes": 45,
+        "servings": _s("4 kishilik (12 dona)", "4 порции (12 штук)"),
+        "per_serving": {"carbs": 25, "kcal": 375},
+        "ingredients": [
+            _i("120 g", "120 г", "Grechka uni (oddiy yoki yashil)", "Гречневая мука (обычная или зелёная)",
+               _BUCKWHEAT_FLOUR,
+               "Glyutensiz va tolaga boy; blinchikka chiroyli rang va yong'oqsimon ta'm beradi.",
+               "Без глютена и с клетчаткой; красивый цвет и ореховый вкус."),
+            _i("1–2 ch.q. (ta'bga ko'ra)", "1–2 ч.л. (по вкусу)", "Steviya", "Стевия", _STEVIA,
+               "Tvorogni shirin qiladi: juda oz ketadi, kaloriyasi yo'q.",
+               "Подслащивает творог: нужно совсем немного, калорий нет."),
+            _i("1 osh q.", "1 ст.л.", "GHEE (tova uchun)", "Гхи (для сковороды)", _GHEE,
+               "Yupqa blinchik yopishmaydi va kuymaydi.", "Тонкие блинчики не прилипают и не подгорают."),
+            _i("2 ta", "2 шт", "Tuxum", "Яйца"),
+            _i("300 ml", "300 мл", "Sut", "Молоко"),
+            _i("1 osh q.", "1 ст.л.", "O'simlik yog'i (xamirga)", "Растительное масло (в тесто)"),
+            _i("bir chimdim", "щепотка", "Tuz", "Соль"),
+            _i("400 g", "400 г", "Tvorog (5–9%)", "Творог (5–9%)"),
+            _i("2 osh q.", "2 ст.л.", "Qaymoq (ichlikka va tortish uchun)", "Сметана (в начинку и для подачи)"),
+            _i("bir chimdim", "щепотка", "Vanilin", "Ванилин"),
+        ],
+        "steps": [
+            _s("Tuxum, tuz va sutning yarmini venchik bilan chayqating, grechka unini qo'shib, silliq bo'lguncha "
+               "aralashtiring.",
+               "Взбейте венчиком яйца, соль и половину молока, всыпьте гречневую муку и перемешайте до гладкости."),
+            _s("Qolgan sut va o'simlik yog'ini qo'shib aralashtiring. Xamirni 20 daqiqa dam bering — un suyuqlikni "
+               "shimib, blinchik yirtilmaydi.",
+               "Добавьте оставшееся молоко и масло, перемешайте. Дайте тесту отдохнуть 20 минут — мука впитает "
+               "жидкость, и блинчики не будут рваться."),
+            _s("Tovani o'rtacha olovda qizdirib, ozgina GHEE surting. Cho'mich bilan ozgina xamir quyib, tovani "
+               "aylantirib yupqa yoying.",
+               "Разогрейте сковороду на среднем огне и смажьте гхи. Налейте половником немного теста и, вращая "
+               "сковороду, распределите тонким слоем."),
+            _s("Har tomonini 1–1,5 daqiqadan pishiring. Birinchi blinchik yirtilsa, xamir quyuq: 2–3 osh qoshiq "
+               "sut qo'shing.",
+               "Жарьте по 1–1,5 минуты с каждой стороны. Если первый блинчик рвётся — тесто густое: добавьте "
+               "2–3 ст. ложки молока."),
+            _s("Ichlik: tvorog, 1 osh qoshiq qaymoq, steviya va vanilinni vilka bilan silliq bo'lguncha ezing.",
+               "Начинка: разомните вилкой творог с 1 ст. ложкой сметаны, стевией и ванилином до однородности."),
+            _s("Har bir blinchikka 1,5 osh qoshiq ichlik qo'yib, konvert qilib o'rang.",
+               "Положите на каждый блинчик 1,5 ст. ложки начинки и сверните конвертом."),
+            _s("Tovada har tomonini 1 daqiqadan qizartirib, qolgan qaymoq bilan issiq holda torting.",
+               "Подрумяньте на сковороде по минуте с каждой стороны и подавайте горячими с оставшейся сметаной."),
+        ],
+        "tip": _s("Shirin bo'lmagan varianti: tvorog o'rniga piyoz bilan qovurilgan qiyma — tushlikka to'yimli "
+                  "blinchik.",
+                  "Несладкий вариант: вместо творога — фарш, обжаренный с луком, — сытные блинчики на обед."),
+        "image_prompt": "thin buckwheat crepes folded into envelopes with cottage cheese filling, sour cream",
+    },
+    {
+        "slug": "zogora-non",
+        "title": _s("Makkajo'xori unidan zog'ora non", "Кукурузная лепёшка зогора-нон"),
+        "intro": _s(
+            "Buvilarimiz yopgan zog'ora non — glyutensiz va qatiq bilan yumshoq. Uyda pechda cho'yan tovada "
+            "pishadi, sho'rva va qatiqqa juda mos.",
+            "Зогора-нон, как у наших бабушек: без глютена и мягкая благодаря катыку. Печётся дома в духовке в "
+            "чугунной сковороде, отлично подходит к супу и катыку."),
+        "minutes": 50,
+        "servings": _s("8 bo'lak", "8 кусков"),
+        "per_serving": {"carbs": 24, "kcal": 180},
+        "ingredients": [
+            _i("250 g", "250 г", "Makkajo'xori uni", "Кукурузная мука", _CORN_FLOUR,
+               "Zog'oraning asosi: glyutensiz, oltinrang va biroz shirinroq ta'm.",
+               "Основа зогоры: без глютена, золотистый цвет и сладковатый вкус."),
+            _i("2 osh q.", "2 ст.л.", "GHEE", "Гхи", _GHEE,
+               "Xamirga va tovaga: qobig'i qarsildoq, ta'mi qaymoqli bo'ladi.",
+               "В тесто и для сковороды: хрустящая корочка и сливочный вкус."),
+            _i("1 ch.q.", "1 ч.л.", "Himalay tuzi", "Гималайская соль", _SALT,
+               "Ta'mni ochadi.", "Раскрывает вкус."),
+            _i("300 ml + tortish uchun", "300 мл + для подачи", "Qatiq", "Катык"),
+            _i("2 ta", "2 шт", "Tuxum", "Яйца"),
+            _i("1/2 ch.q.", "1/2 ч.л.", "Soda", "Сода"),
+        ],
+        "steps": [
+            _s("Pechni 200°C ga qizdiring. 22–24 sm li cho'yan tova yoki qolipga 1 osh qoshiq GHEE surtib, pechga "
+               "qo'yib qizdiring.",
+               "Разогрейте духовку до 200°C. Смажьте чугунную сковороду или форму 22–24 см 1 ст. ложкой гхи и "
+               "поставьте в духовку прогреться."),
+            _s("Makkajo'xori uni, soda va tuzni aralashtiring.",
+               "Смешайте кукурузную муку, соду и соль."),
+            _s("Boshqa idishda 300 ml qatiq, tuxum va qolgan GHEE yog'ini (eritib) chayqating.",
+               "В другой миске взбейте 300 мл катыка, яйца и оставшееся растопленное гхи."),
+            _s("Ikkala aralashmani birlashtirib, quyuq qaymoqdek xamir bo'lguncha aralashtiring va 10 daqiqa "
+               "qoldiring — un namni shimadi.",
+               "Соедините обе смеси, перемешайте до густоты сметаны и оставьте на 10 минут — мука впитает влагу."),
+            _s("Qizigan tovaga xamirni quyib tekislang va ustini barmoq uchi bilan bosib, chuqurchalar qiling.",
+               "Вылейте тесто в горячую сковороду, разровняйте и сделайте кончиками пальцев ямочки."),
+            _s("200°C da 25–30 daqiqa, usti oltinrang bo'lib yorilguncha pishiring.",
+               "Выпекайте 25–30 минут при 200°C, пока верх не станет золотистым и не потрескается."),
+            _s("10 daqiqa tindirib, 8 bo'lakka kesing va qatiq bilan torting.",
+               "Дайте постоять 10 минут, нарежьте на 8 кусков и подавайте с катыком."),
+        ],
+        "tip": _s("Nonushtaga sho'r zog'ora: xamirga 2 osh qoshiq mayda to'g'ralgan ko'kat va bir chimdim qora "
+                  "sedana qo'shing. Ertasiga tovada ikki tomonini isitib olsangiz, yana yumshoq bo'ladi.",
+                  "Несладкая зогора к завтраку: добавьте в тесто 2 ст. ложки рубленой зелени и щепотку чёрного "
+                  "тмина. Назавтра прогрейте на сковороде с двух сторон — снова станет мягкой."),
+        "image_prompt": "uzbek cornbread zogora non in a cast iron skillet, golden cracked dimpled top, wedges, "
+                        "bowl of qatiq",
     },
 ]

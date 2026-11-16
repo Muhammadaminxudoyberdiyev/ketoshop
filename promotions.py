@@ -878,9 +878,12 @@ async def _showcase_tick(bot: Bot) -> None:
               for lang in ("uz", "uz_cyr", "ru")}
 
     sent = failed = 0
+    import push_cap
     for user_id in user_ids:
         lang = langs.get(user_id, "uz")
         text, keyboard = bodies.get(lang) or bodies["uz"]
+        if not await push_cap.claim(user_id, "aksiya"):
+            continue
         try:
             await bot.send_message(
                 user_id,

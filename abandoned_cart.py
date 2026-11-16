@@ -254,6 +254,10 @@ async def run_once(bot: Bot) -> dict:
                 continue
             text, markup, total = built
 
+            import push_cap
+            if not await push_cap.claim(uid, "savat"):
+                stats["skipped"] += 1
+                continue
             if not await database.record_cart_reminder(uid, stage, touched, total):
                 stats["skipped"] += 1            # another pass got here first
                 continue

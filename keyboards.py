@@ -26,6 +26,7 @@ BUYER_COMMANDS = [
     BotCommand(command="buyurtmalarim", description="📦 Mening buyurtmalarim"),
     BotCommand(command="kabinet", description="👤 Kabinetim (Keto balans, daraja)"),
     BotCommand(command="yordam", description="❓ Qo'llanma va yordam"),
+    BotCommand(command="malumotlarim", description="🔐 Ma'lumotlarim — ko'rish va o'chirish"),
 ]
 
 ADMIN_COMMANDS = [
@@ -52,6 +53,15 @@ ADMIN_COMMANDS = [
     BotCommand(command="sayt_havola", description="🔗 Sayt (do'kon) havolasi yasash — trafikni kuzatish"),
     BotCommand(command="sayt_havolalar", description="📊 Sayt havolalari: kim ochdi, kim sotib oldi"),
     BotCommand(command="reklama_token", description="🔑 Meta reklama tokeni"),
+    BotCommand(command="reklama_bog", description="🔗 Reklama kampaniyasi ↔ bot havolasi"),
+    BotCommand(command="izohlar", description="💬 Instagram/Facebook izohlari: javobsizlar, AI"),
+    BotCommand(command="izoh_hisobot", description="📋 AI bugun qayerda javob berdi, qaysilariga bera olmadi"),
+    BotCommand(command="kanal_ovoz", description="🗣 Kanal postlari jonli va har xil uzunlikda: holat, sinov"),
+    BotCommand(command="izoh_qayta", description="🔁 Bir oy oldingi izohlarga qayta yozish: holat, on/off"),
+    BotCommand(command="ig_direct", description="📩 Instagram Direct AI javoblari: holat, on/off, test"),
+    BotCommand(command="xabar_soni", description="📨 Userlarga kuniga nechta rejali xabar boryapti"),
+    BotCommand(command="fikr_sorash", description="🗣 2 kunda bir AI xaridorlardan fikr so'raydi: holat, namuna"),
+    BotCommand(command="izoh_solishtir", description="⚖️ GPT va Gemini javoblari yonma-yon (yuborilmaydi)"),
     BotCommand(command="leads", description="📋 Yangi leadlar"),
     BotCommand(command="ai_holat", description="🤖 AI sotuvchi: holat, yoqish/o'chirish, model"),
     BotCommand(command="ai_kalit", description="🔑 OpenAI (GPT) kaliti — serverga kirmasdan"),
@@ -72,6 +82,7 @@ ADMIN_COMMANDS = [
     BotCommand(command="keto_tushuntirish", description="🎁 Keto tushuntirish xabari (18.09 17:30)"),
     BotCommand(command="sayt", description="🌐 Boshqaruv paneli manzili"),
     BotCommand(command="keto_status", description="🎁 Keto dasturi holati"),
+    BotCommand(command="sayt_keto", description="⏱ Saytda faol vaqt uchun Keto: holat"),
     BotCommand(command="backup_now", description="💾 Bazadan nusxa olish"),
 ]
 
@@ -499,7 +510,7 @@ def order_ret_back(ret: str) -> str:
 def seller_order_keyboard(lang: str, order_id: int, status: str,
                            buyer_username: str | None = None,
                            is_admin: bool = False, ret: str = "",
-                           notify: bool = False) -> InlineKeyboardMarkup:
+                           notify: bool = False, source: str | None = None) -> InlineKeyboardMarkup:
     """Order card buttons. `ret` is the order_list_ret() suffix (or "");
     `notify` adds the order editor's «📨 Mijozga xabar berish» on top, right
     after a saved edit."""
@@ -535,8 +546,10 @@ def seller_order_keyboard(lang: str, order_id: int, status: str,
     buttons.append([
         InlineKeyboardButton(text=get_text("btn_message_client", lang), callback_data=f"msgclient:{order_id}{ret}"),
     ])
-    # Admin-only line editor (handlers/order_edit.py) — until the box ships.
-    if is_admin and status in ("pending", "confirmed", "preparing", "ready"):
+    # Admin-only line editor (handlers/order_edit.py) — until the box ships;
+    # a manual order (`source`) until it is cancelled, B2B never.
+    from database import order_editable
+    if is_admin and order_editable(status, source):
         buttons.append([
             InlineKeyboardButton(text=get_text("btn_edit_order", lang), callback_data=f"oedit:{order_id}{ret}"),
         ])
@@ -671,6 +684,7 @@ def admin_panel_keyboard(lang: str) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="👥 Foydalanuvchilar", callback_data="admin_menu:users"),
             InlineKeyboardButton(text="🚀 Marketing va Aksiya", callback_data="admin_menu:marketing")
         ],
+        [InlineKeyboardButton(text="📣 Reklama va havolalar", callback_data="admin_menu:ads")],
     ]
     # The browser panel (Kanban board, products, stats) — one tap from the
     # main admin menu instead of two levels down under Statistika. Skipped
@@ -686,6 +700,9 @@ def admin_panel_keyboard(lang: str) -> InlineKeyboardMarkup:
 def admin_stats_menu_keyboard(lang: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=get_text("btn_admin_website", lang), url=f"{WEBAPP_URL}/admin")],
+        # Meta kampaniyalari + botning o'z START hisobi (meta_ads / ad_campaigns).
+        # Not «(bugun)»: Meta's day runs 13:00–13:00 Tashkent; the report says which.
+        [InlineKeyboardButton(text="📣 Reklama natijalari", callback_data="ads:today")],
         [InlineKeyboardButton(text="📦 Mahsulot savdosi — 15/30 kun", callback_data="admin:product_sales")],
         [
             InlineKeyboardButton(text=get_text("btn_admin_stats", lang), callback_data="admin:stats"),
@@ -701,6 +718,27 @@ def admin_stats_menu_keyboard(lang: str) -> InlineKeyboardMarkup:
         ],
         [InlineKeyboardButton(text="🔙 Orqaga", callback_data="admin_panel")],
     ])
+
+def admin_ads_menu_keyboard(lang: str) -> InlineKeyboardMarkup:
+    """Every ad and tracked-link command as a button (owner, 2026-11-08:
+    "/reklama bunday yozishni bilmaydiganlar uchun admin panelda tushunarli
+    qilib tugmalar ham qo'sh"). Handlers: meta_ads (ads:*), shop_links
+    (shoplnk:*), ad_sources (adsrc:*), admin_ads_menu (adm_ads:*)."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📊 Bugun", callback_data="ads:today"),
+         InlineKeyboardButton(text="📊 Kecha", callback_data="ads:yesterday"),
+         InlineKeyboardButton(text="📊 7 kun", callback_data="ads:last_7d")],
+        [InlineKeyboardButton(text="🔍 Reklamalar holati (to'xtadimi, muammo bormi)", callback_data="adm_ads:holat")],
+        [InlineKeyboardButton(text="🔗 Kampaniya ↔ bot havolasi", callback_data="adm_ads:bog")],
+        [InlineKeyboardButton(text="🌐 Havolalar natijasi (kim keldi, kim oldi)", callback_data="shoplnk:30")],
+        [InlineKeyboardButton(text="➕ Yangi havola yasash", callback_data="adm_ads:newlink")],
+        [InlineKeyboardButton(text="📣 Facebook/Instagram manbalari (fb_…)", callback_data="adsrc:30")],
+        [InlineKeyboardButton(text="📋 Leadlar (forma to'ldirganlar)", callback_data="adm_ads:leads")],
+        [InlineKeyboardButton(text="💬 Instagram/Facebook izohlari", callback_data="mcs:show")],
+        [InlineKeyboardButton(text="🔑 Meta tokeni", callback_data="adm_ads:token")],
+        [InlineKeyboardButton(text="🔙 Orqaga", callback_data="admin_panel")],
+    ])
+
 
 def admin_products_menu_keyboard(lang: str) -> InlineKeyboardMarkup:
     rows = [

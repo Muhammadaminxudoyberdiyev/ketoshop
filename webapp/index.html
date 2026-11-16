@@ -136,7 +136,14 @@
     --dock-h: 64px;
     --dock-gap: 10px;
     --tab-bar-h: 64px;
-    --safe-b: env(safe-area-inset-bottom, 0px);
+    /* The bottom inset: the browser's, or what Telegram reports — Android's
+       WebView says 0 for env() even where the system bar or Telegram's own
+       bottom UI covers the page (telegram-web-app.js sets the --tg-* ones,
+       Bot API 8.0). Taken whichever is larger. */
+    --safe-b: max(env(safe-area-inset-bottom, 0px),
+                  calc(var(--tg-safe-area-inset-bottom, 0px) + var(--tg-content-safe-area-inset-bottom, 0px)));
+    /* Room above the dock for what floats there (🔇, the YANGI5 timer). */
+    --float-h: 52px;
     color-scheme: light;
   }
 
@@ -242,7 +249,11 @@
     -webkit-user-select: none;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
-    padding-bottom: calc(var(--dock-h) + var(--dock-gap) * 2 + var(--safe-b) + 8px);
+    /* The page ends above the dock AND the buttons floating over it, so the
+       last row — price included — can always be scrolled into view (owner,
+       2026-11-08: a buyer's screenshot of «Tuz», the last home row, with the
+       names and prices under the dock). */
+    padding-bottom: calc(var(--dock-h) + var(--dock-gap) * 2 + var(--safe-b) + var(--float-h) + 8px);
     overflow-x: hidden;
   }
   input, textarea { -webkit-user-select: text; user-select: text; }
@@ -904,6 +915,46 @@
   .card-quick-add:active { transform: scale(.95); }
   .card-quick-add.done { background: var(--surface-hi); color: var(--text); }
 
+  /* Catalog cards (2026-11-12: people scroll, ~30% open a product): a
+     bigger price, «+ Savatga» right on the card — a 40 px target on the
+     card's bottom line — and «🔥 Ko'p olinadi» on the bestsellers. The rest
+     of the card still opens the product. */
+  .product-card .card-price { font-size: 16.5px; letter-spacing: -.01em; }
+  .product-card .card-foot { margin-top: auto; padding-top: 10px; }
+  .card-add {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 40px;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--btn-grad);
+    color: var(--btn-text);
+    font: 800 13.5px/1.1 var(--font-body);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: transform .3s var(--ease-spring), background-color .2s;
+  }
+  .card-add:active { transform: scale(.95); }
+  .card-add.done { background: var(--surface-hi); color: var(--text); }
+  .card-add:disabled { opacity: .7; }
+  .card-hot {
+    align-self: flex-start;
+    max-width: calc(100% - 12px);
+    margin-top: 9px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: var(--berry-soft);
+    color: var(--berry);
+    font: 800 11px/1.3 var(--font-body);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .card-hot + .card-name { margin-top: 5px; }
+
   /* ── Podiums ───────────────────────────────────────────────────────────
      Real pedestals under the tiles. The product podium only raises the
      middle slot (those three are not ranked — see buildPodium), so its two
@@ -1171,29 +1222,16 @@
 
   /* ── Catalog first (2026-11-04): category tiles, the view switch, and
      the three-column and list views of the product grid ─────────────── */
-  /* Kategoriyalar karuseli (owner, 2026-11-07): the tiles drift slowly
-     on their own and loop (TileDrift) — the set of two-tile columns is
-     drawn twice, side by side. No scroll-snap: it would pull the slow
-     drift back to the nearest tile. --ct-col is 30% of the row (96–150 px),
-     set from JS because a set sizes to its own content. */
+  /* Kategoriyalar — pastga qarab (owner, 2026-11-08: "kategoriyalarni
+     karuselini o'chir va ularni yonga emas pastga qarab tahla"): every tile
+     is on the page at once, three across on a phone and more on a wider
+     screen; nothing scrolls sideways or moves by itself. */
   .cat-tiles {
-    display: flex;
-    gap: 10px;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    padding: 6px 14px 12px;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-  }
-  .cat-tiles .ct-set {
-    flex: none;
     display: grid;
-    grid-auto-flow: column;
-    grid-template-rows: repeat(2, auto);
-    grid-auto-columns: var(--ct-col, 124px);
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
     gap: 10px;
+    padding: 6px 14px 12px;
   }
-  .cat-tiles::-webkit-scrollbar { display: none; }
   .cat-tiles[hidden] { display: none; }
   .cat-tile {
     --cc: var(--c-orange);
@@ -1339,6 +1377,16 @@
   #product-grid.pg-list .card-img-wrap::after { width: 24px; height: 24px; right: 5px; bottom: 5px; background-size: 11px; }
   #product-grid.pg-list .discount-corner { font-size: 10px; padding: 3px 7px; top: 5px; left: 5px; }
   #product-grid.pg-list .disc-until-corner { display: none; }
+  /* Price and «+ Savatga» in the small and the list views. */
+  #product-grid.pg-3 .product-card .card-price { font-size: 14px; }
+  #product-grid.pg-3 .card-foot { padding-top: 8px; }
+  #product-grid.pg-3 .card-add { padding: 6px 4px; font-size: 12px; }
+  #product-grid.pg-3 .card-hot { max-width: calc(100% - 6px); margin-top: 6px; padding: 2px 6px; font-size: 9.5px; }
+  #product-grid.pg-3 .card-hot + .card-name { margin-top: 4px; }
+  #product-grid.pg-list .product-card .card-price { font-size: 17px; }
+  #product-grid.pg-list .card-hot { justify-self: start; max-width: 100%; margin-top: 2px; }
+  #product-grid.pg-list .card-foot { align-self: end; justify-self: start; padding-top: 8px; }
+  #product-grid.pg-list .card-add { width: auto; min-width: 136px; padding: 6px 18px; }
 
   /* ── Page headers ──────────────────────────────────────────────────────
      Big display titles that end in an accent full stop. */
@@ -1829,6 +1877,23 @@
     cursor: pointer;
   }
   .checkout-error { margin-top: 6px; font-size: 12.5px; font-weight: 600; color: var(--berry); }
+  /* Under the phone field: "✓ +998 90 123 45 67" once the number reads
+     right, or what is wrong with it — right where the buyer is typing. */
+  .phone-hint { margin-top: 6px; font-size: 12.5px; line-height: 1.4; color: var(--hint); }
+  .phone-hint:empty { display: none; }
+  .phone-hint.ok { color: var(--leaf-deep); font-weight: 600; }
+  .phone-hint.bad { color: var(--berry); font-weight: 600; }
+  #inp-phone.bad { border-color: var(--berry); }
+  /* A box that needs fixing comes to the top, so the keyboard that opens
+     under it can't cover the field or its message. */
+  .checkout-form .form-group { scroll-margin-top: 12px; }
+  /* Search that found nothing: what to do next, not just a sad face. */
+  .search-miss-note { margin-top: 10px; font-size: 13.5px; line-height: 1.45; }
+  .search-miss-btn {
+    margin-top: 14px; padding: 10px 18px; border-radius: 999px;
+    border: 1px solid var(--hairline); background: var(--surface); color: var(--link);
+    font: 600 14px var(--font-body); cursor: pointer;
+  }
 
   /* ── Map picker ────────────────────────────────────────────────────── */
   .map-modal {
@@ -2289,6 +2354,57 @@
     to { opacity: 1; transform: none; }
   }
   @media (prefers-reduced-motion: reduce) { .detail-soon { animation: none; } }
+  /* To'plam (set) sheet: the parts, one per line; a missing one is marked. */
+  .detail-set { margin-top: 16px; }
+  .detail-set[hidden] { display: none; }
+  .dset-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .dset-head b { font: 800 16px var(--font-display); letter-spacing: -.01em; color: var(--text); }
+  .dset-head span { font-size: 12.5px; color: var(--hint); white-space: nowrap; }
+  .dset-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .dset-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px 8px 8px;
+    border-radius: 18px 24px 16px 26px / 22px 16px 24px 18px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+  }
+  .dset-item img, .dset-item .dset-noimg {
+    width: 46px;
+    height: 46px;
+    flex-shrink: 0;
+    border-radius: var(--blob-d);
+    object-fit: cover;
+    background: var(--surface-hi);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .dset-item.is-out img, .dset-item.is-out .dset-noimg { filter: grayscale(.55); opacity: .62; }
+  .dset-text { flex: 1; min-width: 0; }
+  .dset-name { font-size: 13.5px; font-weight: 700; line-height: 1.3; color: var(--text); }
+  .dset-meta { margin-top: 2px; font-size: 12.5px; color: var(--hint); }
+  .dset-out {
+    flex-shrink: 0;
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: var(--berry-soft);
+    color: var(--berry);
+    font-size: 11.5px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .dset-save {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 16px;
+    background: var(--leaf-soft);
+    color: var(--leaf-deep);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.4;
+  }
   .detail-footer.is-out .qty-controls { display: none; }
   .modal .detail-rating { margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--text); }
   .modal .detail-rating:empty, .modal .detail-seller:empty { display: none; }
@@ -2547,17 +2663,40 @@
   }
   #page-order-success .checkout-submit-btn { margin-left: auto; margin-right: auto; }
 
-  .scroll-loader { padding: 16px; text-align: center; font-size: 13px; color: var(--hint); }
-  .scroll-loader .spinner {
-    display: inline-block;
-    width: 22px;
-    height: 22px;
-    border: 2.5px solid var(--surface-hi);
-    border-top-color: var(--link);
-    border-radius: 50%;
-    animation: spin .7s linear infinite;
-    vertical-align: middle;
+  /* Under the catalog grid: "more follow" with a button, or "that's all". */
+  .catalog-more { padding: 6px 14px 22px; text-align: center; }
+  /* A category's heading inside «Hammasi» / «Chegirmalar» — a full row of
+     the grid in every view (2 / 3 columns, list). Tapping opens the category. */
+  #product-grid .catalog-group-head {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    width: 100%;
+    margin: 14px 0 0;
+    padding: 0 2px;
+    border: 0;
+    background: none;
+    color: var(--text);
+    text-align: left;
+    font: 800 17px/1.25 var(--font-display);
+    cursor: pointer;
   }
+  #product-grid .catalog-group-head:first-child { margin-top: 0; }
+  #product-grid .catalog-group-head .cnt { font: 700 13px var(--font-body); color: var(--hint); white-space: nowrap; }
+  #product-grid .catalog-group-head .go { margin-left: auto; font: 700 13px var(--font-body); color: var(--link); white-space: nowrap; }
+  .catalog-more-btn {
+    width: 100%;
+    max-width: 420px;
+    border: 1.5px solid var(--hairline);
+    border-radius: 16px;
+    padding: 13px;
+    background: var(--surface);
+    color: var(--text);
+    font: 800 15px var(--font-body);
+    cursor: pointer;
+  }
+  .catalog-end { font-size: 13px; font-weight: 700; color: var(--hint); }
   @keyframes spin { to { transform: rotate(360deg); } }
   .skeleton { position: relative; overflow: hidden; border-radius: 16px; background: var(--surface-hi); }
 
@@ -3220,6 +3359,53 @@
   .rm-prod-price { font-size: 13px; font-weight: 800; color: var(--link); }
   .rm-prod-out { font-size: 12px; font-weight: 700; color: var(--berry); }
   .rm-why { margin-top: 6px; font-size: 12px; line-height: 1.45; color: var(--hint); }
+  .rm-prod-text { flex: 1; min-width: 0; }
+  .rm-go { color: var(--hint); font-weight: 800; }
+  .rm-prod-add {
+    flex-shrink: 0;
+    min-height: 40px;
+    padding: 6px 12px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--btn-grad);
+    color: var(--btn-text);
+    font: 800 12.5px/1.1 var(--font-body);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: transform .3s var(--ease-spring);
+  }
+  .rm-prod-add:active { transform: scale(.95); }
+  .rm-prod-add.done { background: var(--surface); color: var(--text); }
+  /* The add-all button in the recipe itself: under the ingredients and
+     after the steps (2026-11-12). */
+  .rm-cta {
+    margin-top: 14px;
+    padding: 14px;
+    border-radius: 22px 28px 20px 30px / 26px 20px 28px 22px;
+    background: var(--t-leaf);
+    border: 1px solid var(--hairline);
+    text-align: center;
+  }
+  .rm-cta-title { margin-bottom: 10px; font: 800 15px/1.35 var(--font-display); color: var(--text); text-wrap: balance; }
+  .rm-cta-btn {
+    display: block;
+    width: 100%;
+    min-height: 52px;
+    padding: 12px 16px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--leaf-deep);
+    color: #fff;
+    font: 800 15.5px/1.2 var(--font-body);
+    cursor: pointer;
+    transition: transform .3s var(--ease-spring);
+  }
+  .rm-cta-btn:active { transform: scale(.97); }
+  .rm-cta-btn:disabled { opacity: .6; }
+  .rm-cta-btn.go { background: var(--text); color: var(--bg); }
+  .rm-cta-note { margin-top: 8px; font-size: 12.5px; color: var(--hint); }
+  .rm-cta-note b { color: var(--text); }
+  :root[data-site-theme="night"] .rm-cta-btn:not(.go) { background: #5E8358; }
   /* Pinned to the bottom of the sheet while the recipe scrolls under it. */
   .rm-cart-bar {
     position: sticky;
@@ -3232,7 +3418,10 @@
     background: var(--bg);
     border-top: 1px solid var(--hairline);
     box-shadow: 0 -10px 24px -16px rgba(0,0,0,.35);
+    transition: opacity .25s var(--ease), visibility .25s;
   }
+  .rm-cart-bar.is-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+  @media (prefers-reduced-motion: reduce) { .rm-cart-bar { transition: none; } }
   .rm-cart-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; color: var(--text); }
   .rm-cart-info b { font-size: 12.5px; font-weight: 700; }
   .rm-cart-total { font: 800 17px/1.2 var(--font-display); letter-spacing: -.01em; }
@@ -3440,6 +3629,582 @@
     cursor: pointer;
   }
   .welcome-timer .wt-time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* Pastki menyu ko'rsatmasi (DockHint): a hand taps each dock button. */
+  .dock-hand {
+    position: fixed;
+    z-index: 10001;
+    left: 50%;
+    top: 100%;
+    font-size: 34px;
+    line-height: 1;
+    pointer-events: none;
+    opacity: 0;
+    filter: drop-shadow(0 3px 6px rgba(0, 0, 0, .3));
+    transition: left .7s var(--ease), top .7s var(--ease), opacity .3s var(--ease), transform .2s var(--ease);
+  }
+  .dock-hand.on { opacity: 1; }
+  .dock-hand.press { transform: scale(.8) translateY(-4px); }
+  .dock-tip {
+    position: fixed;
+    z-index: 10001;
+    pointer-events: none;
+    padding: 7px 13px;
+    border-radius: 12px;
+    background: var(--ink, #2B2116);
+    color: #fff;
+    font: 800 14px/1.2 var(--font-body);
+    white-space: nowrap;
+    transform: translate(-50%, -100%);
+    opacity: 0;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .25);
+    transition: opacity .3s var(--ease), left .7s var(--ease);
+  }
+  .dock-tip.on { opacity: 1; }
+  .tab-item.dock-wiggle svg { animation: dock-wiggle .9s ease; }
+  @keyframes dock-wiggle {
+    0%, 100% { transform: rotate(0) scale(1); }
+    20% { transform: rotate(-14deg) scale(1.2); }
+    40% { transform: rotate(12deg) scale(1.2); }
+    60% { transform: rotate(-8deg) scale(1.1); }
+    80% { transform: rotate(5deg) scale(1.04); }
+  }
+  .dock-ripple {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 46px;
+    height: 46px;
+    margin: -23px 0 0 -23px;
+    border-radius: 50%;
+    background: var(--c-orange, #E8892E);
+    opacity: .45;
+    transform: scale(.3);
+    pointer-events: none;
+    animation: dock-ripple .9s ease-out forwards;
+  }
+  @keyframes dock-ripple { to { transform: scale(1.6); opacity: 0; } }
+
+  /* Saytda faol vaqt uchun Keto (owner, 2026-11-15): the celebration at
+     every reward (YANGI5's look), the "still there?" card, the next-gift
+     pill and the profile card. `.still` = reduced motion: nothing moves. */
+  #keto-party {
+    position: fixed;
+    inset: 0;
+    z-index: 99990;
+    display: flex;
+    overflow-y: auto;
+    padding: 20px 16px;
+    background: radial-gradient(circle at 50% 35%, rgba(43, 22, 46, .82), rgba(12, 8, 20, .94));
+    animation: wp-in .35s var(--ease) both;
+  }
+  #keto-party canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  #keto-party .kp-card {
+    position: relative;
+    margin: auto;
+    width: 100%;
+    max-width: 360px;
+    padding: 24px 20px 16px;
+    border-radius: 28px;
+    background: var(--surface, #fff);
+    color: var(--text, #2B2116);
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .45);
+    animation: wp-pop .55s var(--ease-spring) .1s both;
+  }
+  #keto-party .kp-coin {
+    width: 74px;
+    height: 74px;
+    margin: 0 auto;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font: 900 32px/1 var(--font-display);
+    color: #7A4A00;
+    background: radial-gradient(circle at 35% 30%, #FFF6C8, #FFC94D 45%, #E8A317 100%);
+    box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .12), 0 6px 18px rgba(232, 163, 23, .45);
+    animation: kp-coin 1.1s var(--ease-spring) .15s both;
+  }
+  @keyframes kp-coin { from { opacity: 0; transform: rotateY(540deg) scale(.4); } to { opacity: 1; transform: none; } }
+  #keto-party h2 { margin: 12px 0 6px; font: 800 26px/1.15 var(--font-display); }
+  #keto-party .kp-why { margin: 0 0 12px; font-size: 14.5px; line-height: 1.45; color: var(--hint, #7A6A55); }
+  #keto-party .kp-balance {
+    display: inline-block;
+    margin: 0 0 14px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: rgba(255, 201, 77, .22);
+    font-size: 14px;
+    font-weight: 700;
+  }
+  #keto-party .kp-also { margin: 2px 0 8px; font-size: 14px; font-weight: 800; }
+  #keto-party .kp-yangi {
+    margin: 0 0 14px;
+    padding: 12px;
+    border-radius: 20px;
+    background: linear-gradient(115deg, #E5484D 0%, #F76B15 100%);
+    color: #fff;
+  }
+  #keto-party .kp-pct { display: block; font: 900 40px/1 var(--font-display); letter-spacing: -1px; }
+  #keto-party .kp-gift { display: block; margin-top: 4px; font: 700 14px/1.3 var(--font-body); }
+  #keto-party .kp-code {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 3px 12px;
+    border: 1.5px dashed rgba(255, 255, 255, .85);
+    border-radius: 999px;
+    font: 800 13px/1.4 var(--font-body);
+    letter-spacing: 1px;
+  }
+  #keto-party .kp-left { margin-top: 10px; font-size: 12.5px; font-weight: 700; opacity: .9; }
+  #keto-party .kp-clock { font: 900 32px/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
+  #keto-party .kp-note { margin: 6px 0 0; font-size: 12.5px; line-height: 1.4; opacity: .92; }
+  #keto-party .kp-next { margin: 0; font-size: 15px; font-weight: 800; }
+  #keto-party .kp-hint { margin: 3px 0 14px; font-size: 12.5px; line-height: 1.4; color: var(--hint, #7A6A55); }
+  #keto-party .kp-go {
+    width: 100%;
+    border: 0;
+    border-radius: 16px;
+    padding: 15px;
+    font: 800 16px var(--font-body);
+    background: var(--btn, #2E7D32);
+    color: var(--btn-text, #fff);
+    cursor: pointer;
+  }
+  .kp-more {
+    margin-top: 8px;
+    padding: 8px 12px;
+    border: 0;
+    background: none;
+    color: var(--hint, #7A6A55);
+    font: 700 13.5px var(--font-body);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+  .kp-details { margin-top: 4px; text-align: left; font-size: 13.5px; line-height: 1.5; }
+  .kp-details p { margin: 0 0 8px; }
+  .kp-details ul { margin: 0 0 8px; padding-left: 18px; }
+  .kp-details li { margin-bottom: 4px; }
+  #keto-party .kp-rain {
+    position: fixed;
+    top: -40px;
+    font-size: 26px;
+    pointer-events: none;
+    animation: kp-fall linear forwards;
+  }
+  @keyframes kp-fall { to { transform: translateY(115vh) rotate(320deg); } }
+  #keto-party.still, #keto-party.still .kp-card, #keto-party.still .kp-coin { animation: none; }
+  #keto-party.still .kp-rain { display: none; }
+  .st-check {
+    position: fixed;
+    z-index: 99980;
+    width: min(220px, calc(100% - 32px));
+    padding: 10px 14px;
+    border: 1.5px solid var(--btn, #2E7D32);
+    border-radius: 18px;
+    background: var(--surface, #fff);
+    color: var(--text, #2B2116);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, .22);
+    font: 800 15px/1.3 var(--font-body);
+    text-align: left;
+    cursor: pointer;
+  }
+  .st-check small { display: block; margin-top: 3px; font-size: 12px; font-weight: 500; color: var(--hint, #7A6A55); }
+  .st-pill {
+    position: fixed;
+    left: 50%;
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    z-index: 99970;
+    max-width: calc(100% - 32px);
+    padding: 9px 16px;
+    border-radius: 999px;
+    background: var(--surface, #fff);
+    color: var(--text, #2B2116);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .18);
+    font: 700 13.5px/1.3 var(--font-body);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -16px);
+    transition: opacity .3s, transform .3s;
+  }
+  .st-pill.on { opacity: 1; transform: translate(-50%, 0); }
+  #st-profile {
+    margin: 0 0 14px;
+    padding: 14px;
+    border-radius: 24px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    box-shadow: var(--shadow-1);
+  }
+  #st-profile:empty { display: none; }
+  #st-profile .st-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14.5px; font-weight: 700; }
+  #st-profile .st-bal { flex: none; padding: 4px 10px; border-radius: 999px; background: rgba(255, 201, 77, .22); font-size: 13px; }
+  #st-profile .st-bar { height: 8px; margin: 10px 0 8px; border-radius: 99px; background: var(--hairline, #E5DAC6); overflow: hidden; }
+  #st-profile .st-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #FFC94D, #E8A317); }
+  #st-profile .st-next { font-size: 14px; font-weight: 700; }
+  #st-profile .st-sub { margin-top: 2px; font-size: 12.5px; color: var(--hint, #7A6A55); }
+  #st-profile .kp-more { padding-left: 0; }
+  @media (prefers-reduced-motion: reduce) {
+    #keto-party, #keto-party .kp-card, #keto-party .kp-coin { animation: none; }
+    #keto-party .kp-rain { display: none; }
+    .st-pill { transition: none; }
+  }
+
+  /* YANGI5 tantanasi (owner, 2026-11-08): fireworks and the clock, once. */
+  #welcome-party {
+    position: fixed;
+    inset: 0;
+    z-index: 99990;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: radial-gradient(circle at 50% 35%, rgba(43, 22, 46, .82), rgba(12, 8, 20, .94));
+    animation: wp-in .35s var(--ease) both;
+  }
+  #welcome-party canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  #welcome-party .wp-card {
+    position: relative;
+    width: 100%;
+    max-width: 360px;
+    padding: 26px 22px 22px;
+    border-radius: 28px;
+    background: var(--surface, #fff);
+    color: var(--text, #2B2116);
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .45);
+    animation: wp-pop .55s var(--ease-spring) .1s both;
+  }
+  #welcome-party .wp-emoji { font-size: 54px; line-height: 1; }
+  #welcome-party h2 { margin: 10px 0 4px; font: 800 26px/1.15 var(--font-display); }
+  #welcome-party .wp-sub { margin: 0 0 16px; font-size: 14.5px; line-height: 1.45; color: var(--hint, #7A6A55); }
+  #welcome-party .wp-gift {
+    padding: 14px 12px;
+    border-radius: 20px;
+    background: linear-gradient(115deg, #E5484D 0%, #F76B15 100%);
+    color: #fff;
+  }
+  #welcome-party .wp-pct { display: block; font: 900 46px/1 var(--font-display); letter-spacing: -1px; }
+  #welcome-party .wp-gift-text { display: block; margin-top: 4px; font: 700 14px/1.3 var(--font-body); }
+  #welcome-party .wp-code {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 3px 12px;
+    border: 1.5px dashed rgba(255, 255, 255, .85);
+    border-radius: 999px;
+    font: 800 13px/1.4 var(--font-body);
+    letter-spacing: 1px;
+  }
+  #welcome-party .wp-left { margin: 16px 0 2px; font-size: 13px; font-weight: 700; color: var(--hint, #7A6A55); }
+  #welcome-party .wp-clock {
+    font: 900 40px/1.1 var(--font-display);
+    font-variant-numeric: tabular-nums;
+    color: #E5484D;
+  }
+  #welcome-party .wp-note { margin: 10px 0 16px; font-size: 13px; line-height: 1.45; color: var(--hint, #7A6A55); }
+  #welcome-party .wp-go {
+    width: 100%;
+    border: 0;
+    border-radius: 16px;
+    padding: 15px;
+    font: 800 16px var(--font-body);
+    background: var(--btn, #2E7D32);
+    color: var(--btn-text, #fff);
+    cursor: pointer;
+  }
+  @keyframes wp-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes wp-pop { from { opacity: 0; transform: scale(.7) translateY(20px); } to { opacity: 1; transform: none; } }
+
+  /* ── Yordamchi (owner, 2026-11-15): the AI helper's round button, its
+     typing introduction and the chat sheet (site_assistant.py). The button
+     takes the birdsong button's corner; birdsong moves left of it. ── */
+  .birdsong-btn { right: 80px; }
+  .asst-fab {
+    position: fixed;
+    right: 14px;
+    bottom: calc(var(--dock-h) + var(--dock-gap) * 2 + var(--safe-b) + 4px);
+    z-index: 9002;
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--pop);
+    color: var(--on-pop);
+    box-shadow: var(--shadow-pop), 0 10px 24px -10px rgba(0,0,0,.5);
+    cursor: pointer;
+    transition: transform .25s var(--ease), opacity .25s var(--ease);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .asst-fab svg { width: 27px; height: 27px; }
+  .asst-fab:active { transform: scale(.92); }
+  .asst-fab.hidden { opacity: 0; transform: scale(.6); pointer-events: none; }
+  .asst-fab-label {
+    position: absolute;
+    left: 50%;
+    bottom: -7px;
+    transform: translateX(-50%);
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--hairline);
+    font: 700 9.5px/1.35 var(--font-body);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .asst-fab .asst-dot {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: #2fbf71;
+    border: 2px solid var(--surface);
+  }
+  .asst-bubble {
+    position: fixed;
+    right: 14px;
+    bottom: calc(var(--dock-h) + var(--dock-gap) * 2 + var(--safe-b) + 72px);
+    z-index: 9003;
+    width: min(290px, calc(100% - 28px));
+    padding: 12px 34px 12px 14px;
+    border-radius: 18px 18px 6px 18px;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--hairline);
+    box-shadow: 0 14px 34px -14px rgba(0,0,0,.5);
+    font: 500 14px/1.45 var(--font-body);
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(8px) scale(.97);
+    transform-origin: 100% 100%;
+    transition: opacity .3s var(--ease), transform .3s var(--ease);
+  }
+  .asst-bubble.on { opacity: 1; transform: none; }
+  .asst-bubble b { font-weight: 800; }
+  .asst-bubble-x {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    width: 26px;
+    height: 26px;
+    border: 0;
+    background: none;
+    color: var(--hint);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .asst-typing { display: inline-flex; gap: 4px; align-items: center; height: 18px; }
+  .asst-typing i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--hint);
+    animation: asstDot 1.1s infinite ease-in-out;
+  }
+  .asst-typing i:nth-child(2) { animation-delay: .15s; }
+  .asst-typing i:nth-child(3) { animation-delay: .3s; }
+  @keyframes asstDot { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+  .asst-caret::after { content: '▍'; opacity: .55; animation: asstCaret 1s steps(2) infinite; }
+  @keyframes asstCaret { 50% { opacity: 0; } }
+
+  .modal.asst-sheet {
+    display: flex;
+    flex-direction: column;
+    height: min(88vh, 780px);
+    height: min(88dvh, 780px);
+    max-height: none;
+    overflow: hidden;
+  }
+  .asst-head {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 14px 12px;
+    border-bottom: 1px solid var(--hairline);
+    background: var(--glass);
+  }
+  .asst-head::before {
+    content: '';
+    position: absolute;
+    top: 7px;
+    left: 50%;
+    width: 40px;
+    height: 5px;
+    margin-left: -20px;
+    border-radius: 3px;
+    background: var(--hint);
+    opacity: .35;
+  }
+  .asst-ava {
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--pop);
+    color: var(--on-pop);
+  }
+  .asst-ava svg { width: 22px; height: 22px; }
+  .asst-titles { flex: 1; min-width: 0; }
+  .asst-title { font: 800 16px/1.2 var(--font-display, var(--font-body)); color: var(--text); }
+  .asst-sub { font: 500 12px/1.3 var(--font-body); color: var(--hint); }
+  .asst-close {
+    flex: none;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .asst-log {
+    flex: 1;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 14px 12px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .asst-msg {
+    max-width: 86%;
+    padding: 10px 13px;
+    border-radius: 18px;
+    font: 500 14.5px/1.45 var(--font-body);
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+  }
+  .asst-msg.bot { align-self: flex-start; background: var(--surface); color: var(--text); border: 1px solid var(--hairline); border-bottom-left-radius: 6px; }
+  .asst-msg.me { align-self: flex-end; background: var(--pop); color: var(--on-pop); border-bottom-right-radius: 6px; }
+  .asst-msg a { color: var(--link); text-decoration: underline; }
+  .asst-msg.me a { color: inherit; }
+  .asst-cards { align-self: stretch; display: flex; flex-direction: column; gap: 8px; }
+  .asst-card {
+    padding: 10px;
+    border-radius: 16px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    color: var(--text);
+    font: 500 13.5px/1.4 var(--font-body);
+  }
+  .asst-prod { display: flex; gap: 10px; align-items: center; cursor: pointer; }
+  .asst-img {
+    flex: none;
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
+    background: var(--bg) center / cover no-repeat;
+    border: 1px solid var(--hairline);
+  }
+  .asst-img.sm { width: 38px; height: 38px; border-radius: 9px; }
+  .asst-prod-body { flex: 1; min-width: 0; }
+  .asst-prod-name { font-weight: 700; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .asst-prod-price { margin-top: 2px; font-weight: 800; }
+  .asst-prod-price s { font-weight: 500; color: var(--hint); margin-left: 6px; }
+  .asst-oos { color: var(--hint); font-weight: 600; }
+  .asst-add {
+    flex: none;
+    min-height: 40px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--pop);
+    color: var(--on-pop);
+    font: 800 13px var(--font-body);
+    cursor: pointer;
+  }
+  .asst-add:disabled { opacity: .6; }
+  .asst-card-title { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; font-weight: 800; margin-bottom: 6px; }
+  .asst-status { padding: 2px 8px; border-radius: 10px; background: var(--bg); border: 1px solid var(--hairline); font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .asst-line { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+  .asst-line-name { flex: 1; min-width: 0; }
+  .asst-line-sum { font-weight: 700; white-space: nowrap; }
+  .asst-meta { margin-top: 6px; color: var(--hint); font-size: 12.5px; }
+  .asst-total { margin-top: 6px; display: flex; justify-content: space-between; font-weight: 800; }
+  .asst-card-btn {
+    width: 100%;
+    min-height: 40px;
+    margin-top: 8px;
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    background: var(--bg);
+    color: var(--text);
+    font: 700 13.5px var(--font-body);
+    cursor: pointer;
+  }
+  .asst-chips { display: flex; gap: 6px; overflow-x: auto; padding: 4px 12px 8px; scrollbar-width: none; }
+  .asst-chips::-webkit-scrollbar { display: none; }
+  .asst-chip {
+    flex: none;
+    min-height: 34px;
+    padding: 0 12px;
+    border-radius: 17px;
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+    color: var(--text);
+    font: 600 13px var(--font-body);
+    cursor: pointer;
+  }
+  .asst-form {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    padding: 8px 12px calc(10px + var(--safe-b));
+    border-top: 1px solid var(--hairline);
+    background: var(--glass);
+  }
+  .asst-form textarea {
+    flex: 1;
+    min-height: 44px;
+    max-height: 120px;
+    padding: 11px 14px;
+    border-radius: 22px;
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+    color: var(--text);
+    font: 500 15px/1.4 var(--font-body);
+    resize: none;
+    outline: none;
+  }
+  .asst-form textarea:focus { border-color: var(--link); }
+  .asst-send {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--pop);
+    color: var(--on-pop);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .asst-send:disabled { opacity: .5; }
+  .asst-send svg { width: 20px; height: 20px; }
+  .asst-note { padding: 0 14px 4px; color: var(--hint); font: 500 11px/1.3 var(--font-body); text-align: center; }
+  @media (prefers-reduced-motion: reduce) {
+    .asst-fab, .asst-bubble { transition: none; }
+    .asst-typing i, .asst-caret::after { animation: none; }
+  }
 </style>
 </head>
 <body>
@@ -3532,8 +4297,9 @@
   <div class="empty-state" id="catalog-empty" style="display:none">
     <div class="emoji">😔</div>
     <div id="catalog-empty-text"></div>
+    <div id="catalog-empty-extra"></div>
   </div>
-  <div class="scroll-loader" id="scroll-loader" style="display:none"><span class="spinner"></span></div>
+  <div class="catalog-more" id="catalog-more" style="display:none"></div>
 </div>
 
 <!-- ===== PAGE: CART ===== -->
@@ -3583,7 +4349,8 @@
       </div>
       <div class="form-group">
         <label id="lbl-phone"></label>
-        <input type="tel" id="inp-phone" placeholder="+998901234567" autocomplete="tel">
+        <input type="tel" id="inp-phone" placeholder="90 123 45 67" autocomplete="tel" inputmode="tel">
+        <div class="phone-hint" id="phone-hint" aria-live="polite"></div>
       </div>
       <div class="form-group" id="customer-location-group">
         <label id="lbl-location"></label>
@@ -3690,6 +4457,7 @@
     <div class="profile-avatar" id="profile-avatar">👤</div>
     <div class="profile-name" id="profile-name"></div>
     <div class="profile-meta" id="profile-lang"></div>
+    <div id="st-profile"></div>
     <div id="profile-menu"></div>
   </div>
 </div>
@@ -3768,6 +4536,7 @@
       <div class="detail-seller" id="detail-seller"></div>
       <div class="detail-desc" id="detail-desc"></div>
       <div class="detail-desc detail-composition" id="detail-composition" style="display:none"></div>
+      <div class="detail-set" id="detail-set" hidden></div>
       <div class="detail-reviews" id="detail-reviews">
         <div class="reviews-heading" id="reviews-heading"></div>
         <div id="reviews-list"></div>
@@ -3827,6 +4596,36 @@
   </div>
 </div>
 
+<!-- ===== YORDAMCHI (AI suhbatdosh, site_assistant.py) ===== -->
+<button class="asst-fab hidden" id="asst-fab" type="button" aria-label="Yordamchi" onclick="Assistant.open('fab')">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14v-2a8 8 0 0116 0v2"/><rect x="2.5" y="13" width="4" height="6" rx="1.6"/><rect x="17.5" y="13" width="4" height="6" rx="1.6"/><path d="M19.5 19v.5a2.5 2.5 0 01-2.5 2.5h-3.5"/></svg>
+  <span class="asst-dot" aria-hidden="true"></span>
+  <span class="asst-fab-label" id="asst-fab-label">Yordamchi</span>
+</button>
+<div class="asst-bubble" id="asst-bubble" role="status" onclick="Assistant.open('intro')">
+  <button class="asst-bubble-x" type="button" aria-label="Yopish" onclick="event.stopPropagation(); Assistant.hideIntro()">&times;</button>
+  <div id="asst-bubble-text"></div>
+</div>
+<div class="modal-overlay" id="asst-modal" onclick="if (event.target === this) Assistant.close()">
+  <div class="modal asst-sheet" role="dialog" aria-modal="true" aria-labelledby="asst-title">
+    <div class="asst-head">
+      <div class="asst-ava" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v-2a8 8 0 0116 0v2"/><rect x="2.5" y="13" width="4" height="6" rx="1.6"/><rect x="17.5" y="13" width="4" height="6" rx="1.6"/><path d="M19.5 19v.5a2.5 2.5 0 01-2.5 2.5h-3.5"/></svg></div>
+      <div class="asst-titles">
+        <div class="asst-title" id="asst-title">Yordamchi</div>
+        <div class="asst-sub" id="asst-sub"></div>
+      </div>
+      <button class="asst-close" type="button" id="asst-close" onclick="Assistant.close()">&times;</button>
+    </div>
+    <div class="asst-log" id="asst-log" aria-live="polite"></div>
+    <div class="asst-chips" id="asst-chips"></div>
+    <form class="asst-form" id="asst-form" onsubmit="event.preventDefault(); Assistant.send()">
+      <textarea id="asst-input" rows="1" maxlength="1000"></textarea>
+      <button class="asst-send" id="asst-send" type="submit"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.4 20.4l17.45-7.48a1 1 0 000-1.84L3.4 3.6a.99.99 0 00-1.39.91L2 9.12c0 .5.37.93.87.99L17 12 2.87 13.88c-.5.07-.87.5-.87 1l.01 4.61c0 .71.73 1.2 1.39.91z"/></svg></button>
+    </form>
+    <div class="asst-note" id="asst-note"></div>
+  </div>
+</div>
+
 <!-- ===== BOTTOM TAB BAR ===== -->
 <nav class="tab-bar" id="tab-bar">
   <div class="tab-item active" data-page="catalog">
@@ -3854,6 +4653,8 @@
 
 <!-- The games' question bank (quiz_bank.py), filled in by webapp_server.index(). -->
 <script type="application/json" id="game-bank">{{GAME_BANK}}</script>
+<!-- Background music: public-domain recordings served from /music (site_music.py). -->
+<script type="application/json" id="music-playlist">{{MUSIC_PLAYLIST}}</script>
 <script src="/static/pickup_checkout.js"></script>
 <script>
 const tg = window.Telegram.WebApp;
@@ -4153,8 +4954,8 @@ const Butterfly = (() => {
 // ===== BIRDSONG =====
 // Now and then a bird or two sings quietly in the background (owner,
 // 2026-10-22: "fonga qushlarni yoqimli nolasini ora-orada sayrab turadigan").
-// Every note is synthesised with Web Audio — no recordings, so nothing to
-// license or download. Phones only allow sound after the buyer's first tap,
+// Every bird note is synthesised with Web Audio; the music under them is
+// real public-domain recordings (see "Classical music" below). Phones only allow sound after the buyer's first tap,
 // so the first song comes a few seconds after it. A song never plays at
 // night (22:00–07:00 Tashkent), while the app is hidden, on the ordering
 // screens or over an open window, and the 🎶 button (shown once the music or
@@ -4207,21 +5008,10 @@ const Birdsong = (() => {
     fb.connect(echo);
     echo.connect(wet);
     wet.connect(ctx.destination);
-    // The music's own chain: a gentler high cut and a small hall.
+    // The music's gain — on iOS the recordings go through it (see route()).
     mus = ctx.createGain();
     mus.gain.value = 0;
-    const soft = ctx.createBiquadFilter();
-    soft.type = 'lowpass';
-    soft.frequency.value = 3200;
-    const hall = ctx.createConvolver();
-    hall.buffer = hallImpulse(ctx);
-    const hallWet = ctx.createGain();
-    hallWet.gain.value = 0.32;
-    mus.connect(soft);
-    soft.connect(ctx.destination);
-    soft.connect(hall);
-    hall.connect(hallWet);
-    hallWet.connect(ctx.destination);
+    mus.connect(ctx.destination);
     return ctx;
   }
 
@@ -4322,205 +5112,123 @@ const Birdsong = (() => {
     }, rand(range[0], range[1]));
   }
 
-  // ── Classical music under the birds (owner, 2026-10-24: "sayt foniga
-  // qushlar bilan birga klassik yoqimli musiqa ham qo'ygin, har bosib
-  // o'chirganda boshqa musiqaga o'tsin"). Four famous public-domain pieces,
-  // note by note on a soft synthesised piano — no recordings, nothing to
-  // license or download. One piece follows another; switching the 🎶 button
-  // off and on again starts the next one. The music keeps playing while
-  // products and recipes are open, rests on the ordering screens and while
-  // the app is hidden, and keeps the birds' night rule.
+  // ── Classical music under the birds (owner, 2026-10-24; real recordings
+  // since 2026-11-15: "original internetdan olingan top classic musiqalar
+  // bo'lsin, yuqori sifatli … musiqa saytga kirgan zahoti boshlansin, qo'l
+  // tekkizganda emas"). Public-domain and CC0 recordings from Wikimedia
+  // Commons, cached and served by our own server (site_music.py,
+  // /music/<id>.mp3, playlist in #music-playlist). It tries to start the
+  // moment the shop opens; where the phone's browser allows no sound before
+  // a touch, it starts on the first touch. One piece follows another;
+  // switching 🎶 off and on again starts the next one. It keeps playing over
+  // products and recipes, rests on the ordering screens and while the app is
+  // hidden, and keeps the birds' night rule.
   const MUSIC_KEY = 'ketoshop_music_piece';
-  const MUSIC_LEVEL = 0.5;
+  const MUSIC_LEVEL = 0.35;
   const MUSIC_REST_PAGES = ['checkout', 'cheque', 'order-success'];
-  const PIECES = [bachPrelude(), canonInD(), furElise(), odeToJoy()]
-    .map(p => { p.ev.sort((a, b) => a[0] - b[0]); return p; });   // the scheduler reads them in time order
-  let mus = null, musicTimer = null, piece = -1, evi = 0, t0 = 0, playing = false;
-
-  // Each piece: name [uz, ru], tempo, events [beat, midi note, beats, loudness 0–1], length in beats.
-  // J. S. Bach, Prelude in C major BWV 846, bars 1–19 and the closing chord.
-  function bachPrelude() {
-    const bars = [
-      [60, 64, 67, 72, 76], [60, 62, 69, 74, 77], [59, 62, 67, 74, 77], [60, 64, 67, 72, 76],
-      [60, 64, 69, 76, 81], [60, 62, 66, 69, 74], [59, 62, 67, 74, 79], [59, 60, 64, 67, 72],
-      [57, 60, 64, 67, 72], [50, 57, 62, 66, 72], [55, 59, 62, 67, 71], [55, 58, 64, 67, 73],
-      [53, 57, 62, 69, 74], [53, 56, 62, 65, 71], [52, 55, 60, 67, 72], [52, 53, 57, 60, 65],
-      [50, 53, 57, 60, 65], [43, 50, 55, 59, 65], [48, 52, 55, 60, 64],
-    ];
-    const ev = [];
-    bars.forEach((n, bar) => {
-      for (let half = 0; half < 2; half++) {
-        const s = bar * 4 + half * 2;
-        ev.push([s, n[0], 2, 0.75], [s + 0.25, n[1], 1.75, 0.65]);
-        [2, 3, 4, 2, 3, 4].forEach((k, i) => ev.push([s + 0.5 + i * 0.25, n[k], 0.25, 0.6]));
-      }
-    });
-    const end = bars.length * 4;
-    [48, 55, 60, 64, 72].forEach((m, i) => ev.push([end + i * 0.15, m, 4, 0.6]));
-    return { name: ['J. S. Bax — Do-major prelyudiyasi', 'И. С. Бах — Прелюдия до мажор'], bpm: 66, ev, len: end + 4 };
-  }
-
-  // J. Pachelbel, Canon in D: the eight-chord ground, then the two violin
-  // lines that answer each other over it.
-  function canonInD() {
-    const ground = [[50, [62, 66, 69]], [45, [57, 61, 64]], [47, [59, 62, 66]], [42, [54, 57, 61]],
-                    [43, [55, 59, 62]], [50, [62, 66, 69]], [43, [55, 59, 62]], [45, [57, 61, 64]]];
-    const upper = [78, 76, 74, 73, 71, 69, 71, 73], lower = [74, 73, 71, 69, 67, 66, 67, 64];
-    const ev = [];
-    for (let cycle = 0; cycle < 4; cycle++) {
-      ground.forEach(([bass, chord], i) => {
-        const s = cycle * 16 + i * 2;
-        ev.push([s, bass, 2, 0.6]);
-        [chord[0], chord[1], chord[2], chord[1]].forEach((m, k) => ev.push([s + k * 0.5, m, 0.5, 0.4]));
-        if (cycle === 1 || cycle === 3) ev.push([s, upper[i], 2, 0.7]);
-        if (cycle >= 2) ev.push([s, lower[i], 2, 0.62]);
-      });
-    }
-    [38, 50, 62, 66, 69, 74].forEach((m, i) => ev.push([64 + i * 0.12, m, 4, 0.55]));
-    return { name: ['Pachelbel — Kanon', 'Пахельбель — Канон'], bpm: 60, ev, len: 68 };
-  }
-
-  // L. van Beethoven, Für Elise, the opening theme twice (beats are sixteenths).
-  function furElise() {
-    const ev = [];
-    const am = [45, 52, 57], e7 = [40, 52, 56];
-    const turn = s => [76, 75, 76, 71, 74, 72].forEach((m, i) => ev.push([s + i, m, 1, 0.66]));
-    const left = (s, chord) => chord.forEach((m, i) => ev.push([s + i, m, 3 - i, 0.45]));
-    const theme = s => {                     // s: the first sixteenth of bar 1
-      turn(s);
-      ev.push([s + 6, 69, 2, 0.66]); left(s + 6, am); [60, 64, 69].forEach((m, i) => ev.push([s + 9 + i, m, 1, 0.6]));
-      ev.push([s + 12, 71, 2, 0.66]); left(s + 12, e7); [64, 68, 71].forEach((m, i) => ev.push([s + 15 + i, m, 1, 0.6]));
-      ev.push([s + 18, 72, 2, 0.66]); left(s + 18, am); [64, 76, 75].forEach((m, i) => ev.push([s + 21 + i, m, 1, 0.6]));
-      turn(s + 24);
-      ev.push([s + 30, 69, 2, 0.66]); left(s + 30, am); [60, 64, 69].forEach((m, i) => ev.push([s + 33 + i, m, 1, 0.6]));
-      ev.push([s + 36, 71, 2, 0.66]); left(s + 36, e7); [64, 72, 71].forEach((m, i) => ev.push([s + 39 + i, m, 1, 0.6]));
-      ev.push([s + 42, 69, 4, 0.66]); left(s + 42, am);
-    };
-    ev.push([0, 76, 1, 0.6], [1, 75, 1, 0.6]);
-    theme(2);
-    ev.push([48, 76, 1, 0.6], [49, 75, 1, 0.6]);   // the last two sixteenths of bar 8
-    theme(50);
-    return { name: ['Betxoven — «Elizaga»', 'Бетховен — «К Элизе»'], bpm: 300, ev, len: 100 };
-  }
-
-  // L. van Beethoven, «Ode to Joy» from the Ninth Symphony, slow, with a soft left hand.
-  function odeToJoy() {
-    const A = [[76, 1], [76, 1], [77, 1], [79, 1], [79, 1], [77, 1], [76, 1], [74, 1], [72, 1], [72, 1], [74, 1], [76, 1]];
-    const tune = [
-      ...A, [76, 1.5], [74, 0.5], [74, 2],
-      ...A, [74, 1.5], [72, 0.5], [72, 2],
-      [74, 1], [74, 1], [76, 1], [72, 1], [74, 1], [76, 0.5], [77, 0.5], [76, 1], [72, 1],
-      [74, 1], [76, 0.5], [77, 0.5], [76, 1], [74, 1], [72, 1], [74, 1], [67, 2],
-      ...A, [74, 1.5], [72, 0.5], [72, 2],
-    ];
-    const C = [48, [55, 60, 64]], G = [43, [55, 59, 62]];
-    const halves = [C, C, G, G, C, C, G, G, C, C, G, G, C, C, G, C,
-                    G, C, G, C, G, G, C, G, C, C, G, G, C, C, G, C];
-    const ev = [];
-    let s = 0;
-    tune.forEach(([m, d]) => { ev.push([s, m, d, 0.68]); s += d; });
-    halves.forEach(([bass, chord], i) => {
-      ev.push([i * 2, bass, 2, 0.5]);
-      chord.forEach(m => ev.push([i * 2 + 1, m, 1, 0.32]));
-    });
-    ev.sort((a, b) => a[0] - b[0]);
-    [48, 55, 60, 64, 72].forEach((m, i) => ev.push([64 + i * 0.12, m, 3, 0.55]));
-    return { name: ['Betxoven — «Shodlik qasidasi»', 'Бетховен — «Ода к радости»'], bpm: 80, ev, len: 68 };
-  }
-
-  // A soft piano tone: a triangle wave with a quiet octave above, struck and
-  // left to ring; low notes ring longer.
-  function pianoNote(t, midi, durSec, vel) {
-    const f = 440 * Math.pow(2, (midi - 69) / 12);
-    const peak = 0.11 * vel;
-    const ring = Math.min(Math.max(durSec + 0.5, 0.9), 1.4 + Math.max(0, 76 - midi) * 0.045);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(peak, t + 0.01);
-    g.gain.exponentialRampToValueAtTime(peak * 0.4, t + 0.3);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + ring);
-    const a = ctx.createOscillator();
-    a.type = 'triangle';
-    a.frequency.value = f;
-    const b = ctx.createOscillator();
-    b.type = 'sine';
-    b.frequency.value = f * 2;
-    const bg = ctx.createGain();
-    bg.gain.value = 0.15;
-    a.connect(g);
-    b.connect(bg);
-    bg.connect(g);
-    g.connect(mus);
-    a.start(t);
-    b.start(t);
-    a.stop(t + ring + 0.05);
-    b.stop(t + ring + 0.05);
-  }
-
-  // A small hall: two seconds of fading noise as the reverb's impulse.
-  function hallImpulse(c) {
-    const len = Math.floor(c.sampleRate * 2.2), buf = c.createBuffer(2, len, c.sampleRate);
-    for (let ch = 0; ch < 2; ch++) {
-      const d = buf.getChannelData(ch);
-      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
-    }
-    return buf;
-  }
+  const PLAYLIST = (() => {
+    try { return JSON.parse(document.getElementById('music-playlist').textContent) || []; } catch (_) { return []; }
+  })();
+  // iOS ignores a media element's volume — there the music goes through a
+  // Web Audio gain (which only sounds after a touch); elsewhere the element's
+  // own volume, so it can start before any touch.
+  const VOLUME_WORKS = (() => {
+    try { const a = document.createElement('audio'); a.volume = 0.5; return Math.abs(a.volume - 0.5) < 0.01; }
+    catch (_) { return false; }
+  })();
+  let mus = null, el = null, routed = false, piece = -1, playing = false, blocked = false;
+  let musicTimer = null, volTimer = null;
 
   function savedPiece() {
-    try { return parseInt(localStorage.getItem(MUSIC_KEY), 10) || 0; } catch (_) { return 0; }
+    try { return parseInt(localStorage.getItem(MUSIC_KEY) || '0', 10) || 0; } catch (_) { return 0; }
   }
   function pieceName() {
-    const n = PIECES[piece < 0 ? savedPiece() % PIECES.length : piece].name;
-    return gx(n[0], n[1]);
+    const p = PLAYLIST[piece];
+    return p ? gx(p.uz, p.ru) : '';
   }
-  function fade(to, sec) {
-    const now = ctx.currentTime;
-    mus.gain.cancelScheduledValues(now);
-    mus.gain.setValueAtTime(mus.gain.value, now);
-    mus.gain.linearRampToValueAtTime(to, now + sec);
+  function element() {
+    if (el) return el;
+    el = document.createElement('audio');
+    el.preload = 'auto';
+    el.setAttribute('playsinline', '');
+    el.addEventListener('ended', () => startPiece(piece + 1));
+    el.addEventListener('playing', () => { blocked = false; if (!heard) { heard = true; sync(); } });
+    el.addEventListener('error', () => {
+      // Our server has no copy → the same file straight from Wikimedia, once.
+      const p = PLAYLIST[piece];
+      if (p && p.remote && el.getAttribute('src') !== p.remote) { el.src = p.remote; if (playing) { playing = false; play(); } return; }
+      if (playing) setTimeout(() => startPiece(piece + 1), 3000);
+    });
+    return el;
   }
-  function startPiece(i) {
-    piece = ((i % PIECES.length) + PIECES.length) % PIECES.length;
-    try { localStorage.setItem(MUSIC_KEY, String(piece)); } catch (_) {}
-    evi = 0;
-    t0 = ctx.currentTime + 0.5;
-    playing = true;
-    fade(MUSIC_LEVEL, 0.3);
-    if (!heard) { heard = true; sync(); }
+  function route() {
+    // Only our own files: a Web Audio route of another site's file is silent
+    // without CORS — from Wikimedia an iPhone plays at the phone's own volume.
+    if (routed || VOLUME_WORKS || !PLAYLIST.length || !/^\//.test(PLAYLIST[0].src) || !audio()) return;
+    try { ctx.createMediaElementSource(element()).connect(mus); routed = true; } catch (_) {}
   }
-  function musicOk() {
-    return !muted() && !night() && !document.hidden && !MUSIC_REST_PAGES.includes(activePage) &&
-      ctx.state === 'running';
-  }
-  // Every 150 ms: put the next half second of notes on the clock.
-  function musicTick() {
-    if (!ctx || !mus) return;
-    if (!musicOk()) {
-      if (playing) { playing = false; fade(0, 0.4); }
+  function setLevel(to, sec) {
+    clearInterval(volTimer);
+    if (routed && mus) {
+      const g = mus.gain, now = ctx.currentTime;
+      g.cancelScheduledValues(now);
+      g.setValueAtTime(g.value, now);
+      g.linearRampToValueAtTime(to, now + sec);
       return;
     }
-    if (piece < 0) startPiece(savedPiece());
-    const p = PIECES[piece], spb = 60 / p.bpm;
-    if (!playing) {                       // back from a rest: carry on where it stopped
-      playing = true;
-      if (evi < p.ev.length) t0 = ctx.currentTime + 0.4 - p.ev[evi][0] * spb;
-      fade(MUSIC_LEVEL, 0.6);
-    }
-    const until = ctx.currentTime + 0.5;
-    while (evi < p.ev.length && t0 + p.ev[evi][0] * spb <= until) {
-      const [beat, midi, beats, vel] = p.ev[evi++];
-      pianoNote(Math.max(ctx.currentTime, t0 + beat * spb), midi, beats * spb, vel);
-    }
-    if (evi >= p.ev.length && ctx.currentTime > t0 + p.len * spb + 3) startPiece(piece + 1);
+    const a = element(), from = a.volume, steps = Math.max(1, Math.round(sec * 20));
+    let i = 0;
+    volTimer = setInterval(() => {
+      i++;
+      a.volume = Math.max(0, Math.min(1, from + (to - from) * i / steps));
+      if (i >= steps) clearInterval(volTimer);
+    }, 50);
+  }
+  function musicOk() {
+    return PLAYLIST.length > 0 && !muted() && !night() && !document.hidden && !MUSIC_REST_PAGES.includes(activePage);
+  }
+  function startPiece(i) {
+    if (!PLAYLIST.length) return;
+    piece = ((i % PLAYLIST.length) + PLAYLIST.length) % PLAYLIST.length;
+    try { localStorage.setItem(MUSIC_KEY, String(piece)); } catch (_) {}
+    element().src = PLAYLIST[piece].src;
+    playing = false;
+    play();
+  }
+  function play() {
+    if (!musicOk() || blocked) return;
+    const a = element();
+    if (!a.getAttribute('src')) { startPiece(savedPiece()); return; }
+    if (routed && mus) mus.gain.value = 0; else if (VOLUME_WORKS) a.volume = 0;
+    playing = true;
+    const p = a.play();
+    const up = () => setLevel(MUSIC_LEVEL, 1.5);
+    if (p && typeof p.then === 'function') {
+      p.then(up).catch(() => { playing = false; blocked = true; });   // this phone wants a touch first
+    } else up();
+  }
+  function pauseMusic() {
+    if (!el || !playing) return;
+    playing = false;
+    setLevel(0, 0.4);
+    setTimeout(() => { if (!playing && el) el.pause(); }, 450);
+  }
+  // Twice a second: rest or carry on as the page changes.
+  function musicTick() {
+    if (!PLAYLIST.length) return;
+    if (!musicOk()) { pauseMusic(); return; }
+    if (!playing || element().paused) play();
   }
 
   // The first tap unlocks sound (browser rule); the music and the birds start then.
   function unlock() {
-    if (!audio()) return;
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-    if (!timer) schedule(FIRST_DELAY);
-    if (!musicTimer) musicTimer = setInterval(musicTick, 150);
+    blocked = false;
+    route();
+    if (audio()) {
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      if (!timer) schedule(FIRST_DELAY);
+    }
+    musicTick();
   }
 
   function sync() {
@@ -4536,11 +5244,11 @@ const Birdsong = (() => {
     const off = !muted();
     try { localStorage.setItem(KEY, off ? 'off' : 'on'); } catch (_) {}
     if (off) {
-      if (mus) { playing = false; fade(0, 0.3); }
+      pauseMusic();
       showToast(t.birdsOff);
     } else {
       unlock();
-      if (ctx && mus) startPiece(piece < 0 ? savedPiece() + 1 : piece + 1);   // back on: the next piece
+      startPiece(piece < 0 ? savedPiece() + 1 : piece + 1);   // back on: the next piece
       sing();                           // and a little chirp
       showToast(t.birdsOn + ' · ' + pieceName(), false, 3500);
     }
@@ -4556,12 +5264,16 @@ const Birdsong = (() => {
     btn.onclick = toggle;
     document.body.appendChild(btn);
     sync();
+    // The music starts at once where the phone allows sound before a touch.
+    musicTimer = setInterval(musicTick, 500);
+    musicTick();
     // touchend/click, not pointerdown: a touch only counts as the gesture
     // that may start sound when it ends (Chrome and iOS alike).
     const gestures = ['touchend', 'click'];
     const first = () => {
       unlock();
-      if (ctx && ctx.state === 'running') gestures.forEach(e => document.removeEventListener(e, first, true));
+      if (ctx && ctx.state === 'running' && (!PLAYLIST.length || (el && !el.paused)))
+        gestures.forEach(e => document.removeEventListener(e, first, true));
     };
     gestures.forEach(e => document.addEventListener(e, first, true));
     document.addEventListener('visibilitychange', () => {
@@ -4603,11 +5315,22 @@ let lang = localStorage.getItem('ketoshop_lang') || ((tg.initDataUnsafe?.user?.l
 
 const L = {
   uz: {
-    startGateTitle: 'Avval botni ishga tushiring',
-    startGateText: 'Buyurtmangiz holati, to\'lov cheki, sovg\'alar va chegirmalar shu bot orqali keladi. Botni oching va pastdagi «START» tugmasini bosing — keyin shu yerga qayting.',
+    wpTitle: 'Tabriklaymiz!',
+    wpSub: 'Siz Ketoshop a\'zosi bo\'ldingiz — sizga sovg\'a bor',
+    wpGift: 'birinchi buyurtmangizga chegirma',
+    wpLeft: 'Chegirma tugashiga qoldi',
+    wpNote: 'Promokod kiritish shart emas — chegirma savatda o\'zi hisoblanadi.',
+    wpGo: '🛍 Xaridni boshlash',
+    startGateTitle: 'Do\'konga kirish — 2 qadam',
+    startGateText: 'Yangi mahsulotlar, sovg\'alar va chegirmalar kanalda, buyurtmangiz holati va to\'lov cheki botda keladi.',
+    gateChannelStep: 'Kanalimizga a\'zo bo\'ling',
+    gateChannelOpen: '📢 Kanalga o\'tish',
+    gateBotStep: 'Botda «START» tugmasini bosing',
     startGateOpen: '▶️ Botni ochish',
-    startGateCheck: '✅ Bosdim — davom etish',
-    startGateWaiting: 'Hali START bosilmagan. Botni oching va «START» ni bosing.',
+    gateDone: 'Bajarildi',
+    gateChannelFirst: 'Avval 1-qadam: kanalga a\'zo bo\'ling.',
+    startGateCheck: '✅ Tekshirish',
+    startGateWaiting: 'Hali tayyor emas — ikkala qadamni bajaring.',
     all: 'Hammasi',
     sectionBestsellers: 'Top mahsulotlar',
     sectionTopCustomers: 'Eng faol xaridorlar',
@@ -4619,7 +5342,14 @@ const L = {
     birdsOff: "🔇 Musiqa va qushlar o'chirildi",
     search: 'Mahsulot qidirish...',
     loading: 'Yuklanmoqda...',
+    catalogMore: '⬇️ Yana {n} ta mahsulot',
+    catalogEnd: '✓ Hammasi shu — {n} ta mahsulot',
+    catalogRetry: '🔄 Qayta urinish',
     empty: 'Mahsulotlar topilmadi',
+    searchMiss: '«{q}» topilmadi',
+    searchMissNear: "O'xshash mahsulotlar",
+    searchMissNote: "Boshqacha yozib ko'ring (lotin yoki kirill — farqi yo'q) yoki bizga yozing — topib beramiz.",
+    searchMissBtn: '💬 Bizga yozing',
     addToCart: "Savatga qo'shish",
     cart: 'Savat',
     total: 'Jami',
@@ -4740,6 +5470,13 @@ const L = {
     chequeFileTooLarge: 'Fayl juda katta (10MB chegarasi)',
     chequePayLater: 'Botga qaytib to\'layman',
     errorPhone: 'Telefon raqamini tekshiring (masalan: 90 123 45 67)',
+    phoneEmpty: 'Telefon raqamingizni yozing, masalan: 90 123 45 67',
+    phoneShort: "Raqam to'liq emas — operator kodi bilan 9 ta raqam, masalan: 90 123 45 67",
+    phoneLong: "Raqam juda uzun — bitta raqam yozing, masalan: 90 123 45 67",
+    phoneForeign: "Faqat O'zbekiston raqami (+998), masalan: 90 123 45 67",
+    phoneCode: "Operator kodi noto'g'ri — masalan: 90 123 45 67",
+    phoneOk: '✓ {phone}',
+    phoneKnown: "✓ Oldingi buyurtmangizdagi raqam — boshqa bo'lsa, o'zgartiring",
     errorAddress: 'Joylashuvni yuboring',
     errorOutsideUzbekistan: 'Joylashuvingiz O\'zbekistondan tashqarida. Biz faqat O\'zbekiston bo\'ylab yetkazib beramiz. Iltimos, O\'zbekiston ichidagi joylashuvni kiriting.',
     errorStockGone: '🏃‍♀️ Voy, ulgurmay qoldik! Savatingizdagi bir mahsulotni boshqa keto-ixlosmand sizdan bir qadam oldin olib ketdi. Savatingizni yangiladik — bir ko\'z tashlab, qayta urinib ko\'ring 🛒',
@@ -4800,6 +5537,12 @@ const L = {
     restockAdded: '🔔 Yozib qo\'ydik! Qaytishi bilan sizga birinchilardan bo\'lib xabar beramiz 🤍',
     restockAlready: '✅ Siz ro\'yxatdasiz — qaytishi bilan xabar beramiz 🤍',
     restockBack: '🎉 Xushxabar — mahsulot allaqachon qaytdi!',
+    // To'plam (set) sheet — its parts one per line (2026-11-12).
+    setItemsTitle: '🎁 To\'plam tarkibi',
+    setItemsCount: '{n} ta mahsulot',
+    setSeparately: 'Alohida olsangiz {total} so\'m — to\'plamda {saved} so\'m tejaysiz',
+    setPartOut: '⏳ Yo\'lda',
+    setMissing: '⏳ To\'plamdagi {names} hozircha yo\'q — tez orada qaytadi',
     discountUntil: '⏳ Chegirma {date} gacha amal qiladi',
     youSave: '💚 {amount} so\'m tejaysiz',
     discountsTab: '🔥 Chegirmalar',
@@ -4820,11 +5563,22 @@ const L = {
     cartNudgeAdd: '+ Qo\'shish',
   },
   ru: {
-    startGateTitle: 'Сначала запустите бота',
-    startGateText: 'Статус заказа, чек об оплате, подарки и скидки приходят через этого бота. Откройте бота и нажмите «START» внизу — затем вернитесь сюда.',
+    wpTitle: 'Поздравляем!',
+    wpSub: 'Вы стали участником Ketoshop — для вас подарок',
+    wpGift: 'скидка на первый заказ',
+    wpLeft: 'До конца скидки осталось',
+    wpNote: 'Промокод вводить не нужно — скидка посчитается в корзине сама.',
+    wpGo: '🛍 Начать покупки',
+    startGateTitle: 'Вход в магазин — 2 шага',
+    startGateText: 'Новинки, подарки и скидки — в канале, статус заказа и чек об оплате — в боте.',
+    gateChannelStep: 'Подпишитесь на наш канал',
+    gateChannelOpen: '📢 Перейти в канал',
+    gateBotStep: 'Нажмите «START» в боте',
     startGateOpen: '▶️ Открыть бота',
-    startGateCheck: '✅ Нажал — продолжить',
-    startGateWaiting: 'Бот ещё не запущен. Откройте бота и нажмите «START».',
+    gateDone: 'Готово',
+    gateChannelFirst: 'Сначала шаг 1: подпишитесь на канал.',
+    startGateCheck: '✅ Проверить',
+    startGateWaiting: 'Ещё не готово — выполните оба шага.',
     all: 'Все',
     sectionBestsellers: 'Топ товаров',
     sectionTopCustomers: 'Самые активные покупатели',
@@ -4836,7 +5590,14 @@ const L = {
     birdsOff: '🔇 Музыка и птицы выключены',
     search: 'Поиск товаров...',
     loading: 'Загрузка...',
+    catalogMore: '⬇️ Показать ещё ({n})',
+    catalogEnd: '✓ Это все товары ({n})',
+    catalogRetry: '🔄 Повторить',
     empty: 'Товары не найдены',
+    searchMiss: '«{q}» не найдено',
+    searchMissNear: 'Похожие товары',
+    searchMissNote: 'Попробуйте написать иначе (латиницей или кириллицей — неважно) или напишите нам — подберём.',
+    searchMissBtn: '💬 Написать нам',
     addToCart: 'В корзину',
     cart: 'Корзина',
     total: 'Итого',
@@ -4955,6 +5716,13 @@ const L = {
     chequeFileTooLarge: 'Файл слишком большой (лимит 10 МБ)',
     chequePayLater: 'Оплачу через бот',
     errorPhone: 'Проверьте номер телефона (например: 90 123 45 67)',
+    phoneEmpty: 'Укажите номер телефона, например: 90 123 45 67',
+    phoneShort: 'Номер неполный — 9 цифр с кодом оператора, например: 90 123 45 67',
+    phoneLong: 'Номер слишком длинный — укажите один номер, например: 90 123 45 67',
+    phoneForeign: 'Только узбекский номер (+998), например: 90 123 45 67',
+    phoneCode: 'Неверный код оператора — например: 90 123 45 67',
+    phoneOk: '✓ {phone}',
+    phoneKnown: '✓ Номер из прошлого заказа — если другой, измените',
     errorAddress: 'Отправьте местоположение',
     errorOutsideUzbekistan: 'Ваша локация за пределами Узбекистана. Мы доставляем только по Узбекистану. Пожалуйста, укажите локацию в пределах Узбекистана.',
     errorStockGone: '🏃‍♀️ Ой, не успели! Один товар из вашей корзины только что забрал другой любитель кето. Мы обновили корзину — загляните в неё и попробуйте ещё раз 🛒',
@@ -5008,6 +5776,11 @@ const L = {
     restockAdded: '🔔 Записали! Как только товар вернётся, вы узнаете одним из первых 🤍',
     restockAlready: '✅ Вы уже в списке — сообщим, как только вернётся 🤍',
     restockBack: '🎉 Хорошая новость — товар уже вернулся!',
+    setItemsTitle: '🎁 Состав набора',
+    setItemsCount: 'товаров: {n}',
+    setSeparately: 'По отдельности {total} сум — в наборе экономия {saved} сум',
+    setPartOut: '⏳ В пути',
+    setMissing: '⏳ В наборе сейчас нет: {names} — скоро вернётся',
     discountUntil: '⏳ Скидка действует до {date}',
     youSave: '💚 экономия {amount} сум',
     discountsTab: '🔥 Скидки',
@@ -5239,6 +6012,7 @@ let t = buildActiveLocale();
 
 function applyLanguage() {
   t = buildActiveLocale();
+  try { Assistant.applyText(); } catch (_) {}
   // Tab labels
   document.getElementById('tab-home-label').textContent = t.tabHome;
   document.getElementById('tab-catalog-label').textContent = t.tabCatalog;
@@ -5292,6 +6066,7 @@ async function switchLanguage(newLang) {
     renderViewSwitch();
     renderCatalogTiles();
     loadPromo();
+    clearCatalogCache();
     loadProducts();
     if (homeRendered) renderHomePage();
     if (activePage === 'cart') renderCartPage();
@@ -5314,9 +6089,9 @@ async function api(path, opts = {}) {
   if (!res.ok) {
     let body = null;
     try { body = await res.json(); } catch(_) {}
-    // The server refuses buyers the bot can't reach (never pressed START,
-    // or blocked it) — show the "start the bot" screen instead of an error.
-    if (res.status === 403 && body && body.error === 'start_bot') showStartGate(body.bot);
+    // The server refuses buyers outside the channel or whom the bot can't
+    // reach — show the entry screen instead of an error.
+    if (res.status === 403 && body && body.error === 'start_bot') showStartGate(body);
     const err = new Error(res.status);
     err.status = res.status;
     err.body = body;
@@ -5328,8 +6103,6 @@ async function api(path, opts = {}) {
 // ===== STATE =====
 let categories = [];
 let currentCat = 'all';
-let currentPage = 0;
-let totalPages = 1;
 let currentProduct = null;
 let qty = 1;
 let cartData = { items: [], total: 0 };
@@ -5510,6 +6283,7 @@ function switchPage(page) {
   trk(() => Trk.page(page, page === 'catalog' ? currentCat : null));
   updateBackButton();
   Birdsong.sync();
+  try { Assistant.sync(); } catch (_) {}
 }
 
 // ===== SYSTEM BACK BUTTON =====
@@ -5524,6 +6298,7 @@ function _isModalOpen(id) {
 
 function onBackPressed() {
   // Highest-priority overlays win.
+  if (_isModalOpen('asst-modal')) { Assistant.close(); return; }
   if (_isModalOpen('map-modal')) { closeMapPicker(); return; }
   if (_isModalOpen('detail-modal')) { closeDetail(); return; }
   if (_isModalOpen('recipe-modal')) { closeRecipe(); return; }
@@ -5541,6 +6316,7 @@ function onBackPressed() {
 function updateBackButton() {
   if (!tg.BackButton) return;
   const shouldShow = (
+    _isModalOpen('asst-modal') ||
     _isModalOpen('map-modal') ||
     _isModalOpen('detail-modal') ||
     _isModalOpen('recipe-modal') ||
@@ -6050,6 +6826,8 @@ function _siteFbDue() {
 }
 function _siteFbQuietMoment() {
   if (['checkout', 'cheque', 'order-success'].includes(activePage)) return false;
+  // Not right after a Keto celebration — one thing at a time.
+  if (typeof KetoParty !== 'undefined' && KetoParty.recent(120000)) return false;
   if (activePage === 'games' && typeof gameState !== 'undefined' && gameState) return false;
   return !document.querySelector('.modal-overlay.show, .map-modal.show');
 }
@@ -6136,50 +6914,92 @@ document.getElementById('site-fb-modal').addEventListener('click', function (e) 
 })();
 
 // ===== INIT =====
-// ===== START THE BOT FIRST (owner, 2026-10-14: "Mini appni yoki saytni
-// ishlatish uchun botni ishga tushurish shart bo'lsin") =====
-// A full-screen card over the shop until the bot can write to this buyer.
-// It re-checks every few seconds, so pressing START in the chat and coming
-// back opens the shop by itself; "✅" re-checks at once.
+// ===== DO'KONGA KIRISH: KANAL, KEYIN BOT (owner, 2026-10-14: "Mini appni
+// yoki saytni ishlatish uchun botni ishga tushurish shart bo'lsin";
+// 2026-11-08: "sayt uchun ham kanal obunasini talab qil, keyin bot
+// obunasini ham keyin ularni yana saytga yo'naltir") =====
+// A full-screen card over the shop with two steps: join the channel, then
+// press START in the bot (opened with ?start=sayt, which answers with a
+// «Do'konga qaytish» button). It re-checks every few seconds, so coming back
+// from the channel or the chat moves it on by itself; "✅" re-checks at once.
+// `info` is /api/bot-access's answer (or a refused call's body): bot,
+// channel, subscribed, started. An old answer carried only the bot's name.
 let _startGateTimer = null;
-function showStartGate(botName) {
+function showStartGate(info) {
+  info = (info && typeof info === 'object') ? info : { bot: info };
+  const subscribed = info.subscribed !== false;
+  const started = !!info.started;
+  const bot = info.bot || 'ketoshopbot';
+  const channel = info.channel || 'ketoshop_uz';
   let gate = document.getElementById('start-gate');
   if (!gate) {
     gate = document.createElement('div');
     gate.id = 'start-gate';
     gate.setAttribute('role', 'dialog');
     gate.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;'
-      + 'padding:24px;background:var(--bg,#FFF8EC);color:var(--text,#2B2116);font-family:inherit';
+      + 'padding:24px;background:var(--bg,#FFF8EC);color:var(--text,#2B2116);font-family:inherit;overflow-y:auto';
+    const step = (n, id, label, btn) =>
+      '<div class="gate-step" id="gate-step-' + id + '" style="display:flex;align-items:center;gap:12px;text-align:left;'
+        + 'padding:12px;margin-bottom:10px;border:1px solid var(--hairline,#E5DAC6);border-radius:16px;background:var(--surface,#fff)">' +
+        '<span class="gate-num" style="flex:none;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;'
+          + 'font-weight:800;background:var(--btn,#2E7D32);color:var(--btn-text,#fff)">' + n + '</span>' +
+        '<span style="flex:1;min-width:0">' +
+          '<span style="display:block;font-size:15px;font-weight:700;line-height:1.3">' + escapeHtml(label) + '</span>' +
+          '<span class="gate-sub" style="display:block;font-size:13px;color:var(--hint,#7A6A55);margin-top:2px"></span>' +
+        '</span>' +
+        '<button class="gate-go" type="button" style="flex:none;border:0;border-radius:12px;padding:10px 12px;font-size:14px;font-weight:800;'
+          + 'background:var(--btn,#2E7D32);color:var(--btn-text,#fff);cursor:pointer">' + escapeHtml(btn) + '</button>' +
+      '</div>';
     gate.innerHTML =
-      '<div style="max-width:380px;width:100%;text-align:center">' +
-        '<div style="font-size:64px;line-height:1;margin-bottom:14px">🤖</div>' +
-        '<h2 style="font-size:22px;font-weight:800;margin:0 0 10px">' + escapeHtml(t.startGateTitle) + '</h2>' +
-        '<p style="font-size:15px;line-height:1.5;margin:0 0 22px;color:var(--hint,#7A6A55)">' + escapeHtml(t.startGateText) + '</p>' +
-        '<button id="start-gate-open" type="button" style="width:100%;border:0;border-radius:14px;padding:15px;font-size:16px;font-weight:800;'
-          + 'background:var(--btn,#2E7D32);color:var(--btn-text,#fff);margin-bottom:10px;cursor:pointer">' + escapeHtml(t.startGateOpen) + '</button>' +
+      '<div style="max-width:400px;width:100%;text-align:center">' +
+        '<div style="font-size:56px;line-height:1;margin-bottom:12px">🛍</div>' +
+        '<h2 style="font-size:22px;font-weight:800;margin:0 0 8px">' + escapeHtml(t.startGateTitle) + '</h2>' +
+        '<p style="font-size:15px;line-height:1.5;margin:0 0 18px;color:var(--hint,#7A6A55)">' + escapeHtml(t.startGateText) + '</p>' +
+        step(1, 'channel', t.gateChannelStep, t.gateChannelOpen) +
+        step(2, 'bot', t.gateBotStep, t.startGateOpen) +
         '<button id="start-gate-check" type="button" style="width:100%;border:1px solid var(--hairline,#E5DAC6);border-radius:14px;padding:13px;'
-          + 'font-size:15px;font-weight:700;background:transparent;color:inherit;cursor:pointer">' + escapeHtml(t.startGateCheck) + '</button>' +
+          + 'margin-top:6px;font-size:15px;font-weight:700;background:transparent;color:inherit;cursor:pointer">' + escapeHtml(t.startGateCheck) + '</button>' +
         '<div id="start-gate-note" style="font-size:13px;margin-top:12px;min-height:18px;color:var(--berry,#B3261E)"></div>' +
       '</div>';
     document.body.appendChild(gate);
     gate.querySelector('#start-gate-check').onclick = () => checkStartGate(true);
   }
-  const url = 'https://t.me/' + (botName || 'ketoshopbot');
-  gate.querySelector('#start-gate-open').onclick = () => {
-    try { tg.openTelegramLink(url); } catch (_) { window.open(url, '_blank'); }
+  const open = url => { try { tg.openTelegramLink(url); } catch (_) { window.open(url, '_blank'); } };
+  const mark = (id, done, sub, enabled, go) => {
+    const row = gate.querySelector('#gate-step-' + id);
+    row.querySelector('.gate-num').textContent = done ? '✓' : (id === 'channel' ? '1' : '2');
+    row.querySelector('.gate-sub').textContent = done ? t.gateDone : sub;
+    const b = row.querySelector('.gate-go');
+    b.style.display = done ? 'none' : '';
+    b.style.opacity = enabled ? '1' : '.45';
+    b.onclick = go;
+    row.style.opacity = done ? '.7' : '1';
   };
+  mark('channel', subscribed, '@' + channel, true, () => open('https://t.me/' + channel));
+  mark('bot', started, '@' + bot, subscribed, () => {
+    if (!subscribed) {
+      const note = document.getElementById('start-gate-note');
+      if (note) note.textContent = t.gateChannelFirst;
+      return;
+    }
+    open('https://t.me/' + bot + '?start=sayt');
+  });
+  const note = document.getElementById('start-gate-note');
+  if (subscribed && note && note.textContent === t.gateChannelFirst) note.textContent = '';
   gate.style.display = 'flex';
   if (!_startGateTimer) _startGateTimer = setInterval(() => checkStartGate(false), 3000);
 }
 async function checkStartGate(manual) {
-  let ok = false;
-  try { ok = !!(await fetch('/api/bot-access', { headers: apiHeaders() }).then(r => r.json())).ok; } catch (_) {}
+  let info = null;
+  try { info = await fetch('/api/bot-access', { headers: apiHeaders() }).then(r => r.json()); } catch (_) {}
+  const ok = !!(info && info.ok);
   if (ok) {
     clearInterval(_startGateTimer); _startGateTimer = null;
     location.reload();   // boot the shop from scratch now that it may load
-  } else if (manual) {
+  } else {
+    if (info) showStartGate(info);
     const note = document.getElementById('start-gate-note');
-    if (note) note.textContent = t.startGateWaiting;
+    if (manual && note) note.textContent = t.startGateWaiting;
   }
   return ok;
 }
@@ -6195,7 +7015,7 @@ async function checkStartGate(manual) {
   // Nothing loads for a buyer the bot can't reach — they get the START card.
   try {
     const access = await fetch('/api/bot-access', { headers: apiHeaders() }).then(r => r.json());
-    if (access && access.ok === false) { showStartGate(access.bot); return; }
+    if (access && access.ok === false) { showStartGate(access); return; }
   } catch (_) { /* network trouble — carry on; the server still guards every call */ }
   trk(() => {
     const sp = (tg.initDataUnsafe && tg.initDataUnsafe.start_param) || '';
@@ -6205,6 +7025,7 @@ async function checkStartGate(manual) {
   });
   Butterfly.start();
   Birdsong.start();
+  SiteTime.start();
 
   // Reconcile the server-saved language preference in the background; only
   // re-render text if it actually differs from our local guess.
@@ -6222,6 +7043,11 @@ async function checkStartGate(manual) {
     .then(s => { ketoRate = (s && s.rate) || 0; })
     .catch(() => { /* no badges */ });
 
+  // The whole catalog, asked for now so it comes alongside the categories
+  // and the promo instead of after them (loadProducts picks it up).
+  fetchCatalogList('all').catch(() => {});
+  loadPopularIds();
+
   try {
     categories = await api('/api/categories');
     await ketoRatePromise;
@@ -6231,6 +7057,8 @@ async function checkStartGate(manual) {
     loadCatalogTiles();
     await loadProducts();
     await loadCart();
+    DockHint.maybe();
+    Assistant.start();
 
     // Deep link: ?product=<id> on the Mini App URL (used by admin broadcasts —
     // e.g. a low-stock alert with a "tap here" button) opens straight into
@@ -6322,6 +7150,448 @@ function markHeld(root) {
   }, { passive: true });
 })();
 
+// ===== SAYTDA FAOL VAQT UCHUN KETO (owner, 2026-11-15: "saytda qancha ko'p
+// vaqt o'tkazsa shuncha ko'p Keto tanga berilsin ... ekranni to'ldirib,
+// bayramona qilib, o'rtada pop-up chiqsin"; the same day: "saytni har daqiqa
+// qimirlatib turish kerak, firibgarlik va sun'iy qurilmalar ishlamasin") =====
+// The server counts the time and pays (site_time.py); this page only reports
+// minutes a person really used it. After each full minute the shop was on
+// screen and focused, with at least one real (isTrusted) tap, touch, wheel
+// or key in it, it sends a beat with their count and the gaps between them;
+// a minute nobody touched is not sent. Scroll events don't count on their
+// own (the catalog tiles scroll by themselves) — the touch or wheel behind a
+// real scroll does. Now and then the server asks «Davom etyapsizmi? ✅»; the
+// small card waits for a real tap and nothing counts until then. A reward
+// comes back with a beat: the celebration waits for a free screen (never
+// over the entry gate, checkout, an open sheet, a game or the YANGI5 card)
+// and takes a new member's YANGI5 in with it — one party, not two. Reduced
+// motion: nothing moves and nothing plays; the 🎶 switch off: no tune.
+function stDur(sec, floor, long) {
+  const total = Math.max(0, floor ? Math.floor(sec / 60) : Math.ceil(sec / 60));
+  const h = Math.floor(total / 60), m = total % 60;
+  const ru = (n, one, few, many) => {
+    const a = n % 10, b = n % 100;
+    return n + ' ' + (a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many);
+  };
+  const join = (x, y) => [x, y].filter(Boolean).join(' ');
+  const uz = join(h ? h + ' soat' : '', m || !h ? m + ' daqiqa' : '');
+  const r = long
+    ? join(h ? ru(h, 'час', 'часа', 'часов') : '', m || !h ? ru(m, 'минуту', 'минуты', 'минут') : '')
+    : join(h ? h + ' ч' : '', m || !h ? m + ' мин' : '');
+  return gx(uz, r);
+}
+// «Yana 9 daqiqa — +50 Keto 🎁» — the next gift, calmly.
+function stNextText(next) {
+  if (!next || !(next.left > 0)) return '';
+  return gx('Yana {d} — +{n} Keto 🎁', 'Ещё {d} — +{n} Keto 🎁')
+    .replace('{d}', stDur(next.left)).replace('{n}', formatPrice(next.amount));
+}
+// «Batafsil»: what Keto is, how it is spent and earned — every rate from
+// the server (/api/site-time's info), never typed in here.
+function ketoInfoHtml(info) {
+  info = info || {};
+  const pct = r => String(Math.round(r * 1000) / 10).replace('.', ',') + '%';
+  const label = escapeHtml(t.ketoRedeemLabel || gx('Ketochalarni ishlatish', 'Использовать Keto-монетки'));
+  const out = [];
+  out.push('<p>' + gx(
+    "🪙 <b>Keto nima?</b> Ketoshopning sovg'a tangachalari: <b>1 Keto = 1 so'm</b> chegirma. Ular yo'qolmaydi — hisobingizda yig'ilib boradi.",
+    '🪙 <b>Что такое Keto?</b> Подарочные монетки Ketoshop: <b>1 Keto = 1 сум</b> скидки. Они не сгорают — копятся на вашем счёте.') + '</p>');
+  out.push('<p>' + (info.redeem
+    ? gx("🛒 <b>Qanday ishlatiladi?</b> Buyurtma berayotganda «{l}» ni tanlang — Keto pul o'rniga o'tadi va shuncha kam to'laysiz. Botda ham, saytda ham.",
+         '🛒 <b>Как потратить?</b> При оформлении заказа выберите «{l}» — монетки пойдут вместо денег, и вы заплатите меньше. И в боте, и на сайте.')
+    : gx("🛒 <b>Qanday ishlatiladi?</b> Hozircha Keto hisobingizda yig'ilib turadi; ishlatish mumkin bo'lganda buyurtmada «{l}» chiqadi.",
+         '🛒 <b>Как потратить?</b> Пока Keto копятся на счёте; когда их можно будет тратить, при заказе появится «{l}».')
+  ).replace('{l}', label) + '</p>');
+  const items = [];
+  const levels = (info.levels || []).map(l => escapeHtml(l.emoji + ' ' + pct(l.rate))).join(' · ');
+  if (levels) {
+    items.push(gx("🛍 Har yetkazilgan xariddan keshbek, darajangizga qarab: {v}.", '🛍 Кешбэк с каждой доставленной покупки, по уровню: {v}.').replace('{v}', levels)
+      + (info.my_rate ? ' ' + gx('Sizniki — <b>{m}</b>.', 'У вас — <b>{m}</b>.').replace('{m}', pct(info.my_rate)) : ''));
+  }
+  const ladder = info.ladder || [];
+  if (ladder.length) {
+    const rung = s => (s.seconds === 0 ? gx('birinchi tashrif', 'первый визит') : stDur(s.seconds)) + ' — ' + formatPrice(s.amount);
+    const last = ladder[ladder.length - 1];
+    items.push(gx('⏱ Saytda faol vaqt uchun: {r} … {last}; keyin har soatga yana {h} Keto.',
+                  '⏱ За активное время на сайте: {r} … {last}; дальше каждый час — ещё {h} Keto.')
+      .replace('{r}', escapeHtml(ladder.slice(0, 6).map(rung).join(', ')))
+      .replace('{last}', escapeHtml(rung(last)))
+      .replace('{h}', formatPrice(info.every_hour_after || 0)));
+  }
+  if (info.referral_percent) {
+    items.push(gx("👥 Do'stingizni taklif qiling: uning birinchi xaridining <b>{p}%</b> i sizga Keto bo'lib tushadi — botdagi «🎁 Bepul xarid qilish» tugmasida.",
+                  '👥 Приглашайте друзей: <b>{p}%</b> от их первой покупки придут вам в Keto — кнопка «🎁 Бесплатные покупки» в боте.')
+      .replace('{p}', escapeHtml(String(info.referral_percent))));
+  }
+  if (items.length) {
+    out.push('<p>' + gx("📥 <b>Qanday yig'iladi?</b>", '📥 <b>Как копить?</b>') + '</p><ul>' + items.map(i => '<li>' + i + '</li>').join('') + '</ul>');
+  }
+  out.push('<p>' + gx("🤝 <b>Halol hisob.</b> Vaqt faqat saytdan haqiqatan foydalanganingizda hisoblanadi — ko'rib, bosib, varaqlab turganingizda; kuniga ko'pi bilan {c}. Ora-orada «Davom etyapsizmi?» deb so'raymiz — bir bosish kifoya.",
+                      '🤝 <b>Честный счёт.</b> Время считается, только когда вы правда пользуетесь сайтом — смотрите, нажимаете, листаете; не больше {c} в день. Иногда спросим «Вы ещё здесь?» — достаточно одного нажатия.')
+    .replace('{c}', stDur(info.daily_cap || 0)) + '</p>');
+  return out.join('');
+}
+function stPill(text, ms) {
+  if (!text) return;
+  let el = document.getElementById('st-pill');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'st-pill';
+    el.className = 'st-pill';
+    el.setAttribute('role', 'status');
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  requestAnimationFrame(() => el.classList.add('on'));
+  clearTimeout(el._hide);
+  el._hide = setTimeout(() => el.classList.remove('on'), ms || 6000);
+}
+// A short "ta-da", synthesised like the birds — no recording. Sound may only
+// start from a person's gesture: if the phone hasn't allowed it yet, the
+// next tap during the party plays it (a tap on the close button only
+// unlocks it for next time).
+const Fanfare = (() => {
+  let ctx = null;
+  function context() {
+    if (ctx) return ctx;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try { ctx = new AC(); } catch (_) { ctx = null; }
+    return ctx;
+  }
+  function notes(c) {
+    const t0 = c.currentTime + 0.05;
+    const out = c.createGain();
+    out.gain.value = 0.16;
+    out.connect(c.destination);
+    // G4 C5 E5 G5, then a C-major chord that rings out.
+    [[392, 0, .13], [523.25, .13, .13], [659.25, .26, .13], [783.99, .39, .24],
+     [523.25, .66, 1.1], [659.25, .66, 1.1], [783.99, .66, 1.1], [1046.5, .66, 1.2]].forEach(([f, at, dur]) => {
+      const o = c.createOscillator();
+      o.type = 'triangle';
+      o.frequency.value = f;
+      const g = c.createGain();
+      g.gain.setValueAtTime(0, t0 + at);
+      g.gain.linearRampToValueAtTime(at > .6 ? 0.55 : 0.9, t0 + at + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + at + dur);
+      o.connect(g);
+      g.connect(out);
+      o.start(t0 + at);
+      o.stop(t0 + at + dur + 0.05);
+    });
+  }
+  function play(stillOpen) {
+    const c = context();
+    if (!c) return;
+    if (c.state === 'running') { notes(c); return; }
+    const gestures = ['touchend', 'click'];
+    const once = e => {
+      gestures.forEach(g => document.removeEventListener(g, once, true));
+      const closing = e && e.target && e.target.closest && e.target.closest('.kp-go');
+      c.resume().then(() => { if (!closing && stillOpen()) notes(c); }).catch(() => {});
+    };
+    gestures.forEach(g => document.addEventListener(g, once, true));
+  }
+  return { play };
+})();
+// «Davom etyapsizmi? ✅» — a small card at a random spot in the upper part
+// of the screen (clear of the dock and the bottom-right buttons). Shopping
+// goes on around it; only the time stops counting until a real tap, and a
+// tap within 300 ms of it appearing is ignored.
+const Presence = (() => {
+  const MIN_REPLY_MS = 300;
+  let token = null, card = null, shownAt = 0, retry = null, sending = false;
+  function blocked() {
+    const gate = document.getElementById('start-gate');
+    return (gate && gate.style.display !== 'none') || document.getElementById('keto-party')
+      || document.getElementById('welcome-party') || ['checkout', 'cheque', 'order-success'].includes(activePage);
+  }
+  function place() {
+    clearTimeout(retry);
+    retry = null;
+    if (!token) return;
+    if (blocked()) {
+      if (card) card.style.display = 'none';
+      retry = setTimeout(place, 2000);
+      return;
+    }
+    if (!card) {
+      card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'st-check';
+      card.addEventListener('click', onTap);
+      document.body.appendChild(card);
+    }
+    card.innerHTML = escapeHtml(gx('Davom etyapsizmi? ✅', 'Вы ещё здесь? ✅')) + '<small>' +
+      escapeHtml(gx('Bosing — saytdagi vaqtingiz hisoblanishda davom etadi', 'Нажмите — время на сайте продолжит считаться')) + '</small>';
+    const w = Math.min(220, window.innerWidth - 32);
+    card.style.left = Math.round(16 + Math.random() * Math.max(0, window.innerWidth - w - 32)) + 'px';
+    card.style.top = Math.round(window.innerHeight * (0.14 + Math.random() * 0.4)) + 'px';
+    card.style.display = '';
+    shownAt = performance.now();
+  }
+  function onTap(e) {
+    if (!e.isTrusted || !token || sending || performance.now() - shownAt < MIN_REPLY_MS) return;
+    sending = true;
+    api('/api/site-time/here', { method: 'POST', body: JSON.stringify({ token }) })
+      .then(r => { if (r && (r.ok || !r.check)) clear(); else if (r && r.check) token = r.check; })
+      .catch(() => {})
+      .finally(() => { sending = false; });
+  }
+  function ask(next) {
+    if (token === next && card) return;
+    token = next;
+    place();
+  }
+  function clear() {
+    token = null;
+    clearTimeout(retry);
+    retry = null;
+    if (card) { card.remove(); card = null; }
+  }
+  function sync() {             // leave the ordering screens alone, come back after
+    if (token && card && card.style.display !== 'none' && blocked()) place();
+  }
+  return { ask, clear, sync, waiting: () => !!token };
+})();
+const KetoParty = (() => {
+  const queue = [];             // rewards not celebrated yet
+  let welcome = null;           // YANGI5 waiting to join a Keto party
+  let helloPending = true;      // the visit's first beat (the first-visit gift) is on its way
+  let box = null, retry = null, closedAt = 0;
+  const bootAt = Date.now();
+  const reduced = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } };
+  // The 🎶 button's switch (Birdsong) — off means no tune here either.
+  const soundOff = () => { try { return localStorage.getItem('ketoshop_birds') === 'off'; } catch (_) { return false; } };
+  // Wait for /api/promo (it says whether YANGI5 is running), 8 s at most.
+  const promoKnown = () => !!(typeof promo !== 'undefined' && promo && promo.perks) || Date.now() - bootAt > 8000;
+  function busy() {
+    const gate = document.getElementById('start-gate');
+    return (gate && gate.style.display !== 'none') || document.getElementById('welcome-party') || box
+      || ['checkout', 'cheque', 'order-success'].includes(activePage)
+      || (activePage === 'games' && typeof gameState !== 'undefined' && gameState)
+      || document.querySelector('.modal-overlay.show, .map-modal.show, .dock-hand');
+  }
+  function pump() {
+    clearTimeout(retry);
+    retry = null;
+    if (!queue.length || box) return;
+    if (!promoKnown() || busy()) { retry = setTimeout(pump, 1500); return; }
+    show();
+  }
+  function add(awards, balance, next, info) {
+    queue.push({ awards, balance, next, info });
+    pump();
+  }
+  function showHeldWelcome() {
+    if (!welcome || box || queue.length) return;
+    const held = welcome;
+    welcome = null;
+    showWelcomeParty(held.w, held.endsAt);
+  }
+  function helloDone() {
+    helloPending = false;
+    if (welcome && !queue.length) showHeldWelcome();
+    else pump();
+  }
+  function joinWelcome(w, endsAt) {
+    if (box) { addYangi(box, w, endsAt); return true; }
+    if (!queue.length && !helloPending) return false;
+    welcome = { w, endsAt };
+    setTimeout(showHeldWelcome, 6000);   // the beat never came back: YANGI5 on its own
+    return true;
+  }
+  function addYangi(root, w, endsAt) {
+    const slot = root.querySelector('.kp-yangi-slot');
+    if (!slot || slot.childNodes.length) return;
+    slot.innerHTML =
+      '<p class="kp-also">' + escapeHtml(gx("🎁 Yana bir sovg'a — yangi a'zo sifatida", '🎁 И ещё подарок — как новому участнику')) + '</p>' +
+      '<div class="kp-yangi"><span class="kp-pct">−' + escapeHtml(String(w.percent)) + '%</span>' +
+        '<span class="kp-gift">' + escapeHtml(t.wpGift) + '</span>' +
+        '<span class="kp-code">' + escapeHtml(w.code) + '</span>' +
+        '<div class="kp-left">⏳ ' + escapeHtml(t.wpLeft) + '</div>' +
+        '<div class="kp-clock"></div>' +
+        '<p class="kp-note">' + escapeHtml(t.wpNote) + '</p></div>';
+    const clock = slot.querySelector('.kp-clock');
+    const tick = () => { clock.textContent = hmsLeft((endsAt - Date.now()) / 1000); };
+    tick();
+    const timer = setInterval(tick, 1000);
+    root._stops.push(() => clearInterval(timer));
+    const go = root.querySelector('.kp-go');
+    if (go) go.textContent = t.wpGo;
+  }
+  function show() {
+    const items = queue.splice(0);
+    const last = items[items.length - 1];
+    const awards = [].concat(...items.map(i => i.awards || []));
+    const total = awards.reduce((s, a) => s + (a.amount || 0), 0);
+    const top = Math.max(...awards.map(a => a.seconds || 0));
+    const still = reduced();
+    const why = top === 0
+      ? gx("Saytimizga xush kelibsiz! Tashrifingiz uchun kichik sovg'a — sog'lom mahsulotlarimiz bilan bemalol tanishing.",
+           'Добро пожаловать на наш сайт! Небольшой подарок за визит — знакомьтесь с полезными продуктами не спеша.')
+      : gx("Saytimizda sog'lom mahsulotlar bilan tanishishga jami {d} vaqt ajratdingiz. Rahmat — bu sizga sovg'amiz!",
+           'В сумме вы провели на нашем сайте {d}, знакомясь с полезными продуктами. Спасибо — это вам подарок!')
+          .replace('{d}', stDur(top, true, true));
+    box = document.createElement('div');
+    box.id = 'keto-party';
+    box._stops = [];
+    if (still) box.classList.add('still');
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.innerHTML =
+      '<canvas></canvas>' +
+      '<div class="kp-card">' +
+        '<div class="kp-coin" aria-hidden="true">K</div>' +
+        '<h2>' + escapeHtml(gx("🎉 +{n} Keto sovg'a!", '🎉 +{n} Keto в подарок!').replace('{n}', formatPrice(total))) + '</h2>' +
+        '<p class="kp-why">' + escapeHtml(why) + '</p>' +
+        '<div class="kp-balance">' + gx('👛 Balansingiz: <b>{b} Keto</b>', '👛 Ваш баланс: <b>{b} Keto</b>').replace('{b}', formatPrice(last.balance || 0)) + '</div>' +
+        '<div class="kp-yangi-slot"></div>' +
+        (last.next ? '<p class="kp-next">' + escapeHtml(stNextText(last.next)) + '</p>' +
+          '<p class="kp-hint">' + escapeHtml(gx("Mahsulot va retseptlarni bemalol ko'ring — faol vaqtingiz o'zi hisoblanadi.",
+                                                  'Смотрите товары и рецепты не спеша — активное время считается само.')) + '</p>' : '') +
+        '<button class="kp-go" type="button">' + escapeHtml(gx('Rahmat! 🛍 Davom etamiz', 'Спасибо! 🛍 Продолжим')) + '</button>' +
+        '<button class="kp-more" type="button" aria-expanded="false"></button>' +
+        '<div class="kp-details" hidden>' + ketoInfoHtml(last.info || SiteTime.info()) + '</div>' +
+      '</div>';
+    const card = box.querySelector('.kp-card');
+    if (!still) {
+      ['🎊', '✨', '⭐', '💛', '🎉'].forEach((c, i) => {
+        for (let k = 0; k < 3; k++) {
+          const s = document.createElement('span');
+          s.className = 'kp-rain';
+          s.textContent = c;
+          s.style.left = Math.round(Math.random() * 96) + 'vw';
+          s.style.animationDuration = (2.6 + Math.random() * 2.2).toFixed(2) + 's';
+          s.style.animationDelay = ((i * 3 + k) * 0.12).toFixed(2) + 's';
+          box.insertBefore(s, card);
+        }
+      });
+    }
+    document.body.appendChild(box);
+    if (welcome) { const held = welcome; welcome = null; addYangi(box, held.w, held.endsAt); }
+    const more = box.querySelector('.kp-more');
+    const details = box.querySelector('.kp-details');
+    const paintMore = () => {
+      more.textContent = details.hidden ? gx('Batafsil ▾', 'Подробнее ▾') : gx('Yopish ▴', 'Свернуть ▴');
+      more.setAttribute('aria-expanded', String(!details.hidden));
+    };
+    paintMore();
+    more.onclick = () => { details.hidden = !details.hidden; paintMore(); };
+    if (!still) box._stops.push(launchFireworks(box.querySelector('canvas')));
+    const mine = box;
+    if (!still && !soundOff()) Fanfare.play(() => box === mine);
+    try { tg.HapticFeedback.notificationOccurred('success'); } catch (_) {}
+    box.querySelector('.kp-go').onclick = () => close(last.next);
+    box.querySelector('.kp-go').focus({ preventScroll: true });
+  }
+  function close(next) {
+    if (!box) return;
+    box._stops.forEach(stop => { try { stop(); } catch (_) {} });
+    box.remove();
+    box = null;
+    closedAt = Date.now();
+    if (next) setTimeout(() => stPill(stNextText(SiteTime.next() || next)), 350);
+    SiteTime.renderProfile();
+    pump();
+  }
+  // On screen now, or closed less than `ms` ago (other sheets wait for that).
+  const recent = ms => !!box || (closedAt > 0 && Date.now() - closedAt < ms);
+  return { add, helloDone, joinWelcome, recent };
+})();
+const SiteTime = (() => {
+  const MINUTE_MS = 60000, TICK_MS = 1000, MIN_STEP_MS = 250, MAX_GAPS = 40;
+  const sid = Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  let started = false, enabled = true, timer = null;
+  let n = 0, gaps = [], lastAt = 0, focused = true, shownMs = 0, lastTick = 0;
+  let status = null, info = null, openDetails = false;
+
+  function onInteract(e) {
+    if (!e || !e.isTrusted) return;            // a person's own touch — never a script's
+    focused = true;
+    const now = performance.now();
+    if (lastAt && now - lastAt < MIN_STEP_MS) return;   // one swipe is one interaction, not fifty
+    if (lastAt) {
+      gaps.push(Math.round(now - lastAt));
+      if (gaps.length > MAX_GAPS) gaps.shift();
+    }
+    lastAt = now;
+    n++;
+  }
+  function tick() {
+    const now = performance.now();
+    const dt = lastTick ? Math.min(now - lastTick, 5000) : 0;
+    lastTick = now;
+    Presence.sync();
+    if (!enabled || document.visibilityState !== 'visible' || !focused || Presence.waiting()) return;
+    shownMs += dt;
+    if (shownMs < MINUTE_MS) return;
+    shownMs = 0;
+    if (n < 1) { gaps = []; return; }          // a minute nobody touched does not count
+    const beat = { sid, n, gaps: gaps.slice() };
+    n = 0;
+    gaps = [];
+    send(beat);
+  }
+  function send(beat) {
+    return api('/api/site-time', { method: 'POST', body: JSON.stringify(beat) })
+      .then(apply)
+      .catch(() => { /* the server keeps the time; the next minute tries again */ });
+  }
+  function apply(r) {
+    if (!r || r.enabled === false) { stop(); return; }
+    if (r.info) info = r.info;
+    status = r;
+    if (r.awards && r.awards.length) KetoParty.add(r.awards, r.balance, r.next, info);
+    if (r.check) Presence.ask(r.check);
+    else Presence.clear();
+    if (activePage === 'profile') renderProfile();
+  }
+  function stop() {
+    enabled = false;
+    clearInterval(timer);
+    timer = null;
+    Presence.clear();
+    renderProfile();
+  }
+  function start() {
+    if (started) return;
+    started = true;
+    ['pointerdown', 'touchmove', 'wheel', 'keydown'].forEach(ev =>
+      document.addEventListener(ev, onInteract, { capture: true, passive: true }));
+    window.addEventListener('blur', () => { focused = false; });
+    window.addEventListener('focus', () => { focused = true; });
+    lastTick = performance.now();
+    timer = setInterval(tick, TICK_MS);
+    // The visit's first beat: starts the server's clock, pays the first-visit
+    // gift once, and brings what «Batafsil» explains.
+    send({ sid, n: 0, gaps: [], hello: true }).finally(() => KetoParty.helloDone());
+  }
+  function renderProfile() {
+    const el = document.getElementById('st-profile');
+    if (!el) return;
+    if (!enabled || !status || !status.enabled) { el.innerHTML = ''; return; }
+    const active = status.active || 0, next = status.next;
+    let from = 0;
+    ((info && info.ladder) || []).forEach(s => { if (s.seconds <= active) from = s.seconds; });
+    if (next && next.seconds - 3600 > from) from = Math.max(from, next.seconds - 3600);
+    const pct = next ? Math.max(3, Math.min(100, Math.round((active - from) / Math.max(1, next.seconds - from) * 100))) : 100;
+    el.innerHTML =
+      '<div class="st-head"><span>' + gx('⏱ Saytdagi faol vaqtingiz: <b>{d}</b>', '⏱ Ваше активное время на сайте: <b>{d}</b>')
+        .replace('{d}', escapeHtml(stDur(active, true))) + '</span>' +
+        '<span class="st-bal">👛 ' + formatPrice(status.balance || 0) + ' Keto</span></div>' +
+      (next ? '<div class="st-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><i style="width:' + pct + '%"></i></div>' +
+        '<div class="st-next">' + escapeHtml(stNextText(next)) + '</div>' : '') +
+      '<div class="st-sub">' + escapeHtml(gx("Mahsulot va retseptlarni bemalol ko'ring — faol vaqtingiz o'zi hisoblanadi.",
+                                               'Смотрите товары и рецепты не спеша — активное время считается само.')) + '</div>' +
+      '<button class="kp-more" type="button" aria-expanded="' + openDetails + '">' +
+        escapeHtml(openDetails ? gx('Yopish ▴', 'Свернуть ▴') : gx('Batafsil ▾', 'Подробнее ▾')) + '</button>' +
+      '<div class="kp-details"' + (openDetails ? '' : ' hidden') + '>' + ketoInfoHtml(info) + '</div>';
+    el.querySelector('.kp-more').onclick = () => { openDetails = !openDetails; renderProfile(); };
+  }
+  return { start, renderProfile, info: () => info, next: () => status && status.next };
+})();
+
 // ===== AKSIYA / BONUS =====
 // One /api/promo read per session drives the home banner, the catalog strip,
 // the 🎁 badges on cards, and the aksiya sheet. Refreshed after every cart
@@ -6352,6 +7622,7 @@ function renderWelcomeTimer() {
   if (!w || !(w.seconds_left > 0)) { el.style.display = 'none'; return; }
   const endsAt = Date.now() + w.seconds_left * 1000;
   document.getElementById('welcome-timer-code').textContent = w.label;
+  celebrateWelcome(w, endsAt);
   const tick = () => {
     const left = Math.floor((endsAt - Date.now()) / 1000);
     if (left <= 0) {
@@ -6367,6 +7638,526 @@ function renderWelcomeTimer() {
   tick();
   welcomeTimerTick = setInterval(tick, 1000);
 }
+
+// ===== YANGI5 TANTANASI (owner, 2026-11-08: "8 soatlik 5% lik chegirmani
+// tabriklab tantana bilan e'lon qil, saytda ham salyutlar va counter bilan") =====
+// The first time a new member's YANGI5 reaches this phone: a full-screen
+// card with fireworks behind it, the gift and a live clock. Once per member
+// per phone (localStorage; without it, once per launch). The pill stays.
+let welcomePartyShown = false;
+function hmsLeft(seconds) {
+  const s = Math.max(0, Math.floor(seconds));
+  return Math.floor(s / 3600) + ':' + String(Math.floor(s % 3600 / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+}
+function celebrateWelcome(w, endsAt) {
+  if (welcomePartyShown || document.getElementById('welcome-party')) return;
+  welcomePartyShown = true;
+  const me = (tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) || 'x';
+  const key = 'ketoshop_yangi5_party_' + me;
+  try { if (localStorage.getItem(key)) return; localStorage.setItem(key, '1'); } catch (_) { /* once per launch */ }
+  // One party, not two (owner, 2026-11-15): when a Keto gift for the site
+  // is on its way or on screen, YANGI5 joins that celebration.
+  if (KetoParty.joinWelcome(w, endsAt)) return;
+  showWelcomeParty(w, endsAt);
+}
+function showWelcomeParty(w, endsAt) {
+  const box = document.createElement('div');
+  box.id = 'welcome-party';
+  box.setAttribute('role', 'dialog');
+  box.innerHTML =
+    '<canvas></canvas>' +
+    '<div class="wp-card">' +
+      '<div class="wp-emoji">🎉</div>' +
+      '<h2>' + escapeHtml(t.wpTitle) + '</h2>' +
+      '<p class="wp-sub">' + escapeHtml(t.wpSub) + '</p>' +
+      '<div class="wp-gift"><span class="wp-pct">−' + escapeHtml(String(w.percent)) + '%</span>' +
+        '<span class="wp-gift-text">' + escapeHtml(t.wpGift) + '</span>' +
+        '<span class="wp-code">' + escapeHtml(w.code) + '</span></div>' +
+      '<div class="wp-left">⏳ ' + escapeHtml(t.wpLeft) + '</div>' +
+      '<div class="wp-clock"></div>' +
+      '<p class="wp-note">' + escapeHtml(t.wpNote) + '</p>' +
+      '<button class="wp-go" type="button">' + escapeHtml(t.wpGo) + '</button>' +
+    '</div>';
+  document.body.appendChild(box);
+  const clock = box.querySelector('.wp-clock');
+  const tick = () => { clock.textContent = hmsLeft((endsAt - Date.now()) / 1000); };
+  tick();
+  const clockTimer = setInterval(tick, 1000);
+  const stopFireworks = launchFireworks(box.querySelector('canvas'));
+  box.querySelector('.wp-go').onclick = () => {
+    clearInterval(clockTimer);
+    stopFireworks();
+    box.remove();
+  };
+  try { tg.HapticFeedback.notificationOccurred('success'); } catch (_) {}
+}
+
+// Salyut: bursts of sparks that rise, open and fall, for about six seconds.
+// Returns a stop function. Canvas 2D, no library.
+function launchFireworks(canvas) {
+  const ctx = canvas.getContext && canvas.getContext('2d');
+  if (!ctx) return () => {};
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const size = () => { canvas.width = canvas.clientWidth * dpr; canvas.height = canvas.clientHeight * dpr; };
+  size();
+  const colors = ['#FFC94D', '#E8637F', '#9BC25B', '#5AC8FA', '#F76B15', '#C9A0FF', '#FFFFFF'];
+  const sparks = [];
+  let raf = 0, bursts = 0, stopped = false;
+  const burst = () => {
+    const x = canvas.width * (0.15 + Math.random() * 0.7);
+    const y = canvas.height * (0.12 + Math.random() * 0.33);
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const n = 70;
+    for (let i = 0; i < n; i++) {
+      const a = (Math.PI * 2 * i) / n + Math.random() * 0.2;
+      const v = (1.6 + Math.random() * 3.2) * dpr;
+      sparks.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, color });
+    }
+  };
+  const frame = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const s = sparks[i];
+      s.x += s.vx; s.y += s.vy;
+      s.vx *= 0.985; s.vy = s.vy * 0.985 + 0.045 * dpr;
+      s.life -= 0.012;
+      if (s.life <= 0) { sparks.splice(i, 1); continue; }
+      ctx.globalAlpha = s.life;
+      ctx.fillStyle = s.color;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, 2.2 * dpr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    if (!stopped && (sparks.length || bursts < 12)) raf = requestAnimationFrame(frame);
+  };
+  const timer = setInterval(() => {
+    if (++bursts >= 12) clearInterval(timer);
+    burst();
+  }, 480);
+  burst();
+  raf = requestAnimationFrame(frame);
+  window.addEventListener('resize', size);
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+    cancelAnimationFrame(raf);
+    window.removeEventListener('resize', size);
+  };
+}
+
+// ===== PASTKI MENYU KO'RSATMASI (owner, 2026-11-08: "boshqa bo'lim tugmalari
+// ham pastda sezilmayapti katta yoshlilar buni bosish mumkin ekanini ham
+// bilishmayapti, shuni birinchi kirganda 3 safar ... qisqa qimirlaydigan va
+// click qiladigan animatsiya ko'rsat 4-marotaba kirganda bo'ldi ko'rsatma") =====
+// On a buyer's first three launches a hand taps each of the other dock
+// buttons in turn: the button wiggles, a ripple marks the tap and its name
+// shows above it — about four seconds. Counted per buyer on this phone (a
+// launch counts even if the buyer stops it); from the fourth launch, never.
+// It waits for the entry screen and the YANGI5 card to be gone; any touch
+// stops it. Without storage it is not shown at all — it could not stop.
+// ===== YORDAMCHI (owner, 2026-11-15) =====
+// "Saytga Yordamchi nomli o'ng taraf pastda turadigan operator dumaloq
+// belgisini qo'y u orqali ai suhbatdosh ochilsin … buyurtmalarni rasmlari
+// bilan va barcha ma'lumotlari bilan chatda ko'rsatib bera olsin" and "har
+// bir kirgan foydalanuvchi uchun … typing rejimida yordamchini tanishtir".
+// The bot's AI seller answers through POST /api/assistant (site_assistant.py);
+// products, the cart and the buyer's own orders come back as cards. The
+// typing introduction plays once per launch of the shop; the conversation is
+// kept on this phone (last MAX_KEEP messages) so reopening shows it.
+const Assistant = (() => {
+  const HIDE_ON = ['cart', 'checkout'];
+  const MAX_KEEP = 40;
+  const INTRO_FIRST = 3500, INTRO_HOLD = 12000, TYPE_MS = 24;
+  let started = false, busy = false, history = null, introTimer = null, introToken = 0;
+  const $ = id => document.getElementById(id);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const uid = () => (tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) || 'x';
+  const KEY = () => 'ketoshop_asst_' + uid();
+  const reduced = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  const txt = {
+    intro: () => gx("Assalomu alaykum! 👋 Bu — <b>Yordamchi</b>. Keto shopdagi istalgan mahsulot bo'yicha shu yerda maslahat olishingiz mumkin. Savolingizni yozing 👇",
+                    "Здравствуйте! 👋 Это — <b>Помощник</b>. Здесь можно получить совет по любому товару Keto shop. Напишите свой вопрос 👇"),
+    greet: () => gx("Assalomu alaykum! 👋 Bu — Keto shop Yordamchisi. Istalgan mahsulot bo'yicha maslahat beramiz: nima, qanday ishlatiladi, narxi qancha. Buyurtmangiz holatini ham rasmlari bilan ko'rsatib beramiz — savolingizni yozing 👇",
+                    "Здравствуйте! 👋 Это — Помощник Keto shop. Подскажем по любому товару: что это, как использовать, сколько стоит. Покажем и статус вашего заказа с фото — напишите вопрос 👇"),
+    label: () => gx('Yordamchi', 'Помощник'),
+    sub: () => gx('Keto shop · AI maslahatchi', 'Keto shop · AI-консультант'),
+    note: () => gx("AI javob beradi — muhim narsani buyurtmada tekshiring", 'Отвечает ИИ — важное проверьте в заказе'),
+    placeholder: () => gx('Savolingizni yozing…', 'Напишите вопрос…'),
+    send: () => gx('Yuborish', 'Отправить'),
+    close: () => gx('Yopish', 'Закрыть'),
+    chips: () => [gx('📦 Buyurtmam qayerda?', '📦 Где мой заказ?'),
+                  gx("🍞 Keto non uchun qaysi un?", '🍞 Какая мука для кето-хлеба?'),
+                  gx("🍬 Shakar o'rniga nima?", '🍬 Чем заменить сахар?'),
+                  gx('🛒 Savatimda nima bor?', '🛒 Что в моей корзине?')],
+    error: () => gx("Ulanishda xato bo'ldi — birozdan keyin qayta yozib ko'ring.", 'Ошибка связи — попробуйте написать чуть позже.'),
+    add: () => gx('+ Savatga', '+ В корзину'),
+    oos: () => gx('⏳ Tez orada qaytadi', '⏳ Скоро вернётся'),
+    openCart: () => gx('🛒 Savatni ochish', '🛒 Открыть корзину'),
+    cartTitle: () => gx('🛒 Savatingiz', '🛒 Ваша корзина'),
+    cartEmpty: () => gx("Savat hozircha bo'sh", 'Корзина пока пуста'),
+    goods: () => gx('Mahsulotlar', 'Товары'),
+    total: () => gx('Jami', 'Итого'),
+    order: () => gx('Buyurtma', 'Заказ'),
+    myOrders: () => gx('📦 Buyurtmalarim', '📦 Мои заказы'),
+    gift: () => gx("sovg'a", 'подарок'),
+    som: () => gx("so'm", 'сум'),
+  };
+
+  function load() {
+    if (history) return history;
+    try { history = JSON.parse(localStorage.getItem(KEY()) || '[]'); } catch (_) { history = []; }
+    if (!Array.isArray(history)) history = [];
+    return history;
+  }
+  function save() {
+    try { localStorage.setItem(KEY(), JSON.stringify(history.slice(-MAX_KEEP))); } catch (_) {}
+  }
+  function blocked() {
+    const gate = document.getElementById('start-gate');
+    return document.getElementById('welcome-party') || document.getElementById('keto-party')
+      || (gate && gate.style.display !== 'none')
+      || document.querySelector('.modal-overlay.show, .map-modal.show, .dock-hand');
+  }
+
+  // Reply text: the bot's HTML (b/i/u/s/code) kept, everything else escaped;
+  // web links and @usernames become links opened through Telegram.
+  function rich(s) {
+    const keep = [];
+    s = String(s || '').replace(/<a\s+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (m, href, label) => label + ' ' + href);
+    s = s.replace(/<\/?(b|i|u|s|code)>/gi, m => { keep.push(m.toLowerCase()); return '' + (keep.length - 1) + ''; });
+    s = s.replace(/<[^>]*>/g, '');
+    const box = document.createElement('textarea');
+    box.innerHTML = s;
+    s = escapeHtml(box.value);
+    s = s.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" data-ext="1">$1</a>');
+    s = s.replace(/(^|[^\w/])@([A-Za-z][A-Za-z0-9_]{4,31})\b/g, '$1<a href="https://t.me/$2" data-ext="1">@$2</a>');
+    s = s.replace(/(\d+)/g, (m, i) => keep[+i] || '');
+    return s.replace(/\n/g, '<br>');
+  }
+  function som(v) { return formatPrice(v || 0) + ' ' + txt.som(); }
+  function img(url, sm) {
+    return '<div class="asst-img' + (sm ? ' sm' : '') + '"' +
+      (url ? ' style="background-image:url(\'' + cssUrl(url) + '\')"' : '') + '></div>';
+  }
+  function qtyText(q, unit) {
+    const n = Number(q) || 0;
+    return (Number.isInteger(n) ? n : String(n).replace('.', ',')) + (unit ? ' ' + escapeHtml(unit) : '');
+  }
+
+  function productCard(c) {
+    const price = c.discount_percent > 0 && c.original_price > c.price
+      ? som(c.price) + '<s>' + formatPrice(c.original_price) + '</s>' : som(c.price);
+    return '<div class="asst-card asst-prod" data-pid="' + c.id + '">' + img(c.photo_url) +
+      '<div class="asst-prod-body"><div class="asst-prod-name">' + escapeHtml(c.name || '') + '</div>' +
+      '<div class="asst-prod-price">' + price + (c.unit ? ' <span class="asst-oos">/ ' + escapeHtml(c.unit) + '</span>' : '') + '</div>' +
+      (c.out_of_stock ? '<div class="asst-oos">' + txt.oos() + '</div>' : '') + '</div>' +
+      (c.out_of_stock ? '' : '<button class="asst-add" type="button" data-add="' + c.id + '">' + txt.add() + '</button>') +
+      '</div>';
+  }
+  function lines(items) {
+    return items.map(it => '<div class="asst-line">' + img(it.photo_url, true) +
+      '<div class="asst-line-name">' + escapeHtml(it.name || '') + ' × ' + qtyText(it.quantity, it.unit) + '</div>' +
+      '<div class="asst-line-sum">' + (it.gift ? '🎁 ' + txt.gift() : (it.total != null ? som(it.total) : '')) + '</div></div>').join('');
+  }
+  function cartCard(c) {
+    if (!c.items || !c.items.length) return '<div class="asst-card"><div class="asst-card-title">' + txt.cartTitle() + '</div>' + txt.cartEmpty() + '</div>';
+    return '<div class="asst-card"><div class="asst-card-title">' + txt.cartTitle() + '</div>' + lines(c.items) +
+      '<div class="asst-total"><span>' + txt.goods() + '</span><span>' + som(c.total) + '</span></div>' +
+      '<button class="asst-card-btn" type="button" data-go="cart">' + txt.openCart() + '</button></div>';
+  }
+  function orderCard(c) {
+    const meta = [formatOrderDate(c.created_at), c.delivery, c.payment].filter(Boolean).map(escapeHtml).join(' · ');
+    return '<div class="asst-card"><div class="asst-card-title"><span>' + txt.order() + ' #' + c.id + '</span>' +
+      '<span class="asst-status">' + escapeHtml(c.status_text || c.status || '') + '</span></div>' + lines(c.items || []) +
+      '<div class="asst-total"><span>' + txt.total() + '</span><span>' + som(c.total) + '</span></div>' +
+      (meta ? '<div class="asst-meta">' + meta + '</div>' : '') +
+      (c.address ? '<div class="asst-meta">📍 ' + escapeHtml(c.address) + '</div>' : '') +
+      '<button class="asst-card-btn" type="button" data-go="orders">' + txt.myOrders() + '</button></div>';
+  }
+  function cardsHtml(cards) {
+    return (cards || []).map(c => c.type === 'product' ? productCard(c)
+      : c.type === 'cart' ? cartCard(c) : c.type === 'order' ? orderCard(c) : '').join('');
+  }
+
+  function append(m) {
+    const log = $('asst-log');
+    if (!log) return;
+    if (m.text) {
+      const el = document.createElement('div');
+      el.className = 'asst-msg ' + (m.me ? 'me' : 'bot');
+      el.innerHTML = m.me ? escapeHtml(m.text).replace(/\n/g, '<br>') : rich(m.text);
+      log.appendChild(el);
+    }
+    if (m.cards && m.cards.length) {
+      const box = document.createElement('div');
+      box.className = 'asst-cards';
+      box.innerHTML = cardsHtml(m.cards);
+      log.appendChild(box);
+    }
+    log.scrollTop = log.scrollHeight;
+  }
+  function render() {
+    const log = $('asst-log');
+    log.innerHTML = '';
+    const h = load();
+    if (!h.length) append({ text: txt.greet() });
+    h.forEach(append);
+    $('asst-chips').innerHTML = txt.chips().map(c => '<button class="asst-chip" type="button">' + escapeHtml(c) + '</button>').join('');
+    $('asst-chips').style.display = h.length > 6 ? 'none' : 'flex';
+  }
+  function typing(on) {
+    const log = $('asst-log');
+    let el = document.getElementById('asst-typing-row');
+    if (on && !el) {
+      el = document.createElement('div');
+      el.id = 'asst-typing-row';
+      el.className = 'asst-msg bot';
+      el.innerHTML = '<span class="asst-typing"><i></i><i></i><i></i></span>';
+      log.appendChild(el);
+      log.scrollTop = log.scrollHeight;
+    } else if (!on && el) el.remove();
+  }
+
+  function applyText() {
+    const fab = $('asst-fab');
+    if (!fab) return;
+    fab.setAttribute('aria-label', txt.label());
+    $('asst-fab-label').textContent = txt.label();
+    $('asst-title').textContent = txt.label();
+    $('asst-sub').textContent = txt.sub();
+    $('asst-note').textContent = txt.note();
+    $('asst-input').placeholder = txt.placeholder();
+    $('asst-send').setAttribute('aria-label', txt.send());
+    $('asst-close').setAttribute('aria-label', txt.close());
+  }
+
+  function sync() {
+    const fab = $('asst-fab');
+    if (!fab || !started) return;
+    const hide = HIDE_ON.includes(activePage) || _isModalOpen('asst-modal');
+    fab.classList.toggle('hidden', hide);
+    if (hide) hideIntro();
+  }
+
+  async function playIntro() {
+    const my = ++introToken;
+    const bubble = $('asst-bubble'), out = $('asst-bubble-text');
+    for (let i = 0; i < 20 && blocked(); i++) await sleep(1500);   // wait out the gate, party, dock hint, sheets
+    if (my !== introToken || blocked() || HIDE_ON.includes(activePage) || _isModalOpen('asst-modal')) return;
+    trk(() => Trk.ev('assistant', 'intro', null, activePage));
+    out.innerHTML = '<span class="asst-typing"><i></i><i></i><i></i></span>';
+    bubble.classList.add('on');
+    const html = txt.intro();
+    if (reduced()) { out.innerHTML = html; }
+    else {
+      await sleep(1300);
+      // Typed out letter by letter; tags go in whole so <b> never shows.
+      const parts = html.match(/<[^>]+>|[\s\S]/g) || [];
+      let shown = '';
+      for (const p of parts) {
+        if (my !== introToken) return;
+        shown += p;
+        out.innerHTML = shown + '<span class="asst-caret"></span>';
+        if (p.length === 1) await sleep(TYPE_MS);
+      }
+      out.innerHTML = html;
+    }
+    clearTimeout(introTimer);
+    introTimer = setTimeout(hideIntro, INTRO_HOLD);
+  }
+  function hideIntro() {
+    introToken++;
+    clearTimeout(introTimer);
+    const b = $('asst-bubble');
+    if (b) b.classList.remove('on');
+  }
+
+  function open(src) {
+    hideIntro();
+    render();
+    $('asst-modal').classList.add('show');
+    sync();
+    updateBackButton();
+    trk(() => Trk.ev('assistant', 'open', null, src || ''));
+    setTimeout(() => { const i = $('asst-input'); if (i && !matchMedia('(pointer: coarse)').matches) i.focus(); }, 300);
+  }
+  function close() {
+    $('asst-modal').classList.remove('show');
+    sync();
+    updateBackButton();
+  }
+
+  async function send(text) {
+    const input = $('asst-input');
+    text = String(text != null ? text : input.value).trim();
+    if (!text || busy) return;
+    busy = true;
+    $('asst-send').disabled = true;
+    input.value = '';
+    input.style.height = '';
+    const h = load();
+    const mine = { me: true, text };
+    h.push(mine); save(); append(mine);
+    $('asst-chips').style.display = 'none';
+    typing(true);
+    trk(() => Trk.ev('assistant', 'send', null, String(text.length)));
+    let msg;
+    try {
+      const res = await api('/api/assistant', { method: 'POST', body: JSON.stringify({ text }) });
+      msg = { text: res.reply || '', cards: res.cards || [] };
+    } catch (e) {
+      msg = { text: txt.error(), cards: [], err: true };
+    }
+    typing(false);
+    if (!msg.err) { h.push(msg); save(); }
+    append(msg);
+    busy = false;
+    $('asst-send').disabled = false;
+  }
+
+  function wire() {
+    $('asst-log').addEventListener('click', e => {
+      const ext = e.target.closest('a[data-ext]');
+      if (ext) {
+        e.preventDefault();
+        const href = ext.getAttribute('href');
+        try { if (/^https:\/\/t\.me\//.test(href) && tg.openTelegramLink) tg.openTelegramLink(href); else if (tg.openLink) tg.openLink(href); else window.open(href, '_blank'); }
+        catch (_) { window.open(href, '_blank'); }
+        return;
+      }
+      const add = e.target.closest('[data-add]');
+      if (add) {
+        e.stopPropagation();
+        quickAddToCart({ id: parseInt(add.dataset.add, 10), is_set: false }, add, 'assistant');
+        return;
+      }
+      const go = e.target.closest('[data-go]');
+      if (go) { close(); switchPage(go.dataset.go); return; }
+      const prod = e.target.closest('[data-pid]');
+      if (prod) { close(); openDetail(parseInt(prod.dataset.pid, 10)).catch(() => {}); }
+    });
+    $('asst-chips').addEventListener('click', e => {
+      const c = e.target.closest('.asst-chip');
+      if (c) send(c.textContent.replace(/^\S+\s/, ''));
+    });
+    const input = $('asst-input');
+    input.addEventListener('input', () => {
+      input.style.height = '';
+      input.style.height = Math.min(120, input.scrollHeight) + 'px';
+    });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey && !matchMedia('(pointer: coarse)').matches) { e.preventDefault(); send(); }
+    });
+  }
+
+  function start() {
+    if (started || !$('asst-fab')) return;
+    started = true;
+    applyText();
+    wire();
+    sync();
+    let shown = false;
+    try { shown = sessionStorage.getItem('ketoshop_asst_intro') === '1'; } catch (_) {}
+    if (!shown) {
+      try { sessionStorage.setItem('ketoshop_asst_intro', '1'); } catch (_) {}
+      setTimeout(playIntro, INTRO_FIRST);
+    }
+  }
+
+  return { start, open, close, send, sync, hideIntro, applyText, rich, cardsHtml };
+})();
+
+const DockHint = (() => {
+  const SHOWS = 3;
+  // Slow enough to follow (owner, 2026-11-08: "sekinroq chiqsin odam
+  // tushunmay qoldi"): a line saying what the buttons are, then each one
+  // reached in 0.7 s, pressed, its name held for 1.4 s — about 12 s in all.
+  const INTRO_MS = 2200, MOVE_MS = 700, PRESS_MS = 250, HOLD_MS = 1400;
+  let stopFn = null;
+  const key = () => 'ketoshop_dock_hint_' +
+    ((tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) || 'x');
+  function seen() {
+    try { return parseInt(localStorage.getItem(key()) || '0', 10) || 0; } catch (_) { return SHOWS; }
+  }
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  function blocked() {
+    const gate = document.getElementById('start-gate');
+    return document.getElementById('welcome-party') || document.getElementById('keto-party')
+      || (gate && gate.style.display !== 'none')
+      || document.querySelector('.modal-overlay.show, #detail-modal.show');
+  }
+  async function play() {
+    const tabs = [...document.querySelectorAll('#tab-bar .tab-item:not(.active)')];
+    if (!tabs.length) return;
+    const hand = document.createElement('div');
+    hand.className = 'dock-hand';
+    hand.textContent = '👆';
+    const tip = document.createElement('div');
+    tip.className = 'dock-tip';
+    document.body.append(hand, tip);
+    let stopped = false;
+    const stop = () => {
+      stopped = true;
+      hand.remove();
+      tip.remove();
+      tabs.forEach(t => t.classList.remove('dock-wiggle'));
+      document.removeEventListener('pointerdown', stop, true);
+      stopFn = null;
+    };
+    stopFn = stop;
+    document.addEventListener('pointerdown', stop, true);
+    // First, what these are — above the middle of the dock.
+    const bar = document.getElementById('tab-bar').getBoundingClientRect();
+    tip.textContent = gx("👇 Pastdagi tugmalar — boshqa bo'limlar", '👇 Кнопки внизу — другие разделы');
+    tip.style.left = (bar.left + bar.width / 2) + 'px';
+    tip.style.top = (bar.top - 10) + 'px';
+    tip.classList.add('on');
+    await sleep(INTRO_MS);
+    if (stopped) return;
+    tip.classList.remove('on');
+    await sleep(300);
+    for (const tab of tabs) {
+      if (stopped) return;
+      const r = tab.getBoundingClientRect();
+      const x = r.left + r.width / 2;
+      hand.style.left = (x - 12) + 'px';                  // the fingertip on the icon
+      hand.style.top = (r.top + r.height / 2 - 4) + 'px';
+      hand.classList.add('on');
+      tip.textContent = (tab.querySelector('span') || {}).textContent || '';
+      tip.style.left = x + 'px';
+      tip.style.top = (r.top - 10) + 'px';
+      await sleep(MOVE_MS);
+      if (stopped) return;
+      hand.classList.add('press');
+      tip.classList.add('on');
+      tab.classList.remove('dock-wiggle');
+      void tab.offsetWidth;                               // restart the wiggle
+      tab.classList.add('dock-wiggle');
+      const ripple = document.createElement('span');
+      ripple.className = 'dock-ripple';
+      tab.appendChild(ripple);
+      setTimeout(() => ripple.remove(), 950);
+      await sleep(PRESS_MS);
+      hand.classList.remove('press');
+      await sleep(HOLD_MS);
+      tip.classList.remove('on');
+    }
+    if (!stopped) { hand.classList.remove('on'); await sleep(300); stop(); }
+  }
+  return {
+    async maybe() {
+      const n = seen();
+      if (n >= SHOWS) return;
+      try { localStorage.setItem(key(), String(n + 1)); } catch (_) { return; }
+      await sleep(1500);
+      for (let i = 0; i < 40 && blocked(); i++) await sleep(500);
+      if (!blocked()) play();
+    },
+    stop() { if (stopFn) stopFn(); },
+  };
+})();
 
 // "Bot orqali buyurtmaga 10% chegirma" card on the home page. Worded and
 // translated server-side; absent (null) while the discount is off.
@@ -6558,6 +8349,9 @@ function renderRecipe(r) {
       (i.product === undefined ? '<span class="rm-home">' + escapeHtml(L.from_home) + '</span>' : '') +
       '</b><span class="rm-amt">' + escapeHtml(i.amount) + '</span></div>';
     if (i.product) {
+      // The shop's product for this ingredient: the whole row opens its
+      // card, «+ Savatga» puts one pack in (2026-11-12); price or «⏳ tez
+      // orada qaytadi» say whether it is there.
       const p = i.product;
       const img = p.photo_url
         ? '<img src="' + p.photo_url + '" alt="" loading="lazy" onerror="this.outerHTML=\'<div class=rm-noimg>📦</div>\'">'
@@ -6565,15 +8359,19 @@ function renderRecipe(r) {
       const price = p.out_of_stock
         ? '<div class="rm-prod-out">' + escapeHtml(L.out_of_stock) + '</div>'
         : '<div class="rm-prod-price">' + priceHtml(p) + '</div>';
-      html += '<div class="rm-prod" onclick="openDetail(' + p.id + ')">' + img +
-        '<div><div class="rm-prod-name">' + escapeHtml(p.name) + '</div>' + price + '</div></div>';
+      html += '<div class="rm-prod" data-pid="' + p.id + '">' + img +
+        '<div class="rm-prod-text"><div class="rm-prod-name">' + escapeHtml(p.name) +
+        ' <span class="rm-go" aria-hidden="true">›</span></div>' + price + '</div>' +
+        (p.out_of_stock ? '' : '<button type="button" class="rm-prod-add">' + escapeHtml(t.quickAdd) + '</button>') +
+        '</div>';
     }
     if (i.why) html += '<div class="rm-why">' + escapeHtml(i.why) + '</div>';
     return html + '</li>';
   }).join('');
   // One pack of each in-stock product — exactly what recipeToCart puts in.
-  // Pinned to the bottom of the sheet (2026-10-22): mid-page, under the
-  // ingredients, the add-all button was almost never pressed.
+  // Pinned to the bottom of the sheet (2026-10-22); since 2026-11-12 the same
+  // button also stands under the ingredients and after the steps, and the
+  // bar steps aside while one of those is on screen.
   const seen = new Set();
   const buy = [];
   r.ingredients.forEach(i => {
@@ -6581,12 +8379,20 @@ function renderRecipe(r) {
     if (p && !p.out_of_stock && !seen.has(p.id)) { seen.add(p.id); buy.push(p); }
   });
   const total = buy.reduce((s, p) => s + (Number(p.price) || 0), 0);
+  const ctaNote = escapeHtml(L.bar_count.replace('{n}', buy.length)) + ' · <b>' + formatPrice(total) + ' UZS</b>';
+  const cta = (where) => buy.length
+    ? '<div class="rm-cta rm-cta-' + where + '">' +
+        (where === 'end' && L.end_title ? '<div class="rm-cta-title">' + escapeHtml(L.end_title) + '</div>' : '') +
+        '<button class="rm-cta-btn" type="button" data-where="' + where + '">' + escapeHtml(L.cta || L.add_all) + '</button>' +
+        '<div class="rm-cta-note">' + ctaNote + '</div>' +
+      '</div>'
+    : '';
   const cartBar = buy.length
     ? '<div class="rm-cart-bar">' +
         '<div class="rm-cart-info"><b>' + escapeHtml(L.bar_title) + '</b>' +
           '<span class="rm-cart-total">' + formatPrice(total) + ' UZS</span>' +
           '<small>' + escapeHtml(L.bar_count.replace('{n}', buy.length)) + '</small></div>' +
-        '<button class="rm-cart-btn" type="button" onclick="recipeToCart(\'' + r.slug + '\', this)">' +
+        '<button class="rm-cart-btn" type="button" data-where="bar">' +
           escapeHtml(L.bar_btn) + '</button>' +
       '</div>'
     : '';
@@ -6599,31 +8405,68 @@ function renderRecipe(r) {
       '<div class="rm-meta">' + recipeMetaHtml(r, L) + '</div>' +
       '<div class="rm-note">' + escapeHtml(L.per_serving) + '</div>' +
       '<h3>' + escapeHtml(L.ingredients) + '</h3><ul class="rm-ings">' + ings + '</ul>' +
+      cta('ings') +
       '<h3>' + escapeHtml(L.steps) + '</h3><ol class="rm-steps">' +
         r.steps.map(s => '<li>' + escapeHtml(s) + '</li>').join('') + '</ol>' +
       (r.tip ? '<div class="rm-tip"><b>' + escapeHtml(L.tip) + '</b><br>' + escapeHtml(r.tip) + '</div>' : '') +
+      cta('end') +
       '<div class="rm-next">' + escapeHtml(L.next.replace('{date}', recipesData.next_at)) + '</div>' +
     '</div>' +
     cartBar;
+  const body = document.getElementById('recipe-body');
+  const products = {};
+  r.ingredients.forEach(i => { if (i.product) products[i.product.id] = i.product; });
+  // Taps are tracked: a product opened from here is a view with src
+  // "recipe:<slug>", its «+ Savatga» a cart_add with the same src, and the
+  // add-all buttons a cart_add of the recipe with src "cta:<where>".
+  body.querySelectorAll('.rm-prod').forEach(el => {
+    const p = products[el.dataset.pid];
+    el.onclick = () => openDetail(p.id);   // the tracker's src: recipe:<slug>
+    const add = el.querySelector('.rm-prod-add');
+    if (add) add.onclick = (e) => { e.stopPropagation(); quickAddToCart(p, add, 'recipe:' + r.slug); };
+  });
+  body.querySelectorAll('.rm-cta-btn, .rm-cart-btn').forEach(btn => {
+    btn.onclick = () => recipeToCart(r.slug, btn, btn.dataset.where);
+  });
+  watchRecipeCta(body);
   document.querySelector('#recipe-modal .modal').scrollTop = 0;
 }
 
-async function recipeToCart(slug, btn) {
+// The pinned bar steps aside while the add-all button under the
+// ingredients or after the steps is on screen — one button at a time.
+let recipeCtaWatch = null;
+function watchRecipeCta(body) {
+  if (recipeCtaWatch) { recipeCtaWatch.disconnect(); recipeCtaWatch = null; }
+  const bar = body.querySelector('.rm-cart-bar');
+  const ctas = body.querySelectorAll('.rm-cta');
+  if (!bar || !ctas.length || !window.IntersectionObserver) return;
+  const seen = new Set();
+  recipeCtaWatch = new IntersectionObserver(es => {
+    es.forEach(e => { if (e.isIntersecting) seen.add(e.target); else seen.delete(e.target); });
+    bar.classList.toggle('is-hidden', seen.size > 0);
+  }, { root: document.querySelector('#recipe-modal .modal'), threshold: 0.6 });
+  ctas.forEach(el => recipeCtaWatch.observe(el));
+}
+
+async function recipeToCart(slug, btn, where) {
   const L = recipesData.labels;
   if (btn) btn.disabled = true;
   try {
     const res = await api('/api/recipes/' + encodeURIComponent(slug) + '/cart', { method: 'POST' });
-    trk(() => Trk.ev('cart_add', 'recipe', slug, 'recipe', res.added.length));
+    trk(() => Trk.ev('cart_add', 'recipe', slug, 'cta:' + (where || 'bar'), res.added.length));
     let msg = res.added.length ? L.added.replace('{n}', res.added.length) : L.already;
     if (res.missing.length) msg += ' · ' + L.missing.replace('{names}', res.missing.join(', '));
     showToast(msg, false, 3500);
     try { tg.HapticFeedback.notificationOccurred('success'); } catch (_) {}
     await loadCart();
-    // The ingredients are in the cart now — the bar's next step is the cart.
-    if (btn && (res.added.length || res.already.length)) {
-      btn.textContent = L.go_cart;
-      btn.classList.add('go');
-      btn.onclick = () => { closeRecipe(); switchPage('cart'); };
+    // The ingredients are in the cart now — every add-all button's next
+    // step is the cart.
+    if (res.added.length || res.already.length) {
+      document.querySelectorAll('#recipe-body .rm-cta-btn, #recipe-body .rm-cart-btn').forEach(b => {
+        b.textContent = L.go_cart;
+        b.classList.add('go');
+        b.onclick = () => { closeRecipe(); switchPage('cart'); };
+      });
     }
   } catch (e) {
     showToast(t.errorLoad, true);
@@ -7004,16 +8847,17 @@ function buildPopularRow(products) {
 }
 
 // One piece straight from a card — the same rules and messages as the
-// product page's button (addToCart), without opening it.
-async function quickAddToCart(p, btn) {
+// product page's button (addToCart), without opening it. `src` names where
+// the tap was (a recipe's ingredient) when the tracker can't tell by itself.
+async function quickAddToCart(p, btn, src) {
   if (btn.disabled) return;
   btn.disabled = true;
   try {
     const res = await api('/api/cart/add', {
       method: 'POST',
-      body: JSON.stringify({ product_id: p.id, quantity: 1 })
+      body: JSON.stringify(p.is_set ? { set_id: p.id, quantity: 1 } : { product_id: p.id, quantity: 1 })
     });
-    trk(() => Trk.ev('cart_add', 'product', p.id, Trk.from()));
+    trk(() => Trk.ev('cart_add', p.is_set ? 'set' : 'product', p.id, src || Trk.from()));
     await loadCart();
     try { tg.HapticFeedback.impactOccurred('light'); } catch (_) {}
     showToast(res && res.partial ? t.addedPartly.replace('{n}', res.added) : t.addedToCart);
@@ -7026,9 +8870,7 @@ async function quickAddToCart(p, btn) {
     }, 1800);
   } catch (e) {
     console.error('Quick add error:', e);
-    const reason = e && e.body && e.body.error;
-    const held = reason === 'held' && (e.body.waiting ? t.heldWaiting : t.heldLimit);
-    showToast(held || t.errorCart, true);
+    showToast(cartErrorText(e), true, 4000);
     btn.disabled = false;
   }
 }
@@ -7078,10 +8920,6 @@ function renderCatalogTiles() {
   });
   box.innerHTML = '';
   box.hidden = false;
-  const row = (box.clientWidth || document.documentElement.clientWidth) - 28;
-  box.style.setProperty('--ct-col', Math.round(Math.min(150, Math.max(96, row * 0.3))) + 'px');
-  const set = document.createElement('div');
-  set.className = 'ct-set';
   tiles.forEach(tl => {
     const b = document.createElement('button');
     b.type = 'button';
@@ -7096,114 +8934,20 @@ function renderCatalogTiles() {
     b.innerHTML = art + (tl.badge ? '<span class="ct-badge">' + tl.badge + '</span>' : '') +
       '<span class="ct-name">' + escapeHtml(tl.name) + '</span>' +
       '<span class="ct-count">' + escapeHtml(tileCountText(tl.count || 0)) + '</span>';
-    set.appendChild(b);
+    box.appendChild(b);
   });
-  box.appendChild(set);
-  // One handler for both sets — the moving copy's tiles work the same.
   box.onclick = e => {
     const b = e.target.closest('.cat-tile');
     if (b) { selectCategory(b.dataset.cat); scrollToCatalogList(false); }
   };
-  TileDrift.attach(box, set);
   if (window.IntersectionObserver) {
     chips.classList.add('cat-float');
     if (!tilesWatch) {
-      tilesWatch = new IntersectionObserver(es => es.forEach(e => {
-        chips.classList.toggle('show', !e.isIntersecting);
-        TileDrift.visible(e.isIntersecting);
-      }));
+      tilesWatch = new IntersectionObserver(es => es.forEach(e => chips.classList.toggle('show', !e.isIntersecting)));
       tilesWatch.observe(box);
     }
   }
 }
-
-// ── Kategoriyalar karuseli (owner, 2026-11-07: "katalog qismidagi
-// kategoriyalar ham karusel bo'lib sekin aylanib turadigan bo'lsin") ──
-// The tile row moves left by itself, slowly, and never ends: the tiles are
-// drawn twice, and once the copy has slid into the place of the original the
-// scroll steps back by one set's width — the same picture, so no jump shows.
-// A finger (or mouse, or wheel) stops it; it goes on 4 s after the buyer
-// lets go, from wherever they left it. It runs only while the row is on
-// screen and the app is in front. Phones that ask for reduced motion keep
-// it too: battery saver asks for that, and the owner wants the shop alive
-// there (see the 2026-10-22 note at the reduced-motion rules).
-function tileDriftStep(pos, ms, loopW, speed) {
-  const next = pos + speed * Math.min(Math.max(ms, 0), 100) / 1000;
-  return loopW > 0 && next >= loopW ? next - loopW : next;
-}
-const TileDrift = (() => {
-  const SPEED = 20;            // px a second — about one column every 6–7 s
-  const RESUME_MS = 4000;
-  let box = null, set = null, loopW = 0, pos = 0, last = 0, raf = 0, resizeT = 0;
-  let onScreen = true, down = false, heldUntil = 0, sync = true, mine = -1;
-
-  function measure() {
-    if (!box || !set) return;
-    const old = box.querySelector('.ct-copy');
-    if (old) old.remove();
-    loopW = 0;
-    const room = box.clientWidth - 28;
-    if (room <= 0 || set.offsetWidth <= room) return;   // every tile fits — nothing to turn
-    const copy = set.cloneNode(true);
-    copy.classList.add('ct-copy');
-    copy.setAttribute('aria-hidden', 'true');
-    copy.querySelectorAll('button').forEach(b => { b.tabIndex = -1; });
-    box.appendChild(copy);
-    loopW = copy.offsetLeft - set.offsetLeft;
-    sync = true;
-  }
-  function frame(ts) {
-    raf = 0;
-    if (!loopW || !onScreen || document.hidden) { last = 0; return; }
-    if (last && !down && Date.now() >= heldUntil) {
-      if (sync) { pos = box.scrollLeft; sync = false; }
-      pos = tileDriftStep(pos, ts - last, loopW, SPEED);
-      box.scrollLeft = pos;
-      mine = box.scrollLeft;
-    }
-    last = ts;
-    raf = requestAnimationFrame(frame);
-  }
-  function run() {
-    if (!raf && loopW && onScreen && !document.hidden) raf = requestAnimationFrame(frame);
-  }
-  function hold() { heldUntil = Date.now() + RESUME_MS; sync = true; mine = -1; }
-  function grab() { down = true; hold(); }
-  function free() { down = false; hold(); }
-
-  document.addEventListener('visibilitychange', run);
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeT);
-    resizeT = setTimeout(() => { if (box) { measure(); run(); } }, 250);
-  });
-
-  return {
-    attach(el, s) {
-      if (box !== el) {
-        el.addEventListener('touchstart', grab, { passive: true });
-        el.addEventListener('touchend', free, { passive: true });
-        el.addEventListener('touchcancel', free, { passive: true });
-        el.addEventListener('pointerdown', e => { if (e.pointerType !== 'touch') grab(); });
-        el.addEventListener('pointerup', e => { if (e.pointerType !== 'touch') free(); });
-        el.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch' && down) free(); });
-        el.addEventListener('wheel', hold, { passive: true });
-        // Moved by hand (momentum, keyboard, a scrollbar) — wait, then carry on from there.
-        el.addEventListener('scroll', () => {
-          if (mine < 0 || Math.abs(el.scrollLeft - mine) > 2) hold();
-        }, { passive: true });
-      }
-      box = el; set = s; pos = 0; last = 0;
-      el.scrollLeft = 0;
-      measure();
-      run();
-    },
-    visible(v) {
-      onScreen = v;
-      if (v && !loopW) measure();      // drawn while the catalog was hidden
-      run();
-    },
-  };
-})();
 
 // Bring the start of the product list up under the floating chip row —
 // after a tile is tapped always, after a chip only when the buyer is below it.
@@ -7294,7 +9038,6 @@ function renderCatalogCategories() {
 
 function selectCategory(key) {
   currentCat = key;
-  currentPage = 0;
   document.querySelectorAll('#categories .cat-tab').forEach(el => {
     el.classList.toggle('active', el.dataset.cat === key);
   });
@@ -7308,85 +9051,194 @@ function selectCategory(key) {
   loadProducts();
 }
 
-let isLoadingMore = false;
-// The catalog asks for 30 a page; the bot keeps its own 5 (ITEMS_PER_PAGE).
-// Five was far too few here: on a wide screen five tiles fit without any
-// scrolling, the scroll that loads the next page never came, and the catalog
-// stopped at five products (owner, 2026-10-22: "katalogda hamma
-// mahsulotlarni ko'rib bo'lmayapti").
-const CATALOG_PAGE_SIZE = 30;
-let catalogSeq = 0;      // a newer category, search or language wins
+// ===== KATALOG: BITTA SO'ROV, TEZ ALMASHISH (owner, 2026-11-08: "kategoriyani
+// bosgach ham sekin yuklanyapti ... pastga tushsa bazida hamma mahsulot
+// chiqmayapti odamlar shu ekan faqat deb o'ylab qolishyapti") =====
+// The whole active catalog (~110 products) comes in ONE request and is kept
+// for a few minutes. A category is that list filtered here — the server
+// sorts both ways the same (LOWER(name), id) — so a tap draws at once, with
+// no trip to the server. Sets and «Chegirmalar» have their own lists, each
+// fetched once. Cards are drawn 30 at a time from memory as the buyer
+// scrolls, and the line under the grid always tells whether more follow
+// («Yana 24 ta mahsulot», a button) or that this is all. Before, every 30
+// were a request fired 300 px from the bottom: a failed one was skipped for
+// good, and a slow one looked like the end of the shop.
+const CATALOG_FETCH = 200;            // the server's cap per request
+const CATALOG_CHUNK = 30;             // cards drawn per step
+const CATALOG_TTL = 3 * 60 * 1000;    // a kept list is asked for again after this
+const catalogCache = {};              // list key -> {at, promise}
+let catalogSeq = 0;                   // a newer category, search or language wins
+let catalogList = [];                 // what the current tab shows
+let catalogShown = 0;                 // how many of them are drawn
+let catalogGrouped = false;           // «Hammasi» / «Chegirmalar»: headed by category
+let catalogLastCat = null;            // the category of the last card drawn
+let catalogGroupCounts = {};
 
-async function loadProducts(append = false) {
+// ===== KATALOG TARTIBI (owner, 2026-11-08: "saytda chiqayotgan mahsulotlarni
+// ham kategoriyalab ko'rsat"; "birxil kategoriyada bir xil nomlilar yonma yon
+// chiqsin") =====
+// Products whose names differ only by the pack size — «Stevia 200gr»,
+// «Stevia 1000g» — stand next to each other, smallest first; alphabetical
+// order split them. Mixed lists («Hammasi», «Chegirmalar») go category by
+// category, in the tiles' order, each under its own heading.
+// catalog_order.py reads names the same way for the bot.
+const PACK_SIZE_RE = /(\d+(?:[.,]\d+)?)\s*(kg|кг|gr|гр|g|г|ml|мл|l|л)(?![a-zа-яё])/i;
+function packSize(name) {
+  const m = PACK_SIZE_RE.exec(name || '');
+  if (!m) return null;
+  const v = parseFloat(m[1].replace(',', '.'));
+  return /^(kg|кг|l|л)$/i.test(m[2]) ? v * 1000 : v;
+}
+function packBase(name) {
+  return (name || '').replace(PACK_SIZE_RE, ' ').toLowerCase().replace(/[\s\-–—_.,()]+/g, ' ').trim();
+}
+function orderCatalog(list, grouped) {
+  const at = new Map((categories || []).map((c, i) => [c.key, i]));
+  return list.map((p, i) => ({
+    p, i,
+    c: grouped ? (at.has(p.category) ? at.get(p.category) : 1e6) : 0,
+    b: packBase(p.name),
+    s: packSize(p.name),
+  })).sort((x, y) => x.c - y.c || (x.b < y.b ? -1 : x.b > y.b ? 1 : 0) || (x.s === null) - (y.s === null)
+    || (x.s || 0) - (y.s || 0) || x.i - y.i).map(x => x.p);
+}
+function catalogGroupHead(cat) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'catalog-group-head';
+  b.dataset.cat = cat;
+  const name = (categories.find(c => c.key === cat) || {}).name || cat;
+  b.innerHTML = '<span>' + escapeHtml(name) + '</span>'
+    + '<span class="cnt">· ' + escapeHtml(tileCountText(catalogGroupCounts[cat] || 0)) + '</span>'
+    + '<span class="go">' + escapeHtml(gx('Hammasi →', 'Все →')) + '</span>';
+  b.onclick = () => { selectCategory(cat); scrollToCatalogList(false); };
+  return b;
+}
+
+function fetchCatalogList(key) {
+  const hit = catalogCache[key];
+  if (hit && Date.now() - hit.at < CATALOG_TTL) return hit.promise;
+  const url = (key === 'all' ? '/api/products?page=0' : '/api/products?category=' + key + '&page=0')
+    + '&per_page=' + CATALOG_FETCH;
+  const entry = { at: Date.now() };
+  entry.promise = api(url).then(d => ({
+    products: d.products || [],
+    total: d.total != null ? d.total : (d.products || []).length,
+  })).catch(e => {
+    if (catalogCache[key] === entry) delete catalogCache[key];   // a failure is never kept
+    throw e;
+  });
+  catalogCache[key] = entry;
+  return entry.promise;
+}
+function clearCatalogCache() {
+  Object.keys(catalogCache).forEach(k => delete catalogCache[k]);
+}
+
+// {products, total} for a tab: sets and discounts are their own lists; any
+// other category is the full list filtered — unless the shop ever outgrows
+// one request, then the category is asked for by itself.
+async function catalogListFor(cat) {
+  if (cat === 'sets' || cat === 'discounts') return fetchCatalogList(cat);
+  const all = await fetchCatalogList('all');
+  if (cat === 'all') return all;
+  if (all.products.length >= all.total) {
+    const products = all.products.filter(p => p.category === cat);
+    return { products, total: products.length };
+  }
+  return fetchCatalogList(cat);
+}
+
+async function loadProducts() {
   const grid = document.getElementById('product-grid');
   const loading = document.getElementById('catalog-loading');
   const empty = document.getElementById('catalog-empty');
-  const scrollLoader = document.getElementById('scroll-loader');
-
-  if (!append) {
-    // A fresh list always starts at page 0 — a language switch or a cleared
-    // search used to reload only the page the buyer had scrolled to.
-    currentPage = 0;
-    grid.innerHTML = '';
+  const seq = ++catalogSeq;
+  grid.innerHTML = '';
+  catalogList = [];
+  catalogShown = 0;
+  catalogLastCat = null;
+  empty.style.display = 'none';
+  renderCatalogMore();
+  // A kept list draws at once; "Yuklanmoqda" only when it takes a moment.
+  const slow = setTimeout(() => {
+    if (seq !== catalogSeq) return;
     loading.style.display = 'block';
     loading.textContent = t.loading;
-    empty.style.display = 'none';
-  }
-  scrollLoader.style.display = 'none';
-  isLoadingMore = true;
-  const seq = ++catalogSeq;
+  }, 150);
 
   try {
-    const url = (currentCat === 'all'
-      ? '/api/products?page=' + currentPage
-      : '/api/products?category=' + currentCat + '&page=' + currentPage) + '&per_page=' + CATALOG_PAGE_SIZE;
-    const data = await api(url);
+    const data = await catalogListFor(currentCat);
     if (seq !== catalogSeq) return;
-    const products = data.products || [];
-    totalPages = data.pages || 1;
-    if (!append) setCatalogHeading(data.total != null ? data.total : products.length);
-
+    clearTimeout(slow);
     loading.style.display = 'none';
-
-    if (!append && products.length === 0) {
-      empty.style.display = 'block';
-      document.getElementById('catalog-empty-text').textContent = t.empty;
-      isLoadingMore = false;
+    catalogGrouped = currentCat === 'all' || currentCat === 'discounts';
+    catalogList = orderCatalog(data.products, catalogGrouped);
+    catalogGroupCounts = {};
+    catalogList.forEach(p => { catalogGroupCounts[p.category] = (catalogGroupCounts[p.category] || 0) + 1; });
+    setCatalogHeading(data.total);
+    if (!catalogList.length) {
+      showCatalogEmpty(t.empty);
       return;
     }
-
-    products.forEach(p => {
-      grid.appendChild(createProductCard(p));
-    });
-
-    isLoadingMore = false;
-    requestAnimationFrame(catalogLoadMore);
+    catalogDrawMore();
   } catch(e) {
     if (seq !== catalogSeq) return;
+    clearTimeout(slow);
     loading.style.display = 'none';
-    isLoadingMore = false;
     console.error('Load products error:', e);
     showToast(t.errorLoad, true);
+    renderCatalogMore(true);
   }
 }
 
-// Infinite scroll: the next page when the buyer nears the end — or at once
-// when the grid doesn't even fill the screen, since then nothing scrolls.
+// The next 30 cards, from memory — no request, so nothing can be skipped.
+function catalogDrawMore() {
+  const grid = document.getElementById('product-grid');
+  const next = catalogList.slice(catalogShown, catalogShown + CATALOG_CHUNK);
+  const frag = document.createDocumentFragment();
+  next.forEach(p => {
+    if (catalogGrouped && p.category !== catalogLastCat) {
+      catalogLastCat = p.category;
+      frag.appendChild(catalogGroupHead(p.category));
+    }
+    frag.appendChild(createProductCard(p));
+  });
+  grid.appendChild(frag);
+  catalogShown += next.length;
+  renderCatalogMore();
+  requestAnimationFrame(catalogLoadMore);   // a short grid fills the screen
+}
+
+// Under the grid: «⬇️ Yana N ta mahsulot» while more follow, «✓ Hammasi
+// shu» at the end, «🔄 Qayta urinish» after a failed load.
+function renderCatalogMore(failed) {
+  const box = document.getElementById('catalog-more');
+  if (!box) return;
+  const left = catalogList.length - catalogShown;
+  if (failed) {
+    box.innerHTML = '<button type="button" class="catalog-more-btn">' + escapeHtml(t.catalogRetry) + '</button>';
+    box.firstChild.onclick = () => loadProducts();
+  } else if (!catalogList.length) {
+    box.innerHTML = '';
+  } else if (left > 0) {
+    box.innerHTML = '<button type="button" class="catalog-more-btn">'
+      + escapeHtml(t.catalogMore.replace('{n}', left)) + '</button>';
+    box.firstChild.onclick = catalogDrawMore;
+  } else {
+    box.innerHTML = '<div class="catalog-end">' + escapeHtml(t.catalogEnd.replace('{n}', catalogList.length)) + '</div>';
+  }
+  box.style.display = box.innerHTML ? 'block' : 'none';
+}
+
+// Draw more well before the bottom (1200 px), so scrolling never meets an
+// empty end while cards are still to come.
 function catalogLoadMore() {
-  if (activePage !== 'catalog' || isLoadingMore) return;
-  if (currentPage + 1 >= totalPages) return;
-
-  const scrollY = window.scrollY + window.innerHeight;
-  const docHeight = document.documentElement.scrollHeight;
-
-  if (scrollY >= docHeight - 300) {
-    currentPage++;
-    isLoadingMore = true;
-    document.getElementById('scroll-loader').style.display = 'block';
-    loadProducts(true);
-  }
+  if (activePage !== 'catalog' || catalogShown >= catalogList.length) return;
+  const bottom = window.scrollY + window.innerHeight;
+  if (bottom >= document.documentElement.scrollHeight - 1200) catalogDrawMore();
 }
-window.addEventListener('scroll', catalogLoadMore);
+window.addEventListener('scroll', catalogLoadMore, { passive: true });
 
 // Sold out stays in the shop (owner, 2026-10-14): a tilted "Yo'lda 🚚"
 // stamp on the photo (was "Tugab qoldi" until 2026-10-17), and "Tez orada qaytadi" takes the description's line.
@@ -7403,10 +9255,36 @@ function cardNoteHtml(p) {
   return p.description ? '<div class="card-desc">' + escapeHtml(p.description) + '</div>' : '';
 }
 
-function createProductCard(p) {
+// «🔥 Ko'p olinadi» on catalog cards: the same bestsellers as the home row
+// (/api/popular — the last 30 days' orders, in stock only), asked for once.
+// Cards drawn before the answer get the badge when it comes.
+let popularIds = null;
+function loadPopularIds() {
+  if (popularIds) return;
+  popularIds = new Set();
+  api('/api/popular').then(list => {
+    (Array.isArray(list) ? list : []).forEach(p => popularIds.add(String(p.id)));
+    document.querySelectorAll('.product-card[data-id]').forEach(card => {
+      if (card.dataset.set || card.querySelector('.card-hot') || !popularIds.has(card.dataset.id)) return;
+      card.querySelector('.card-name').insertAdjacentHTML('beforebegin', hotBadgeHtml({ id: card.dataset.id }));
+    });
+  }).catch(() => {});
+}
+function hotBadgeHtml(p) {
+  return (!p.is_set && popularIds && popularIds.has(String(p.id)))
+    ? '<div class="card-hot">' + escapeHtml(t.sectionPopular) + '</div>' : '';
+}
+
+function createProductCard(p, opts) {
   const card = document.createElement('div');
   card.className = 'product-card';
+  card.dataset.id = p.id;
+  if (p.is_set) card.dataset.set = '1';
   card.onclick = () => openDetail(p.id, p.is_set);
+  // «+ Savatga» on the card itself (2026-11-12): people scroll the catalog
+  // but ~30% open a product. Not on sold-out cards (the card says when it
+  // returns) nor on saved favourites, whose copies may predate the set flag.
+  const addBtn = !(opts && opts.addBtn === false) && !p.out_of_stock;
 
   const isFav = !!favorites[p.id];
   let imgInner;
@@ -7424,23 +9302,66 @@ function createProductCard(p) {
       soldOutStampHtml(p) +
       '<button class="card-fav-btn" data-id="' + p.id + '">' + (isFav ? '❤️' : '🤍') + '</button>' +
     '</div>' +
+    hotBadgeHtml(p) +
     '<div class="card-name">' + (p.is_set ? '🎁 ' : '') + escapeHtml(p.name) + '</div>' +
     '<div class="card-price">' + priceHtml(p) + '</div>' +
     savingHtml(p) +
     bonusBadgeHtml(p) +
     ketoBadgeHtml(p.price) +
-    cardNoteHtml(p);
+    cardNoteHtml(p) +
+    (addBtn ? '<div class="card-foot"><button type="button" class="card-add">' + escapeHtml(t.quickAdd) + '</button></div>' : '');
 
   card.querySelector('.card-fav-btn').onclick = (e) => {
     e.stopPropagation();
     toggleFav(p);
     e.currentTarget.textContent = favorites[p.id] ? '❤️' : '🤍';
   };
+  if (addBtn) {
+    const add = card.querySelector('.card-add');
+    add.onclick = (e) => {
+      e.stopPropagation();   // the card itself opens the product
+      quickAddToCart(p, add);
+    };
+  }
 
   return card;
 }
 
-// Catalog search
+// The catalog's "nothing here" box. A search that found nothing says what to
+// try next (2026-11-11: 20 of 88 searches ended on a bare «Mahsulotlar
+// topilmadi»): the closest names when the server sent some (marked `near`,
+// drawn as cards under «O'xshash mahsulotlar»), and a button to ask the shop.
+function showCatalogEmpty(text, searchQuery, near) {
+  const empty = document.getElementById('catalog-empty');
+  const extra = document.getElementById('catalog-empty-extra');
+  const emoji = empty.querySelector('.emoji');
+  near = near || [];
+  extra.innerHTML = '';
+  if (emoji) emoji.style.display = near.length ? 'none' : '';
+  document.getElementById('catalog-empty-text').textContent = near.length ? '' : text;
+  if (searchQuery != null) {
+    if (near.length) {
+      // Short: the heading is one line next to the view switch.
+      document.getElementById('catalog-title').textContent = t.searchMissNear;
+      document.getElementById('catalog-count').textContent = '';
+      const grid = document.getElementById('product-grid');
+      near.forEach(p => grid.appendChild(createProductCard(p)));
+    }
+    const note = document.createElement('div');
+    note.className = 'search-miss-note';
+    note.textContent = t.searchMissNote;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'search-miss-btn';
+    btn.textContent = t.searchMissBtn;
+    btn.onclick = () => { trk(() => Trk.ev('search', 'catalog', searchQuery, 'ask', 0)); contactAdmin(); };
+    extra.append(note, btn);
+  }
+  empty.style.display = 'block';
+}
+
+// Catalog search. The server reads Latin and Cyrillic alike («кепак» finds
+// «Kepakli bug'doy uni» — search_text.py), so the query goes as typed.
 document.getElementById('catalog-search').addEventListener('input', function(e) {
   clearTimeout(searchTimeout);
   const q = e.target.value.trim();
@@ -7449,14 +9370,16 @@ document.getElementById('catalog-search').addEventListener('input', function(e) 
     return;
   }
   searchTimeout = setTimeout(async () => {
-    // Search results are one list: no catalog page may land under them.
-    catalogSeq++;
-    totalPages = 0;
-    isLoadingMore = false;
+    // Search results are one list: no catalog cards may land under them.
+    // A newer search (or a tab tapped meanwhile) wins over this one's answer.
+    const seq = ++catalogSeq;
+    catalogList = [];
+    catalogShown = 0;
+    catalogGrouped = false;
+    renderCatalogMore();
     const grid = document.getElementById('product-grid');
     const loading = document.getElementById('catalog-loading');
     const empty = document.getElementById('catalog-empty');
-    document.getElementById('scroll-loader').style.display = 'none';
     grid.innerHTML = '';
     loading.style.display = 'block';
     loading.textContent = t.loading;
@@ -7465,17 +9388,20 @@ document.getElementById('catalog-search').addEventListener('input', function(e) 
     document.querySelectorAll('#categories .cat-tab').forEach(el => el.classList.remove('active'));
 
     try {
-      const products = await api('/api/search?q=' + encodeURIComponent(q));
-      trk(() => { Trk.cat('search'); Trk.ev('search', 'catalog', q, null, products.length); });
+      const found = await api('/api/search?q=' + encodeURIComponent(q));
+      if (seq !== catalogSeq) return;
+      const near = found.filter(p => p.near);
+      const products = found.filter(p => !p.near);
+      trk(() => { Trk.cat('search'); Trk.ev('search', 'catalog', q, near.length ? 'near' : null, products.length); });
       setCatalogHeading(products.length);
       loading.style.display = 'none';
       if (products.length === 0) {
-        empty.style.display = 'block';
-        document.getElementById('catalog-empty-text').textContent = t.empty;
+        showCatalogEmpty(t.searchMiss.replace('{q}', q), q, near);
         return;
       }
       products.forEach(p => grid.appendChild(createProductCard(p)));
     } catch(e) {
+      if (seq !== catalogSeq) return;
       loading.style.display = 'none';
       console.error('Search error:', e);
       if (e && e.status === 403) {
@@ -7554,6 +9480,7 @@ async function openDetail(productId, isSet = false) {
       compEl.innerHTML = '';
       compEl.style.display = 'none';
     }
+    renderSetItems(p);
     document.getElementById('qty-value').textContent = qty;
     const addBtn = document.getElementById('add-to-cart-btn');
     // Sold out — "🔔 Kelganda xabar bering". Held in other buyers' carts
@@ -7642,11 +9569,58 @@ async function openDetail(productId, isSet = false) {
 
     document.getElementById('detail-modal').classList.add('show');
     updateBackButton();
-    loadProductReviews(productId);
+    // Reviews belong to products: a set's id is not a product id, and the
+    // sheet used to show (and take) the reviews of the product with that id.
+    document.getElementById('detail-reviews').hidden = !!p.is_set;
+    if (!p.is_set) loadProductReviews(productId);
   } catch(e) {
     console.error('Detail error:', e);
     showToast(t.errorLoad, true);
   }
+}
+
+// ===== TO'PLAM (SET) TARKIBI (2026-11-12) =====
+// 11.11: «Keto set» 12 opens / 0 cart adds, «Supper set» 10 / 0. The sheet
+// showed one line "Tarkibi: Bodom uni (1.0), …" and always «Savatga
+// qo'shish», even when a part had run out — the tap then failed with a bare
+// «Savatga qo'shib bo'lmadi». Now /api/set/<id> says what is really there:
+// the parts one per line (a missing one marked «⏳ Yo'lda»), what they cost
+// bought one by one, and a sold-out set gets «🔔 Kelganda xabar bering».
+function renderSetItems(p) {
+  const box = document.getElementById('detail-set');
+  const items = (p && p.is_set && Array.isArray(p.items)) ? p.items : [];
+  box.hidden = !items.length;
+  if (!items.length) { box.innerHTML = ''; return; }
+  const rows = items.map(i => {
+    const img = i.photo_url
+      ? '<img src="' + i.photo_url + '" alt="" loading="lazy" onerror="this.outerHTML=\'<div class=dset-noimg>📦</div>\'">'
+      : '<div class="dset-noimg">📦</div>';
+    return '<li class="dset-item' + (i.out_of_stock ? ' is-out' : '') + '">' + img +
+      '<div class="dset-text"><div class="dset-name">' + escapeHtml(i.name) + '</div>' +
+      '<div class="dset-meta">' + escapeHtml(i.quantity + ' ' + i.unit) + ' · ' + formatPrice(i.price * i.quantity) + ' UZS</div></div>' +
+      (i.out_of_stock ? '<span class="dset-out">' + escapeHtml(t.setPartOut) + '</span>' : '') + '</li>';
+  }).join('');
+  const total = Number(p.original_total) || 0;
+  const saved = Math.round(total - (Number(p.price) || 0));
+  const save = total > 0 && saved > 0
+    ? '<div class="dset-save">' + escapeHtml(t.setSeparately.replace('{total}', formatPrice(total))
+        .replace('{saved}', formatPrice(saved))) + '</div>'
+    : '';
+  box.innerHTML = '<div class="dset-head"><b>' + escapeHtml(t.setItemsTitle) + '</b><span>' +
+    escapeHtml(t.setItemsCount.replace('{n}', items.length)) + '</span></div>' +
+    '<ul class="dset-items">' + rows + '</ul>' + save;
+}
+
+// What a refused /api/cart/add means, in the buyer's words: held in another
+// cart, a set's missing part, or the generic line.
+function cartErrorText(e) {
+  const b = (e && e.body) || {};
+  const reason = b.error;
+  if (reason === 'held') return b.waiting ? t.heldWaiting : t.heldLimit;
+  if (Array.isArray(b.missing) && b.missing.length) {
+    return t.setMissing.replace('{names}', b.missing.map(n => '«' + n + '»').join(', '));
+  }
+  return t.errorCart;
 }
 
 // ===== PRODUCT REVIEWS =====
@@ -7770,13 +9744,14 @@ async function restockWait() {
   // The message comes from the bot — make sure it may write to this buyer.
   await ensureBotCanWrite();
   try {
+    // A set waits for its missing parts (the server knows which).
     const res = await api('/api/restock-wait', {
       method: 'POST',
-      body: JSON.stringify({ product_id: p.id })
+      body: JSON.stringify(p.is_set ? { set_id: p.id } : { product_id: p.id })
     });
     if (res.status === 'in_stock') {
       showToast(t.restockBack);
-      openDetail(p.id);
+      openDetail(p.id, !!p.is_set);
       return;
     }
     p.restock_waiting = true;
@@ -7824,7 +9799,7 @@ function renderFavPage() {
   }
   empty.style.display = 'none';
   items.forEach(p => {
-    grid.appendChild(createProductCard(p));
+    grid.appendChild(createProductCard(p, { addBtn: false }));
   });
 }
 
@@ -7851,9 +9826,13 @@ async function addToCart() {
     showToast(res && res.partial ? t.addedPartly.replace('{n}', res.added) : t.addedToCart);
   } catch(e) {
     console.error('Add to cart error:', e);
-    const reason = e && e.body && e.body.error;
-    const held = reason === 'held' && (e.body.waiting ? t.heldWaiting : t.heldLimit);
-    showToast(held || t.errorCart, true);
+    showToast(cartErrorText(e), true, 4000);
+    // A set whose part ran out meanwhile: draw it again as it is now —
+    // the missing part marked and «🔔 Kelganda xabar bering».
+    const p = currentProduct;
+    if (p && p.is_set && e && e.status === 409 && e.body && e.body.error === 'out_of_stock') {
+      openDetail(p.id, true).catch(() => {});
+    }
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -8281,6 +10260,8 @@ function renderCheckoutPage() {
 
   // Remove old errors
   document.querySelectorAll('.checkout-error').forEach(e => e.remove());
+  setPhoneHint('', '');
+  prefillCheckoutPhone();
 }
 
 // Keto-as-discount at checkout — hidden entirely unless the owner has
@@ -8727,21 +10708,121 @@ function ensureBotCanWrite() {
   });
 }
 
+// The digits of a typed or pasted number: ASCII, Arabic-Indic, Persian and
+// full-width ones count, everything else (spaces, brackets, +, invisible
+// marks from a copied contact) is dropped. Same blocks as phone_utils.py.
+function uzPhoneDigits(raw) {
+  let d = '';
+  for (const ch of String(raw || '')) {
+    let c = ch.charCodeAt(0);
+    for (const base of [0x660, 0x6F0, 0xFF10]) if (c >= base && c <= base + 9) c = 48 + c - base;
+    if (c >= 48 && c <= 57) d += String.fromCharCode(c);
+  }
+  return d;
+}
+
 // Uzbek phone as buyers type it: "90 123 45 67", "+998 (90) 123-45-67",
-// "8 90 1234567"… → "+998901234567", or null. Same rule as phone_utils.py on
-// the server (2026-10-21: the strict "+998…" check turned most real numbers
-// away and the buyer only saw a button that "didn't work").
+// "8 90 1234567", "+998 +998 90…" (autofill after a typed +998)… →
+// "+998901234567", or null. Same rule as phone_utils.normalize_uz_phone on
+// the server — keep the two alike (2026-10-21: the strict "+998…" check
+// turned most real numbers away; 2026-11-11: still 18 of 45 checkouts).
 function normalizeUzPhone(raw) {
-  let d = String(raw || '').replace(/\D/g, '');
+  let d = uzPhoneDigits(raw);
   if (d.startsWith('00')) d = d.slice(2);
+  if (d.length === 15 && d.startsWith('998998')) d = d.slice(3);
   if (d.length === 9) d = '998' + d;
   else if (d.length === 10 && d[0] === '8') d = '998' + d.slice(1);
-  return /^998\d{9}$/.test(d) ? '+' + d : null;
+  return /^998[2-9][0-9]{8}$/.test(d) ? '+' + d : null;
+}
+
+// What is wrong with a number normalizeUzPhone refused, so the buyer is told
+// exactly that: 'empty' | 'short' | 'long' | 'foreign' | 'code' (operator
+// code starting with 0 or 1); null for a good number.
+function uzPhoneProblem(raw) {
+  if (normalizeUzPhone(raw)) return null;
+  let d = uzPhoneDigits(raw);
+  if (!d) return 'empty';
+  if (d.startsWith('00')) d = d.slice(2);
+  let n;
+  if (d.startsWith('998')) n = d.slice(3);
+  else if (d.length === 10 && d[0] === '8') n = d.slice(1);
+  else if (d.length <= 9) n = d;
+  else return (d.length === 10 || d.length >= 18) ? 'long' : 'foreign';
+  if (n.length < 9) return 'short';
+  if (n.length > 9) return 'long';
+  return 'code';
+}
+
+// "+998901234567" → "+998 90 123 45 67" (phone_utils.format_uz_phone).
+function formatUzPhone(phone) {
+  const p = normalizeUzPhone(phone);
+  return p ? p.slice(0, 4) + ' ' + p.slice(4, 6) + ' ' + p.slice(6, 9) + ' ' + p.slice(9, 11) + ' ' + p.slice(11)
+           : String(phone || '');
+}
+
+function phoneProblemText(problem) {
+  return ({ empty: t.phoneEmpty, short: t.phoneShort, long: t.phoneLong,
+            foreign: t.phoneForeign, code: t.phoneCode })[problem] || t.errorPhone;
+}
+
+function setPhoneHint(text, kind) {
+  const hint = document.getElementById('phone-hint');
+  const input = document.getElementById('inp-phone');
+  if (hint) {
+    hint.textContent = text || '';
+    hint.className = 'phone-hint' + (kind ? ' ' + kind : '');
+  }
+  if (input) input.classList.toggle('bad', kind === 'bad');
+}
+
+// Under the field as the buyer types: "✓ +998 90 123 45 67" once it reads
+// right (and the last press's error goes away); what is wrong with it only
+// when they leave the field (strict), never mid-typing.
+function updatePhoneHint(strict) {
+  const input = document.getElementById('inp-phone');
+  if (!input) return;
+  const phone = normalizeUzPhone(input.value);
+  if (phone) {
+    input.parentNode.querySelectorAll('.checkout-error').forEach(e => e.remove());
+    setPhoneHint(t.phoneOk.replace('{phone}', formatUzPhone(phone)), 'ok');
+    return;
+  }
+  const typed = strict && input.value.trim();
+  setPhoneHint(typed ? phoneProblemText(uzPhoneProblem(input.value)) : '', typed ? 'bad' : '');
+}
+(function () {
+  const input = document.getElementById('inp-phone');
+  if (!input) return;
+  input.addEventListener('input', () => updatePhoneHint(false));
+  input.addEventListener('blur', () => updatePhoneHint(true));
+})();
+
+// The field opened empty on every checkout, for a returning buyer too
+// (2026-11-11). Now it is filled with their number from the last order, or
+// the one they shared in the bot — asked once per opening of the app, and
+// never over something the buyer already typed or is typing.
+let knownPhonePromise = null;
+function prefillCheckoutPhone() {
+  const input = document.getElementById('inp-phone');
+  if (!input) return;
+  if (input.value.trim()) { updatePhoneHint(false); return; }
+  if (!knownPhonePromise) {
+    knownPhonePromise = api('/api/checkout/phone')
+      .then(r => (r && r.phone) || '')
+      .catch(() => { knownPhonePromise = null; return ''; });
+  }
+  knownPhonePromise.then(phone => {
+    if (!phone || input.value.trim() || document.activeElement === input) return;
+    input.value = phone;
+    setPhoneHint(t.phoneKnown, 'ok');
+  });
 }
 
 // A checkout mistake is shown where the buyer is looking: the field it is
 // about comes into view (and the keyboard, for the phone), and a toast says
-// what to fix — the note under a field far up the page went unseen.
+// what to fix — the note under a field far up the page went unseen. For a
+// field that gets the keyboard, its whole box goes to the TOP of the screen:
+// centred, it ended up under the keyboard together with its message.
 function showCheckoutFieldError(fieldId, message, focus) {
   const field = document.getElementById(fieldId);
   const err = document.createElement('div');
@@ -8749,7 +10830,9 @@ function showCheckoutFieldError(fieldId, message, focus) {
   err.textContent = message;
   if (field) {
     field.after(err);
-    try { field.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) { field.scrollIntoView(); }
+    const box = (focus && field.closest && field.closest('.form-group')) || field;
+    const block = focus ? 'start' : 'center';
+    try { box.scrollIntoView({ behavior: 'smooth', block }); } catch (_) { box.scrollIntoView(); }
     if (focus) setTimeout(() => { try { field.focus({ preventScroll: true }); } catch (_) {} }, 350);
   }
   showToast(message, true, 4000);
@@ -8769,13 +10852,16 @@ async function submitOrder() {
   // Remove old errors
   document.querySelectorAll('.checkout-error').forEach(e => e.remove());
 
-  // Validate
+  // Validate. The message says what exactly is wrong; the event carries it
+  // too, so the analytics tell an empty field from a malformed number.
   if (!phone) {
-    showCheckoutFieldError('inp-phone', t.errorPhone, true);
-    trk(() => Trk.ev('checkout', 'checkout', 'error:phone'));
+    const problem = uzPhoneProblem(phoneInput.value) || 'check';
+    setPhoneHint('', 'bad');
+    showCheckoutFieldError('inp-phone', phoneProblemText(problem), true);
+    trk(() => Trk.ev('checkout', 'checkout', 'error:phone', problem));
     return;
   }
-  phoneInput.value = phone;                    // show the buyer the number we'll use
+  phoneInput.value = formatUzPhone(phone);     // show the buyer the number we'll use
   if (modeState.locationRequired && (!lat || !lng)) {
     showCheckoutFieldError('btn-get-location', t.errorAddress, false);
     trk(() => Trk.ev('checkout', 'checkout', 'error:address'));
@@ -8817,8 +10903,12 @@ async function submitOrder() {
     cartData = { items: [], total: 0 };
     updateCartBadge();
 
-    // Clear form
-    document.getElementById('inp-phone').value = '';
+    // Clear form — but keep the number: the next order in this opening of
+    // the app goes to the same phone unless the buyer changes it.
+    const usedPhone = formatUzPhone(phone);
+    knownPhonePromise = Promise.resolve(usedPhone);
+    document.getElementById('inp-phone').value = usedPhone;
+    setPhoneHint('', '');
     document.getElementById('inp-lat').value = '';
     document.getElementById('inp-lng').value = '';
     document.getElementById('location-text').textContent = t.btnGetLocation;
@@ -8860,6 +10950,10 @@ async function submitOrder() {
       if (addrBox) addrBox.style.display = 'none';
       const addrEl = document.getElementById('location-address');
       if (addrEl) addrEl.value = '';
+    } else if (e && e.body && e.body.error === 'invalid_phone') {
+      // The server's rule is the same as normalizeUzPhone, so this should
+      // not happen — but if it does, say it at the field, not "error".
+      showCheckoutFieldError('inp-phone', t.errorPhone, true);
     } else if (e && e.body && e.body.error === 'stock_gone') {
       showToast(stockGoneMessage(e.body), true, 7000);
       // Refresh cart so the user sees the gap before retrying
@@ -9060,6 +11154,7 @@ function renderProfilePage() {
   const name = user ? [user.first_name, user.last_name].filter(Boolean).join(' ') : '—';
   document.getElementById('profile-name').textContent = name;
   document.getElementById('profile-lang').textContent = t.profileLang;
+  SiteTime.renderProfile();
 
   if (user?.photo_url) {
     document.getElementById('profile-avatar').innerHTML = '<img src="' + user.photo_url + '" style="width:72px;height:72px;border-radius:50%;object-fit:cover">';

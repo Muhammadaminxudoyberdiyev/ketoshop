@@ -53,6 +53,14 @@ XOTIRA (ai_memory.py) — har bir Telegram ID ning buyurtmalari, qiziqishlari va
 mahsulotlar haqidagi fikri suhbat boshida modelga beriladi. Yetkazilgan
 mahsulot haqida bir marta fikr so'raladi.
 
+PORTRET (customer_portrait.py, egasi 2026-11-15) — murojaat ismi, yosh, maqsad.
+Ism va yosh sotuvchidek tabiiy, sababi bilan so'raladi, majburlanmaydi:
+suhbatning ikkinchi xabaridan boshlab, bir xabarda bittadan, har biri bir
+marta — qaysi xabarda mumkinligini kod hal qiladi (_portrait_hint), ruxsatsiz
+savol va "shubhali" izohlar javobdan olinadi (customer_portrait.plain_tone).
+Jins ismdan jim taxmin qilinadi va modelga berilmaydi. Mijoz /malumotlarim da
+ko'radi va o'chiradi.
+
 TO'LOV. Kartada naqd yoki karta tanlanadi (Yandex va pochtada faqat karta).
 Karta bilan to'lovda tugmali checkout ning o'z yo'li ishlaydi: tasdiqdan keyin
 karta raqami chiqadi, buyurtma chek kelgach tuziladi va chek adminlarga boradi.
@@ -122,6 +130,7 @@ import ai_memory
 import ai_stats
 import ai_tone
 import cheque_confirm
+import customer_portrait
 import pack_math
 import ai_provider
 import database
@@ -163,6 +172,8 @@ SHOP_LANDMARK = os.getenv("SHOP_LANDMARK", "Ko'kcha masjidi atrofida").strip()
 # Egasi, 2026-11-04: "manzilga qo'shimcha qilib endi buni ham qo'sh javoblarda:
 # Toshkent shahri, Oqsoy 1-tor ko'chasi, 2A".
 SHOP_STREET = os.getenv("SHOP_STREET", "Toshkent shahri, Oqsoy 1-tor ko'chasi, 2A").strip()
+# Egasi, 2026-11-12: "ish vaqti (do'kondan kelib olib ketish uchun) 09:00-21:00 gacha".
+SHOP_HOURS = os.getenv("SHOP_HOURS", "09:00–21:00").strip()
 SHOP_PLACE = f"{SHOP_STREET} (mo'ljal: {SHOP_LANDMARK})"
 
 # Mijoz tanlaydigan yetkazish -> bazadagi delivery_method. Tugmali checkout
@@ -438,11 +449,18 @@ def customer_names(user, text: str | None = None, extra=()) -> set[str]:
     return {n.strip(",.!?") for n in names if len(n.strip(",.!?")) >= 3}
 
 
-def strip_name_address(text: str, names) -> str:
+def strip_name_address(text: str, names, allowed: str | None = None) -> str:
     """Egasi, 2026-10-14: "mijozni ismi bilan murojaat qilma". Model baribir
     yozsa: "Rahmat, Bobur 😊" → "Rahmat 😊", "Bobur, buyurtmangiz…" →
     "Buyurtmangiz…", "Hurmatli Bobur" → "Hurmatli mijoz". "Ism: Bobur" kabi
-    ma'lumot qatoriga tegilmaydi."""
+    ma'lumot qatoriga tegilmaydi. `allowed` — mijoz o'zi aytgan murojaat ismi
+    (customer_portrait, egasi 2026-11-15): u qoladi, faqat yonidagi aka/opa olinadi."""
+    allowed_words = {w.casefold() for w in (allowed or "").split()}
+    names = [n for n in names or () if n.casefold() not in allowed_words]
+    if allowed_words and not allowed_words & _GENDERED_WORDS:
+        for word in (allowed or "").split():
+            text = re.sub(rf"\b({re.escape(word)})\s+(?:aka|opa|ака|опа)(?:jon|жон)?\b", r"\1", text,
+                          flags=re.IGNORECASE)
     for name in sorted(names or (), key=len, reverse=True):
         # "Bobur aka" / "Dilnoza opa" ham — egasi: "ism ishlatma" (aka/opa ham emas).
         n = re.escape(name) + r"(?:\s+(?:aka|opa|ака|опа))?"
@@ -454,6 +472,33 @@ def strip_name_address(text: str, names) -> str:
         text = re.sub(rf"\b({_HONORIFIC})\s+{n}\b", lambda m: m.group(1) + " mijoz", text,
                       flags=re.IGNORECASE)
     return text
+
+
+# Jinsga bog'liq murojaat (egasi, 2026-11-15): mijoz o'zi ishlatmagan bo'lsa —
+# ", opa!" / ", aka 😊" olinadi. Ismsiz shakli; ism bilan — strip_name_address.
+_GENDERED = r"(?:aka|opa|akajon|opajon|uka|ukajon|singlim|brat|ака|опа|акажон|опажон|ука|синглим)"
+_GENDERED_WORDS = {"aka", "opa", "akajon", "opajon", "uka", "ukajon", "singlim", "brat",
+                   "ака", "опа", "акажон", "опажон", "ука", "синглим"}
+
+
+def drop_gendered_address(text: str, used=()) -> str:
+    """", opa!" → "!" — mijoz o'zi bu so'zni yozmagan bo'lsa (`used`)."""
+    used = {w.casefold() for w in used or ()}
+    return re.sub(rf",\s*({_GENDERED}){_EMOJI_OR_END}",
+                  lambda m: m.group(0) if m.group(1).casefold() in used else "",
+                  text or "", flags=re.IGNORECASE)
+
+
+def finish_address(reply: str, user, customer_text: str, session: dict) -> str:
+    """Model javobidagi murojaat: Telegram ismi bilan emas, o'zi aytgan ism qoladi,
+    aka/opa faqat mijoz o'zi ishlatgan bo'lsa (bot ham, sayt ham)."""
+    names = customer_names(user, customer_text, session.get("names", ()))
+    session.setdefault("names", set()).update(names)
+    used = session.setdefault("gendered_used", set())
+    used.update(w.casefold() for w in re.findall(r"\w+", customer_text or "")
+                if w.casefold() in _GENDERED_WORDS)
+    reply = strip_name_address(reply, names, allowed=session.get("address_name"))
+    return drop_gendered_address(reply, used)
 
 
 def _strip_html(text: str) -> str:
@@ -925,7 +970,8 @@ def _shop_knowledge() -> str:
         "mahsulot puli faqat karta orqali oldindan. Muddatini pochta belgilaydi — aniq kun "
         "va'da qilma.\n"
         f"- Do'kondan o'zi olib ketish: BEPUL. Manzil: {SHOP_PLACE}, havola: "
-        f"{SHOP_ADDRESS_URL} . Buyurtma tayyor bo'lgach operatorimiz xabar beradi. To'lov naqd "
+        f"{SHOP_ADDRESS_URL} . Ish vaqti (kelib olib ketish uchun): {SHOP_HOURS}. "
+        "Ish vaqti so'ralsa — shuni ayt. Buyurtma tayyor bo'lgach operatorimiz xabar beradi. To'lov naqd "
         "yoki karta. Faqat Toshkentdagi mijozga taklif qil — viloyatdagiga emas.\n"
         "- Yetkazish usullarini taklif qilganda shunday ro'yxat qil (narxlari bilan, har biri "
         "alohida qatorda):\n"
@@ -999,8 +1045,11 @@ def _sales_rules() -> str:
         "Bu Telegram chat, maqola emas. Ro'yxat kerak bo'lsa — 3 qatordan oshmasin.\n"
         "- MINNATDORCHILIK — 'Sizga rahmat' / 'Sizga katta rahmat' shaklida; yolg'iz 'Rahmat' "
         "yoki 'Bobur, rahmat' emas (egasi, 2026-10-14).\n"
-        "- MIJOZGA ISMI BILAN MUROJAAT QILMA ('Rahmat, Bobur', 'Hurmatli Dilnoza' — yo'q; "
-        "egasi, 2026-10-14). Ism faqat buyurtma xulosasida ('Ism: …') ko'rinishi mumkin.\n"
+        "- TELEGRAM ISMI BILAN MUROJAAT QILMA ('Rahmat, Bobur', 'Hurmatli Dilnoza' — yo'q; "
+        "egasi, 2026-10-14). Faqat mijoz o'zi aytgan murojaat ismi bilan (PORTRET da yoki "
+        "suhbatda 'menga X deb murojaat qiling' desa) — ba'zan, tabiiy joyda (egasi, 2026-11-15).\n"
+        "- 'aka', 'opa', 'uka', 'singlim', 'brat' kabi jinsga bog'liq murojaat ishlatma — mijoz "
+        "o'zi shunday yozmagan bo'lsa.\n"
         "- OHANG — MAKSIMAL ODOB: muloyim va g'amxo'r sotuvchi. Mijozga doim 'siz' deb "
         "murojaat qil; 'albatta', 'mamnuniyat bilan', 'marhamat', 'iltimos', 'rahmat' kabi "
         "hurmatli so'zlar ishlat (lekin hammasini bir gapga yig'ma); xaridi uchun minnatdorchilik "
@@ -1119,6 +1168,24 @@ def _sales_rules() -> str:
         "xaridga aylantirib yoz ('qandsiz mahsulot qidiradi').\n"
         "- Salbiy fikr bo'lsa — uzr so'ra; mahsulot buzuq yoki noto'g'ri kelgan bo'lsa "
         "raqamimizni ber.\n\n"
+        "MIJOZ PORTRETI — ISM VA YOSH (egasi, 2026-11-15)\n"
+        "- Ism (qanday murojaat qilish) yoki yoshni FAQAT '[PORTRET — SO'RASH IMKONI]' kelgan "
+        "xabarda, o'sha ko'rsatmadagi bitta savol bilan so'ra. Boshqa paytda o'zingdan so'rama. "
+        "Jinsini hech qachon so'rama va taxminingni aytma.\n"
+        "- Sotuvchi suhbat orasida so'raganidek so'ra: oddiy, tabiiy, mijoz tanlayotgan narsaga "
+        "bog'lab. Ism: 'Sizga qanday murojaat qilaylik?'. Yosh — mayin jumla, sababi ichida "
+        "(egasi, 2026-11-16): 'Yoshingizni bilsak, sizga mosrog'ini tavsiya qila olamiz 😊'; "
+        "ruscha: 'Если подскажете ваш возраст, сможем посоветовать то, что подойдёт лучше 😊'. "
+        "Bular namuna — so'zma-so'z takrorlama, har safar o'z so'zing bilan ayt. Yoniga izoh, "
+        "ogohlantirish yoki maxfiylik haqida gap qo'shma — so'rovnoma ohangi yo'q (egasi: 'tabiiy "
+        "yozsin'). Buyurtma uchun kerak dema, zarur qilib ko'rsatma. 'Nega so'rayapsiz?' desa — "
+        "oddiy sababini ayt: sizga mosrog'ini tavsiya qilish uchun.\n"
+        "- Mijoz biz u haqida nima bilishimizni so'rasa yoki o'chirishni xohlasa — /malumotlarim "
+        "buyrug'ini ayt.\n"
+        "- Mijoz o'zi aytsa (ismi, yoshi yoki maqsadi: ozish, keto, PP, shakarsiz, glutensiz, "
+        "sport, oila yoki bolalar uchun, pishiriq) — portret_yoz bilan yoz. Maqsad ehtiyojni "
+        "aniqlayotganda o'zi chiqadi ('Kim uchun olyapsiz — o'zingizgami yoki oilagami?'). Faqat "
+        "mijoz aytganini yoz, taxmin qilma. Aytgisi kelmasa — xo'p de, qayta so'rama.\n\n"
         "AKSIYA — BOSIMSIZ ESLATISH\n"
         "- Pastda 'FAOL AKSIYA' bo'lsa, mijoz mos mahsulotni olayotganda uni bir marta, "
         "yumshoq eslatib o't. Aksiya haqida faqat o'sha blokdagi va savat vositasi "
@@ -1146,7 +1213,7 @@ def _sales_rules() -> str:
         "- Ikki marta salomlashma ('Vaalaykum assalom! Assalomu alaykum, ...' — yo'q).\n"
         "- Yangi mijozga shu birinchi javobda bir marta 'Keto shopga xush kelibsiz' deyish "
         "mumkin. Avval buyurtma bergan mijozni 'yana ko'rganimizdan xursandmiz' ohangida kutib ol "
-        "(ismi bilan emas).\n"
+        "(PORTRET da murojaat ismi bo'lsa — o'sha ism bilan, bo'lmasa ismsiz).\n"
         "- Salomdan keyin darrov ishga o't: mijozning savoliga javob ber yoki "
         "bitta qisqa savol bilan mavzuga burib yubor ('nima qidiryapsiz?').\n"
         "- Salomni FAQAT suhbatning birinchi javobida ayt, keyingi har bir "
@@ -1410,6 +1477,30 @@ _TOOL_SPECS = [
                                 "description": "Fikr yoki qiziqish aniq mahsulotga tegishli bo'lsa"},
             },
             "required": ["turi", "matn"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "portret_yoz",
+        "description": "Mijoz O'ZI aytgan murojaat ismi, yoshi, maqsadlari va (faqat o'zi aniq aytgan "
+                       "bo'lsa) jinsini saqlaydi — keyingi suhbatlarda shu ism bilan murojaat va mos "
+                       "tavsiya uchun. Taxmin qilma, Telegram ismini yozma, tashxis yozma. Mijozga "
+                       "hech narsa ko'rinmaydi.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ism": {"type": "string",
+                        "description": "Mijoz qanday murojaat qilishni aytgan ism, masalan 'Dilnoza'"},
+                "yosh": {"type": "integer",
+                         "description": "Mijoz aytgan yoshi, yillarda; oraliq aytsa ('40-45') — o'rtasi"},
+                "maqsadlar": {"type": "array",
+                              "items": {"type": "string", "enum": list(customer_portrait.GOALS)},
+                              "description": "Mijoz aytgan maqsadlar: qandsiz = shakarsiz ovqat, "
+                                             "pp = to'g'ri ovqatlanish"},
+                "jins_ozi_aytdi": {"type": "string", "enum": ["erkak", "ayol"],
+                                   "description": "FAQAT mijoz o'zi aniq aytgan bo'lsa. Ismdan "
+                                                  "taxmin qilma — u o'zi aniqlanadi"},
+            },
             "additionalProperties": False,
         },
     },
@@ -1901,6 +1992,29 @@ async def _tool_remember(user_id: int, args: dict) -> str:
     product_id = int(args.get("mahsulot_id") or 0) or None
     await _remember_quiet(user_id, kind, text, product_id)
     return "OK: eslab qolindi. Mijozga bu haqda gapirma, suhbatni davom ettir."
+
+
+async def _tool_portrait(message, args: dict) -> str:
+    """portret_yoz — mijoz o'zi aytgan ism, yosh, maqsad (customer_portrait)."""
+    user = message.from_user
+    stated = {"erkak": "m", "ayol": "f"}.get(str(args.get("jins_ozi_aytdi") or "").strip().lower())
+    try:
+        result = await customer_portrait.save(
+            user.id, name=args.get("ism"), age=args.get("yosh"), goals=args.get("maqsadlar"),
+            stated_gender=stated, telegram_name=getattr(user, "full_name", None))
+    except customer_portrait.Invalid as exc:
+        return f"Xato: {exc}."
+    except Exception:
+        logger.warning("Portrait write failed for %s", user.id, exc_info=True)
+        return "Xato: hozir saqlab bo'lmadi — mijozga aytma, suhbatni davom ettir."
+    if args.get("ism"):
+        # Shu suhbatda murojaat uchun (javobdagi ism olib tashlanmasin) — bazaga emas.
+        _session(user.id)["address_name"] = customer_portrait.clean_name(args.get("ism"))
+    if result.get("opted_out"):
+        return ("OK: mijoz o'z ma'lumotlarini o'chirgan — hech narsa saqlanmadi. Qayta so'rama va "
+                "ismini faqat shu suhbatda ishlat.")
+    return ("OK: saqlandi. 'Yozib qo'ydik' dema — shunchaki suhbatni davom ettir"
+            + ("; endi ba'zan shu ism bilan murojaat qil." if args.get("ism") else "."))
 
 
 # ─────────────────────────── buyurtma kartasi ───────────────────────────────
@@ -2588,6 +2702,8 @@ async def _run_tool(bot: Bot, message: Message, name: str, args: dict) -> str:
         return await _tool_remove(user_id, args)
     if name == "eslab_qol":
         return await _tool_remember(user_id, args)
+    if name == "portret_yoz":
+        return await _tool_portrait(message, args)
     if name == "buyurtma_kartasi":
         return await _tool_card(message, args)
     if name == "buyurtma_holati":
@@ -2617,12 +2733,45 @@ def _session(user_id: int) -> dict:
     return session
 
 
+async def _portrait(user_id: int) -> dict | None:
+    try:
+        return await customer_portrait.get(user_id)
+    except Exception:
+        logger.warning("Portrait could not be read for %s", user_id, exc_info=True)
+        return None
+
+
+async def _portrait_hint(user_id: int, session: dict) -> str:
+    """Shu xabarda mijozdan ism yoki yoshni so'rash imkoni — model uchun ko'rsatma
+    yoki "". Qoidalar customer_portrait da: birinchi javobda yo'q, bir xabarda
+    bitta, har maydon bir marta (imkon berilgan zahoti bazada belgilanadi)."""
+    session.pop("portrait_ask", None)
+    if not customer_portrait.ask_allowed(session) or await ai_card_open(session.get("fsm")):
+        return ""
+    try:
+        field = await customer_portrait.claim_question(user_id)
+    except Exception:
+        logger.warning("Portrait question could not be claimed for %s", user_id, exc_info=True)
+        session["portrait_done"] = True
+        return ""
+    if not field:
+        session["portrait_done"] = True
+        return ""
+    session["portrait_ask"] = field
+    session["portrait_asked_turn"] = session.get("turns")
+    return customer_portrait.ask_hint(field)
+
+
 async def _opening_context(user_id: int) -> str:
     """Suhbat boshida modelga bir marta: mijoz xotirasi (buyurtmalar,
     qiziqishlar, fikr so'rash) va guruhda yaqinda nima so'ragani."""
     parts = []
+    portrait = await _portrait(user_id)
+    if portrait and portrait.get("display_name") and not portrait.get("opted_out_at"):
+        _session(user_id)["address_name"] = portrait["display_name"]
     try:
-        parts.append(await ai_memory.build_profile(user_id, await _lang(user_id)))
+        parts.append(await ai_memory.build_profile(user_id, await _lang(user_id),
+                                                   portrait=portrait or {}))
     except Exception:
         logger.warning("AI memory profile failed for %s", user_id, exc_info=True)
     carried = _group_context.pop(user_id, None)
@@ -2633,21 +2782,29 @@ async def _opening_context(user_id: int) -> str:
     return "\n\n".join(p for p in parts if p)
 
 
-async def _respond(bot: Bot, message: Message, user_text: str) -> str:
+async def _respond(bot: Bot, message: Message, user_text: str, tools=None) -> str:
     """Bitta mijoz xabari -> bitta javob. Ichida vosita chaqiruvlari tsikli:
     model savatga soladi/kartani ochadi, natijani o'qiydi va yakuniy matnni
     yozadi. MAX_TURNS — cheksiz tsiklga qarshi to'siq. Model qaysi
     provayderdan ekani bu yerda ahamiyatsiz — ai_provider.step() ikkalasini
-    bir xil Turn ga keltiradi."""
+    bir xil Turn ga keltiradi. `tools` — saytdagi Yordamchi uchun qisqartirilgan
+    ro'yxat (botdagi karta va lokatsiya tugmasisiz, site_assistant)."""
+    tools = tools or TOOLS
     user_id = message.from_user.id
     session = _session(user_id)
     session["last"] = time.time()
     state = session.setdefault("ai", {})
+    session["turns"] = int(session.get("turns") or 0) + 1
     if not session.get("profiled"):
         session["profiled"] = True
+        session.pop("portrait_ask", None)
         opening = await _opening_context(user_id)
         if opening:
             user_text = f"{opening}\n\n[MIJOZ XABARI]\n{user_text}"
+    else:
+        hint = await _portrait_hint(user_id, session)
+        if hint:
+            user_text = f"{hint}\n\n{user_text}"
     note = session.pop("note", None)   # karta tasdiqlandi / bekor qilindi (checkout_event)
     if note:
         user_text = f"{note}\n\n{user_text}"
@@ -2658,7 +2815,7 @@ async def _respond(bot: Bot, message: Message, user_text: str) -> str:
     prices = PriceCheck(rules, catalog, user_text)
     products = _catalog_products(catalog)          # qator miqdori ↔ summa tekshiruvi uchun
 
-    turn = await _step(state, rules, catalog, TOOLS, user=user_text,
+    turn = await _step(state, rules, catalog, tools, user=user_text,
                        max_tokens=MAX_TOKENS, history_limit=HISTORY_LIMIT)
     reply_text = ""
     done: set[str] = set()     # shu xabarda muvaffaqiyatli ishlagan vositalar
@@ -2710,10 +2867,11 @@ async def _respond(bot: Bot, message: Message, user_text: str) -> str:
                 if issues:
                     logger.warning("AI sales reply still mixed up packs for user %s — lines dropped", user_id)
                     reply_text = _drop_mismatched(reply_text, issues, lang)
-                return reply_text
+                # Ism / yosh faqat kod ruxsat bergan xabarda va bittadan (customer_portrait).
+                return customer_portrait.drop_profile_questions(reply_text, session.get("portrait_ask"))
             corrected.add(kind)
             logger.warning("AI sales reply needs a fix (%s, user %s) — asking again", kind, user_id)
-            turn = await _step(state, rules, catalog, TOOLS, user=fix,
+            turn = await _step(state, rules, catalog, tools, user=fix,
                                max_tokens=MAX_TOKENS, history_limit=HISTORY_LIMIT)
             continue
 
@@ -2725,6 +2883,9 @@ async def _respond(bot: Bot, message: Message, user_text: str) -> str:
             except Exception:
                 logger.exception("AI tool %s failed", call.name)
                 output, is_error = "Xato: ichki nosozlik.", True
+            trace = getattr(message, "web_cards", None)        # saytdagi Yordamchi (site_assistant)
+            if trace is not None:
+                trace.append((call.name, dict(call.args or {}), output))
             if not is_error:
                 done.add(call.name)
             prices.add_tool_output(output)             # hisob / savat raqamlari — model ko'chiradi
@@ -2732,7 +2893,7 @@ async def _respond(bot: Bot, message: Message, user_text: str) -> str:
 
         if attempt == MAX_TURNS - 1:
             break
-        turn = await _step(state, rules, catalog, TOOLS, results=results,
+        turn = await _step(state, rules, catalog, tools, results=results,
                            max_tokens=MAX_TOKENS, history_limit=HISTORY_LIMIT)
 
     # Chegara: oxirgi vosita natijalari modelga qaytmadi. OpenAI zanjirida
@@ -2821,9 +2982,7 @@ async def _answer(bot: Bot, message: Message, user_text: str) -> None:
     elif reply:
         # Modelning o'z matni — yozuv, ism va minnatdorchilik tekshiruvidan o'tadi.
         reply = polish_reply(reply, lang, customer_text=user_text)
-        names = customer_names(message.from_user, user_text, session.get("names", ()))
-        session.setdefault("names", set()).update(names)
-        reply = naturalize(thank_politely(strip_name_address(reply, names)))
+        reply = naturalize(thank_politely(finish_address(reply, message.from_user, user_text, session)))
         # Ketma-ket "Ha, ..." va har safar "Savatga qo'shamizmi?" — robotning
         # belgisi (egasi, 2026-11-08). Oldingi javobdagi qolip qaytarilmaydi.
         reply = ai_tone.vary(reply, session.get("last_reply"))
@@ -3219,7 +3378,7 @@ async def cb_memory(callback: CallbackQuery):
 
 async def _memory_card(user_id: int) -> str:
     try:
-        text = await ai_memory.build_profile(user_id, await _lang(user_id), mark_asked=False)
+        text = await ai_memory.build_profile(user_id, await _lang(user_id), mark_asked=False, admin=True)
     except Exception:
         logger.exception("AI memory card failed for %s", user_id)
         return "⚠️ Xotirani o'qib bo'lmadi."
@@ -3871,8 +4030,12 @@ async def cmd_ai_customer_forget(message: Message):
                              parse_mode="HTML")
         return
     removed = await ai_memory.forget(user_id)
+    try:
+        await customer_portrait.clear(user_id)
+    except Exception:
+        logger.warning("Portrait could not be cleared for %s", user_id, exc_info=True)
     _sessions.pop(user_id, None)
-    await message.answer(f"🗑 {user_id} haqidagi {removed} ta eslatma o'chirildi "
+    await message.answer(f"🗑 {user_id} haqidagi {removed} ta eslatma va portret o'chirildi "
                          "(buyurtmalar tarixi qoladi).")
 
 
