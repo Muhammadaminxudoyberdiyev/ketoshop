@@ -255,6 +255,9 @@ async def main():
     dp.include_router(channel_voice_router)
     from comment_followup import router as comment_followup_router
     dp.include_router(comment_followup_router)
+    # 📩 Instagram Direct AI javoblari: /ig_direct (holat, on/off, test).
+    from ig_direct import router as ig_direct_router
+    dp.include_router(ig_direct_router)
     from push_cap import router as push_cap_router
     dp.include_router(push_cap_router)
     from feedback_ask import router as feedback_ask_router
@@ -383,6 +386,10 @@ async def main():
     # 🔁 Bir oy oldin izoh qoldirganlarga qayta, samimiy yozish (kuniga 25 tagacha).
     from comment_followup import loop as comment_followup_loop
     asyncio.create_task(comment_followup_loop(bot))
+    # 📩 Instagram Direct: har daqiqada suhbatlar, javobsiz xabarga AI javob
+    # (24 soat ichida); izohlar tokeni bo'lmasa jim. /ig_direct off — to'xtatish.
+    from ig_direct import loop as ig_direct_loop
+    asyncio.create_task(ig_direct_loop(bot))
     # 🗣 2 kunda bir AI xaridorlardan oldingi mahsuloti haqida qisqa fikr so'raydi.
     from feedback_ask import scheduler_loop as feedback_ask_loop
     asyncio.create_task(feedback_ask_loop(bot))
