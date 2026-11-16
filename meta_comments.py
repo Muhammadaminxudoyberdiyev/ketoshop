@@ -379,6 +379,12 @@ async def webhook_receive(request: web.Request):
         logger.warning("webhook mark failed", exc_info=True)
     for c in comments:
         _spawn(ingest(bot, c, source="webhook"))
+    try:
+        # Instagram Direct xabari kelgan bo'lsa — ig_direct tekshiruvini uyg'otadi.
+        import ig_direct
+        ig_direct.on_webhook(body)
+    except Exception:
+        logger.warning("ig direct webhook hook failed", exc_info=True)
     return web.Response(text="ok")
 
 
