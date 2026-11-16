@@ -26,9 +26,10 @@ $CmdlineTools = @{
     Sha1 = "57d04f2d75eb8e8fffc5000a987e5de4b5a63e9d"
 }
 # cmdline-tools 23 hands off to the new Android CLI, whose package ids use
-# "/" (platforms/android-36). Anything else the build needs (NDK, other
-# build-tools) Gradle downloads itself under the accepted licences.
-$SdkPackages = @("platform-tools", "platforms/android-36", "build-tools/36.0.0")
+# "/" (platforms/android-36). Gradle's own auto-download still asks for
+# "ndk;<ver>", which that CLI rejects, so the NDK Flutter 3.50 pins
+# (flutter.ndkVersion) is installed here.
+$SdkPackages = @("platform-tools", "platforms/android-36", "build-tools/36.0.0", "ndk/28.2.13676358")
 
 New-Item -ItemType Directory -Force -Path $Root, "$Root\downloads", "$Root\tmp" | Out-Null
 
