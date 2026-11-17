@@ -59,7 +59,9 @@ AI_MODES = ("avto", "tasdiq", "off")
 # Direct'dagi rahmat oxiriga kod o'zi qo'shadigan havola (egasi, 2026-11-11:
 # "barcha sog'lom Keto va PP mahsulotlarini … shu yerdan ko'rib chiqishingiz
 # mumkin, deb: https://t.me/ketoshopbot/shop shu linkni bergin").
-SHOP_LINK = os.getenv("META_COMMENTS_SHOP_LINK", "https://t.me/ketoshopbot/shop").strip()
+# ?startapp=instagram: a tracked shop link (shop_links.py), so orders from people
+# who came through an Instagram comment or Direct are marked 📸 Instagram (order_origin.py).
+SHOP_LINK = os.getenv("META_COMMENTS_SHOP_LINK", "https://t.me/ketoshopbot/shop?startapp=instagram").strip()
 DEFAULT_DM = ("Izohingiz uchun katta rahmat! 🌿 Barcha sog'lom keto va PP mahsulotlarimizni "
               "shu yerdan bemalol ko'rib chiqishingiz mumkin:")
 # ai_usage da izohlar sarfi AI sotuvchinikidan alohida qatorda turadi.

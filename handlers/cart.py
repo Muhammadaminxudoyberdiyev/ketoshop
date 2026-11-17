@@ -2641,6 +2641,10 @@ async def _notify_sellers(bot: Bot, order_id: int, items: list, data: dict, lang
     # Read back what the buyer actually spent in Keto — see the note below.
     saved_order = await get_order(order_id)
     keto_used = int((saved_order or {}).get("keto_redeemed") or 0)
+    # 🧭 Qayerdan (owner, 2026-11-17): bot / sayt / ilova, AI, Instagram, reklama…
+    # Stored once on the order (order_origin.py), shown under the card's title.
+    import order_origin
+    origin = await order_origin.record(order_id, data.get("user_id"), data.get("placed") or "bot")
     contact = buyer_contact_link(
         data.get("user_id"),
         data.get("username"),
@@ -2722,6 +2726,7 @@ async def _notify_sellers(bot: Bot, order_id: int, items: list, data: dict, lang
                 total=f"{int(data['total']):,}".replace(",", " "),
                 saved_block=saved_block,
             )
+            text = order_origin.with_line(text, order_origin.line(origin, admin_lang))
             note = mystery_gift.admin_note(goods_subtotal(items), admin_lang)
             if note:
                 text += "\n" + note

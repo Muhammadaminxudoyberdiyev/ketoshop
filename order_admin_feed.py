@@ -260,6 +260,11 @@ def build_card(order: dict, lang: str, *, title: str, by: str,
         lines.append(f"{get_order_status(old_status, lang)} → <b>{get_order_status(new_status, lang)}</b>")
     elif order.get("status"):
         lines.append(_t("status_now", lang, status=get_order_status(order["status"], lang)))
+    # 🧭 Qayerdan — stays on the card through every status edit (order_origin.py).
+    import order_origin
+    origin_line = order_origin.line(order.get("origin"), lang)
+    if origin_line:
+        lines.append(origin_line)
 
     lines.append("")
     lines.extend(customer_lines(order, lang, history=history, contact=contact))

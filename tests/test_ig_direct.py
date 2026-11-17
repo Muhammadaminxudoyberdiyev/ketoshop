@@ -359,7 +359,7 @@ class ListsTest(Base):
         text = d.catalog_message(PRODUCTS, "uz")
         self.assertTrue(text.startswith("🛒 Keto shop'da hozir 3 xil mahsulot bor"))   # tugagan va optom yo'q
         self.assertIn("— 1 xil", text)
-        self.assertTrue(text.rstrip().endswith("👉 https://t.me/ketoshopbot/shop"))
+        self.assertTrue(text.rstrip().endswith("👉 https://t.me/ketoshopbot/shop?startapp=instagram"))
         self.assertNotIn("Chia", text)
         self.assertLessEqual(d._ulen(text), 1000)
 

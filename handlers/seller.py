@@ -1595,6 +1595,8 @@ async def render_order_card(callback: CallbackQuery, order_id: int, ret: str = "
         total=f"{int(order['total']):,}".replace(",", " "),
         saved_block=saved_block,
     )
+    import order_origin
+    text = order_origin.with_line(text, order_origin.line(order.get("origin"), lang))
     # 🎁 Sirli sovg'a has no order line — this card is what the team packs
     # from, so the reminder must be here too, not only on the first message.
     import mystery_gift
