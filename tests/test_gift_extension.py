@@ -5,7 +5,7 @@ import asyncio
 import os
 import re
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 os.environ.setdefault("DATABASE_URL", "postgresql://unused/test")
@@ -59,7 +59,9 @@ class TextTest(unittest.TestCase):
 class TickTest(unittest.TestCase):
     def tick(self, now, row=ENDED, prod=PROD, claimed=True):
         bot = MagicMock()
-        extended = dict(row, ends_at=datetime(2026, 11, 17, 4, 0), ended_notified_at=None)
+        # Live after the extension, whatever today is (a fixed 17.11 end made this
+        # test fail from that day on — the real clock decides _active_row).
+        extended = dict(row, ends_at=datetime.utcnow() + timedelta(days=30), ended_notified_at=None)
         states = iter([row, extended, extended, extended])
         with patch.object(g, "_now_tk", lambda: now), \
              patch.object(g, "_state", AsyncMock(side_effect=lambda force=False: next(states))), \
