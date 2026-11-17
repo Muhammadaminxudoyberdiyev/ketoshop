@@ -59,8 +59,9 @@ class TextTest(unittest.TestCase):
 class TickTest(unittest.TestCase):
     def tick(self, now, row=ENDED, prod=PROD, claimed=True):
         bot = MagicMock()
-        # Live after the extension, whatever today is (a fixed 17.11 end made this
-        # test fail from that day on — the real clock decides _active_row).
+        # The extended campaign must still be running: _active_row compares
+        # with the real clock, so a fixed date (it was 17.11.2026 04:00 UTC)
+        # turned this into the "campaign over" path once that hour passed.
         extended = dict(row, ends_at=datetime.utcnow() + timedelta(days=30), ended_notified_at=None)
         states = iter([row, extended, extended, extended])
         with patch.object(g, "_now_tk", lambda: now), \
