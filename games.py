@@ -390,6 +390,7 @@ async def finish(user_id: int, body: dict, now: datetime | None = None) -> tuple
                 if got:
                     notes.append({"kind": "tasks", "keto": got})
                 paid += got
+        st["remind_ignored"] = 0          # played → the morning reminders may go on (game_reminder.py)
         await _save(conn, user_id, st)
     out = await state_for(user_id, now)
     out.update(paid=paid, notes=notes, points=points)

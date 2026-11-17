@@ -10,7 +10,7 @@ Chegara (Toshkent kuni bo'yicha):
 Rejali, hammaga boradigan xabarlar shu darvozadan o'tadi (claim): maslahat,
 shaxsiy tavsiya, aksiya ko'rgazmasi/e'loni, kun mahsuloti, qiziqish eslatmasi,
 Keto savol, qayta sotuv, tashlab ketilgan savat, sovg'a kampaniyasi e'loni.
-Kun ichida birinchi kelgan yuboradi: 08:00 maslahat → 09:30 qayta sotuv →
+Kun ichida birinchi kelgan yuboradi: 07:30 o'yin seriyasi eslatmasi → 08:00 maslahat → 09:30 qayta sotuv →
 10:00 tavsiya → 12:00 aksiya → 13:00 kun mahsuloti → 18:00 qiziqish →
 20:00 Keto savol.
 
@@ -54,7 +54,8 @@ router = Router(name="push_cap")
 
 KIND_NAMES = {"tips": "Keto maslahat", "reco": "Shaxsiy tavsiya", "aksiya": "Aksiya", "kun_mahsuloti": "Kun mahsuloti",
               "qiziqish": "Qiziqish eslatmasi", "keto_savol": "Keto savol", "qayta_sotuv": "Qayta sotuv",
-              "savat": "Savat eslatmasi", "sovga": "Sovg'a kampaniyasi", "fikr": "Fikr so'rash (AI)"}
+              "savat": "Savat eslatmasi", "sovga": "Sovg'a kampaniyasi", "fikr": "Fikr so'rash (AI)",
+              "oyin": "O'yin seriyasi eslatmasi"}
 
 
 def stats_text(st: dict, days: int) -> str:
