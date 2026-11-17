@@ -157,5 +157,19 @@
   "profile_support": "Yordam (Telegram)",
   "profile_version": "Versiya {v}",
   "others_logged_out": "{n} ta qurilma chiqarildi",
-  "security_note": "Har bir so'rov shu telefonning himoyalangan kaliti bilan imzolanadi."
+  "security_note": "Har bir so'rov shu telefonning himoyalangan kaliti bilan imzolanadi.",
+
+  "update_required_title": "Ilovani yangilang",
+  "update_required_body": "Bu versiya endi ishlamaydi. Yangi versiyani o'rnating — savatingiz va buyurtmalaringiz saqlanib qoladi.",
+  "update_available_title": "Yangi versiya bor",
+  "update_button": "Yangilash ({v})",
+  "later": "Keyinroq",
+
+  "terms_title": "Oferta shartlari",
+  "terms_edition": "Tahrir: {v}",
+  "terms_login_note": "Kirish orqali siz Oferta shartlarini, jumladan xavfsizlik qoidalarini qabul qilasiz.",
+  "terms_updated_title": "Oferta shartlari yangilandi",
+  "terms_updated_body": "Do'kondan foydalanishni davom ettirish uchun yangi tahrir bilan tanishib, uni qabul qiling.",
+  "terms_read": "O'qish",
+  "terms_accept": "Qabul qilaman"
 }

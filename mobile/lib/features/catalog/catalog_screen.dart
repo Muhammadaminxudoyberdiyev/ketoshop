@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../app/scope.dart';
 import '../../app/theme.dart';
 import '../../data/models.dart';
 import '../../widgets/common.dart';
+import 'home_blocks.dart';
 import 'product_tile.dart';
 
 class CatalogScreen extends StatefulWidget {
@@ -30,6 +33,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
   Future<void> _refresh() async {
     final catalog = context.services.catalog;
+    unawaited(context.services.remote.refresh(force: true));
     final products = _load(force: true);
     setState(() {
       _categories = catalog.categories(force: true);
@@ -49,6 +53,15 @@ class _CatalogScreenState extends State<CatalogScreen> {
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: CustomScrollView(slivers: [
+          SliverToBoxAdapter(
+            child: ListenableBuilder(
+              listenable: context.services.remote,
+              builder: (context, _) => HomeBlocksView(
+                blocks: context.services.remote.config.home,
+                onCategory: _pick,
+              ),
+            ),
+          ),
           SliverToBoxAdapter(
             child: SizedBox(
               height: 56,

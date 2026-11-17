@@ -213,6 +213,8 @@ class LoginFlowTest(unittest.IsolatedAsyncioTestCase):
         app["bot"] = None
         app["bot_token"] = "1:test"
         app_auth.add_routes(app)
+        import app_terms
+        app_terms.add_routes(app)
         app.router.add_get("/api/echo", echo)
         app.router.add_post("/api/echo", echo)
         app.router.add_post("/api/upload", upload)
@@ -242,8 +244,10 @@ class LoginFlowTest(unittest.IsolatedAsyncioTestCase):
         return await self.client.request(method, path, data=body or None, headers=sent)
 
     async def start_login(self, device):
+        import app_terms
         r = await self.call("POST", "/app/v1/auth/start", device,
-                            {"device_key": device.public, "device_name": "Pixel 8", "env": {"rooted": False}})
+                            {"device_key": device.public, "device_name": "Pixel 8", "env": {"rooted": False},
+                             "terms_version": app_terms.VERSION})
         self.assertEqual(r.status, 200, await r.text())
         return await r.json()
 
@@ -293,6 +297,23 @@ class LoginFlowTest(unittest.IsolatedAsyncioTestCase):
 
         r = await self.call("POST", "/api/echo", device, {"product_id": 3}, token=tokens["access_token"])
         self.assertEqual((await r.json())["json"], {"product_id": 3})
+
+    async def test_terms_acceptance_is_recorded(self):
+        import app_terms
+        device = Device()
+        tokens = await self.login(device)
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow("SELECT terms_version, terms_accepted_at FROM app_sessions")
+        self.assertEqual(row["terms_version"], app_terms.VERSION)
+        self.assertIsNotNone(row["terms_accepted_at"])
+
+        r = await self.call("POST", "/app/v1/terms/accept", device, {"version": "2000-01-01"}, token=tokens["access_token"])
+        self.assertEqual(r.status, 409)
+        r = await self.call("POST", "/app/v1/terms/accept", device, {"version": app_terms.VERSION},
+                            token=tokens["access_token"])
+        self.assertEqual(r.status, 200)
+        r = await self.client.post("/app/v1/terms/accept", json={"version": app_terms.VERSION})
+        self.assertEqual(r.status, 401)
 
     async def test_wrong_number_kills_the_login(self):
         device = Device()

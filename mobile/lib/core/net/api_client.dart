@@ -82,6 +82,10 @@ class ApiClient {
           Duration? timeout}) =>
       _request('POST', path, json: json, raw: raw, contentType: contentType, headers: headers, timeout: timeout);
 
+  /// Public reads that work before login (the app's remote config).
+  Future<Object?> getPublic(String path, {Map<String, String>? query}) =>
+      _request('GET', path, query: query, auth: false, readRetries: 1);
+
   /// /app/v1/auth/* before there is a session: signed, no token.
   Future<Object?> postUnauthenticated(String path, Object json) => _request('POST', path, json: json, auth: false);
 

@@ -39,6 +39,27 @@ Qoidalar:
   `python mobile/tool/gen_l10n.py`.
 - Uchinchi tomon paketlari qo'shilmaydi (sababi SECURITY.md da).
 
+## Yangi APK'siz o'zgaradigan qism
+
+O'rnatilgan ilovalar har ochilishda (va har 30 daqiqada) serverdan
+`/app/v1/config` ni o'qiydi (`app_config.py`):
+
+- **Bosh sahifa bloklari** — aksiya, chegirma, yetkazish e'lonlari avtomatik;
+  qo'shimcha banner, e'lon, havola, bo'lim yoki mahsulotlar qatorini
+  `app_config.EXTRA_BLOCKS` ga yozib, master'ga push qilish kifoya.
+- **Funksiya kalitlari** (`FEATURES`) — masalan qidiruv tabi, «Kelganda xabar bering».
+- **Yetkazish usullari** (`DELIVERY`) — Toshkent va viloyatlar ro'yxati.
+- **Oferta shartlari** (`app_terms.py`) — matn serverda; `VERSION` o'zgarsa,
+  hamma xaridordan yangi tahrirni qabul qilish so'raladi.
+- **Versiya** — `LATEST_BUILD` oshsa «Yangi versiya bor» oynasi chiqadi,
+  `MIN_BUILD` dan past ilova esa yangilashni talab qiladi. APK manzili:
+  `APP_APK_URL` (bo'lmasa — do'kon kanali).
+
+Narx, mahsulot, aksiya, savat, buyurtma va Keto qoidalari esa avvaldan
+serverda — ular ham APK'siz o'zgaradi. Ilovaga butunlay yangi ekran yoki
+native imkoniyat kerak bo'lsagina yangi APK chiqariladi (build raqamini
+oshirib `tool\build_release.ps1 -Build N`, so'ng `LATEST_BUILD = N`).
+
 ## Yig'ish (Windows)
 
 ```powershell

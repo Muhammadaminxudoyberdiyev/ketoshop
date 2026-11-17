@@ -7,11 +7,20 @@ import 'session_store.dart';
 enum AuthStatus { unknown, unsafeDevice, signedOut, signedIn }
 
 class LoginTicket {
-  const LoginTicket({required this.requestId, required this.botUrl, required this.matchCode, required this.expiresAt});
+  const LoginTicket({
+    required this.requestId,
+    required this.botUrl,
+    required this.matchCode,
+    required this.expiresAt,
+    this.termsVersion = '',
+  });
   final String requestId;
   final String botUrl;
   final int matchCode;
   final DateTime expiresAt;
+
+  /// The Oferta edition shown on the login screen; logging in accepts it.
+  final String termsVersion;
 }
 
 enum PollOutcome { pending, approved, rejected, expired }
@@ -36,6 +45,9 @@ class AuthController extends ChangeNotifier {
   /// Why the user was signed out last (shown once on the login screen).
   String? lastEndReason;
 
+  /// Told which Oferta edition a successful login accepted.
+  Future<void> Function(String version)? onTermsAccepted;
+
   Session? get session => _sessions.current;
 
   Future<void> bootstrap() async {
@@ -48,12 +60,13 @@ class AuthController extends ChangeNotifier {
     _set(_sessions.current == null ? AuthStatus.signedOut : AuthStatus.signedIn);
   }
 
-  Future<LoginTicket> startLogin() async {
+  Future<LoginTicket> startLogin({String termsVersion = ''}) async {
     final env = await _native.checkEnvironment();
     final json = await _api.postUnauthenticated('/app/v1/auth/start', {
       'device_key': await _native.devicePublicKey(),
       'device_name': env.deviceName,
       'env': env.toJson(),
+      if (termsVersion.isNotEmpty) 'terms_version': termsVersion,
     });
     final m = json! as Map<String, Object?>;
     return LoginTicket(
@@ -61,6 +74,7 @@ class AuthController extends ChangeNotifier {
       botUrl: m['bot_url']! as String,
       matchCode: (m['match_code']! as num).toInt(),
       expiresAt: DateTime.now().add(Duration(seconds: (m['expires_in']! as num).toInt())),
+      termsVersion: termsVersion,
     );
   }
 
@@ -84,6 +98,7 @@ class AuthController extends ChangeNotifier {
       firstName: (user['first_name'] as String?) ?? '',
     ));
     lastEndReason = null;
+    if (ticket.termsVersion.isNotEmpty) await onTermsAccepted?.call(ticket.termsVersion);
     _set(AuthStatus.signedIn);
     return PollOutcome.approved;
   }

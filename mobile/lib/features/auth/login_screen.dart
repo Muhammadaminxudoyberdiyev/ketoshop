@@ -8,6 +8,7 @@ import '../../core/auth/auth_controller.dart';
 import '../../core/config.dart';
 import '../../core/l10n/locale_controller.dart';
 import '../../widgets/common.dart';
+import '../terms/terms_screen.dart';
 
 /// Login through the bot: the app shows a number, the buyer taps the same
 /// number among three in Telegram, the app picks the session up by polling.
@@ -59,7 +60,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
       _notice = null;
     });
     try {
-      final ticket = await services.auth.startLogin();
+      final ticket = await services.auth.startLogin(termsVersion: services.remote.config.termsVersion);
       if (!mounted) return;
       setState(() => _ticket = ticket);
       _poller = Timer.periodic(AppConfig.loginPollEvery, (_) => _poll());
@@ -145,6 +146,9 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                       : const Icon(Icons.send_rounded),
                   label: Text(context.t('login_button')),
                 ),
+                const SizedBox(height: Tokens.gap),
+                Text(context.t('terms_login_note'), textAlign: TextAlign.center, style: theme.textTheme.bodySmall),
+                TextButton(onPressed: () => openTerms(context), child: Text(context.t('terms_title'))),
               ] else
                 _CodeCard(ticket: ticket, onOpenTelegram: _openTelegram, onCancel: () => _finish('')),
               if (_notice != null && _notice!.isNotEmpty) ...[

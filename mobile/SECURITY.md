@@ -59,6 +59,20 @@ Ilova                         Server                       Bot (Telegram)
   |                                      botda: "yangi qurilmadan kirildi"
 ```
 
+## Oferta shartlari va huquqiy himoya
+
+Ilovaning Profil → «Oferta shartlari» bo'limida (matn: `app_terms.py`)
+taqiqlangan harakatlar (ilovani buzish, so'rovlarni soxtalashtirish, boshqa
+hisobdan foydalanish, soxta chek) va ularning oqibati yozilgan: soxta
+buyurtmalar bekor qilinadi, kirish to'xtatiladi, qayd etilgan dalillar
+huquqni muhofaza qiluvchi organlarga topshiriladi, aybdorlar JK 168-modda
+(firibgarlik), XX¹ bob (jumladan 278²-modda) va MJtK bo'yicha javobgarlikka
+tortiladi. Kirish = shartlarni qabul qilish; qaysi tahrir va qachon qabul
+qilingani `app_sessions.terms_version / terms_accepted_at` da saqlanadi.
+Dalil sifatida: sessiya (qurilma, kirish IP-manzili, vaqt), Telegram hisobi,
+buyurtma yozuvlari. Matnni yurist bilan tasdiqlang va `SELLER` rekvizitlarini
+to'ldiring.
+
 ## Imzo formati
 
 ```

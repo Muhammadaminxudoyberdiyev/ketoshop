@@ -34,7 +34,7 @@ if ($LASTEXITCODE -ne 0) { throw "tests failed" }
 $common = @(
     "--release", "--obfuscate", "--split-debug-info=build/symbols",
     "--build-name=$Version", "--build-number=$Build",
-    "--dart-define=KS_VERSION=$Version"
+    "--dart-define=KS_VERSION=$Version", "--dart-define=KS_BUILD=$Build"
 )
 flutter build apk @common --split-per-abi
 if ($LASTEXITCODE -ne 0) { throw "split build failed" }

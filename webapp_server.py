@@ -2276,9 +2276,14 @@ def create_webapp(bot: Bot, storage=None) -> web.Application:
     app["bot_token"] = BOT_TOKEN
     app["storage"] = storage
 
-    # 📱 The Android app's login and session routes (/app/v1/*).
+    # 📱 The Android app's login and session routes (/app/v1/*), and the
+    # server-driven part of the app (version, features, home blocks).
     import app_auth
+    import app_config
+    import app_terms
     app_auth.add_routes(app)
+    app_config.add_routes(app)
+    app_terms.add_routes(app)
 
     app.router.add_get("/healthz", healthz)
     app.router.add_get("/", index)

@@ -77,10 +77,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     });
   }
 
+  /// Which services deliver to the pin — the list comes from the server
+  /// (app_config.DELIVERY), so a new courier service needs no APK.
   List<String> get _methods {
     final p = _point;
     if (p == null) return const [];
-    return AppConfig.inTashkent(p.lat, p.lng) ? const ['self', 'yandex_taxi'] : const ['uzpost', 'bts', 'emu'];
+    final config = context.services.remote.config;
+    return AppConfig.inTashkent(p.lat, p.lng) ? config.tashkentMethods : config.regionMethods;
   }
 
   bool get _cashAllowed => _pickup || _method == 'self';
@@ -319,7 +322,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(context.t('cash_only_courier'), style: theme.textTheme.bodySmall),
                 ),
-              if ((_keto?.enabled ?? false) && _keto!.balance > 0)
+              if ((_keto?.enabled ?? false) && _keto!.balance > 0 && services.remote.config.enabled('keto_redeem'))
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   value: _useKeto,

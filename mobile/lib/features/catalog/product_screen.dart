@@ -169,6 +169,9 @@ class _BuyBarState extends State<_BuyBar> {
   Widget build(BuildContext context) {
     final p = widget.detail.product;
     if (p.outOfStock || p.heldOut) {
+      if (!context.services.remote.config.enabled('restock_wait')) {
+        return FilledButton.tonal(onPressed: null, child: Text(context.t(p.heldOut ? 'held_out' : 'out_of_stock')));
+      }
       return FilledButton.tonal(
         onPressed: _busy || widget.detail.restockWaiting ? null : _waitForRestock,
         child: Text(widget.detail.restockWaiting ? context.t('restock_already') : context.t('notify_restock')),

@@ -7,6 +7,7 @@ import '../../core/format.dart';
 import '../../core/l10n/locale_controller.dart';
 import '../../data/models.dart';
 import '../../widgets/common.dart';
+import '../terms/terms_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -108,6 +109,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: Tokens.pad),
           Card(
             child: Column(children: [
+              ListTile(
+                leading: const Icon(Icons.gavel_rounded),
+                title: Text(context.t('terms_title')),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => openTerms(context),
+              ),
               ListTile(
                 leading: const Icon(Icons.support_agent),
                 title: Text(context.t('profile_support')),

@@ -4,6 +4,10 @@
 abstract final class AppConfig {
   static const String host = String.fromEnvironment('KS_HOST', defaultValue: 'keto.standart-eko.uz');
   static const String appVersion = String.fromEnvironment('KS_VERSION', defaultValue: '1.0.0');
+
+  /// Compared with the server's latest/min build (app_config.py) to offer
+  /// or require an update.
+  static const int appBuild = int.fromEnvironment('KS_BUILD', defaultValue: 1);
   static const String supportUsername = 'keto_market';
   static const String botUsername = String.fromEnvironment('KS_BOT', defaultValue: 'ketoshopbot');
 

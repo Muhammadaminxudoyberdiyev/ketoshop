@@ -286,6 +286,7 @@ async def ensure_schema() -> None:
                 profile     JSONB,
                 env         JSONB,
                 ip          TEXT,
+                terms_version TEXT,
                 created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
                 expires_at  TIMESTAMPTZ NOT NULL,
                 decided_at  TIMESTAMPTZ
@@ -309,7 +310,10 @@ async def ensure_schema() -> None:
                 created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
                 last_seen         TIMESTAMPTZ NOT NULL DEFAULT now(),
                 revoked_at        TIMESTAMPTZ,
-                revoke_reason     TEXT
+                revoke_reason     TEXT,
+                -- Oferta shartlari (app_terms.py): which edition, accepted when.
+                terms_version     TEXT,
+                terms_accepted_at TIMESTAMPTZ
             )""")
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS app_sessions_user ON app_sessions (user_id) WHERE revoked_at IS NULL")
@@ -330,14 +334,16 @@ def _profile(row) -> dict:
 
 
 async def _issue(conn, *, user_id: int, device_key: str, device_name: str,
-                 profile: dict, env: dict) -> tuple[int, str, str]:
+                 profile: dict, env: dict, terms_version: str | None = None) -> tuple[int, str, str]:
     access, refresh = new_token("a"), new_token("r")
     session_id = await conn.fetchval(
         """INSERT INTO app_sessions (user_id, device_key, device_name, profile, env,
-                                     access_hash, access_expires, refresh_hash, refresh_expires)
-           VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9) RETURNING id""",
+                                     access_hash, access_expires, refresh_hash, refresh_expires,
+                                     terms_version, terms_accepted_at)
+           VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10::text,
+                   CASE WHEN $10::text IS NULL THEN NULL ELSE now() END) RETURNING id""",
         user_id, device_key, device_name, json.dumps(profile), json.dumps(env),
-        token_hash(access), _utc(ACCESS_TTL), token_hash(refresh), _utc(REFRESH_TTL))
+        token_hash(access), _utc(ACCESS_TTL), token_hash(refresh), _utc(REFRESH_TTL), terms_version)
     # Oldest sessions beyond the cap go first — a stolen phone can't pile up.
     await conn.execute(
         """UPDATE app_sessions SET revoked_at = now(), revoke_reason = 'session_cap'
@@ -433,14 +439,19 @@ async def handle_start(request: web.Request) -> web.Response:
             return _error("device_untrusted", 403)
     login_id = b64u(secrets.token_bytes(16))
     match_code = 10 + secrets.randbelow(90)
+    # The Oferta edition the buyer saw on the login screen (app_terms.py);
+    # logging in is its acceptance.
+    import app_terms
+    terms_version = app_terms.clean_version(data.get("terms_version"))
     await ensure_schema()
     async with database.pool.acquire() as conn:
         await conn.execute("DELETE FROM app_login_requests WHERE expires_at < now() - interval '1 day'")
         await conn.execute(
-            """INSERT INTO app_login_requests (id, device_key, device_name, match_code, env, ip, expires_at)
-               VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)""",
+            """INSERT INTO app_login_requests (id, device_key, device_name, match_code, env, ip, expires_at,
+                                               terms_version)
+               VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)""",
             login_id, device_key, clean_device_name(data.get("device_name")), match_code,
-            json.dumps(env), ip, _utc(LOGIN_TTL))
+            json.dumps(env), ip, _utc(LOGIN_TTL), terms_version)
     return _json({
         "request_id": login_id,
         "bot_url": f"https://t.me/{BOT_USERNAME}?start={LOGIN_PREFIX}{login_id}",
@@ -483,7 +494,7 @@ async def handle_poll(request: web.Request) -> web.Response:
                 """UPDATE app_login_requests SET status = 'consumed'
                    WHERE id = $1 AND status = 'approved'
                      AND expires_at > now() - make_interval(secs => $2)
-                   RETURNING user_id, device_key, device_name, profile, env""",
+                   RETURNING user_id, device_key, device_name, profile, env, terms_version""",
                 login_id, float(APPROVED_PICKUP))
             if claimed is None:
                 return _json({"status": "expired", "server_time": _now_ms()}, status=410)
@@ -491,7 +502,8 @@ async def handle_poll(request: web.Request) -> web.Response:
             env = json.loads(env) if isinstance(env, str) else (env or {})
             session_id, access, refresh = await _issue(
                 conn, user_id=claimed["user_id"], device_key=claimed["device_key"],
-                device_name=claimed["device_name"], profile=_profile(claimed), env=env)
+                device_name=claimed["device_name"], profile=_profile(claimed), env=env,
+                terms_version=claimed["terms_version"])
     profile = _profile(claimed)
     logger.info("App session %s opened for user %s (%s)", session_id, claimed["user_id"],
                 claimed["device_name"])
