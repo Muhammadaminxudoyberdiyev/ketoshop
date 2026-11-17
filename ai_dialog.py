@@ -21,7 +21,12 @@ berilmaydi, telefon kabi uzun raqamlar yashiriladi. /malumotlarim da
 ma'lumotini o'chirgan mijozning gapi yozilmaydi. O'chirish buyrug'i bu
 jurnalni ham tozalaydi (ai_memory.forget).
 
-Har mijozga oxirgi KEEP_PER_USER ta yozuv, KEEP_DAYS kungacha saqlanadi.
+Hamma yozuv to'liq matni bilan MUDDATSIZ saqlanadi (egasi, 2026-11-17: "biz
+hammasini cheksiz saqlashimiz kerak"). AI ga esa faqat oxirgilari ko'rsatiladi
+(RECENT_TURNS, RECENT_HOURS) va qisqartirib (_short) — bu prompt hajmi uchun,
+saqlash uchun emas. Yagona o'chirish — mijozning o'zi /malumotlarim da
+so'raganda yoki admin buyrug'i (ai_memory.forget).
+
 Jadval shu modulda yaratiladi (ai_memory dagidek). Hech bir funksiya xato
 ko'tarmaydi: jurnal ishlamasa ham suhbat davom etadi.
 """
@@ -33,11 +38,9 @@ import database
 
 logger = logging.getLogger(__name__)
 
-KEEP_PER_USER = 30
-KEEP_DAYS = 30
 RECENT_TURNS = 6            # promptga tushadigan oxirgi savol-javoblar
 RECENT_HOURS = 72           # bundan eskisi "oxirgi suhbat" emas
-TEXT_MAX = 600
+TEXT_MAX = 600              # promptdagi bitta matn (bazada to'liq qoladi)
 CHANNELS = {"bot": "botda", "site": "saytda", "group": "kanal guruhida"}
 PUBLIC_CHANNEL = "group"
 
@@ -72,8 +75,8 @@ def _short(text: str, limit: int) -> str:
 
 
 async def record(user_id: int, channel: str, question: str, answer: str) -> None:
-    """Bitta savol-javobni yozadi."""
-    question, answer = _clean(question), _clean(answer)
+    """Bitta savol-javobni to'liq matni bilan yozadi. Hech narsa o'chirilmaydi."""
+    question, answer = (question or "").strip(), (answer or "").strip()
     if not question or channel not in CHANNELS or database.pool is None:
         return
     try:
@@ -85,12 +88,6 @@ async def record(user_id: int, channel: str, question: str, answer: str) -> None
             await conn.execute(
                 "INSERT INTO ai_dialog (user_id, channel, question, answer) VALUES ($1, $2, $3, $4)",
                 user_id, channel, question, answer)
-            await conn.execute(
-                """DELETE FROM ai_dialog WHERE user_id = $1 AND (
-                       created_at < (NOW() AT TIME ZONE 'UTC') - make_interval(days => $3)
-                       OR id NOT IN (SELECT id FROM ai_dialog WHERE user_id = $1
-                                     ORDER BY id DESC LIMIT $2))""",
-                user_id, KEEP_PER_USER, KEEP_DAYS)
     except Exception:
         logger.warning("AI dialog could not be recorded for %s", user_id, exc_info=True)
 
