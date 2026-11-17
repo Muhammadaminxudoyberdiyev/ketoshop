@@ -266,6 +266,9 @@ async def main():
     # /oyinlar — the games centre's numbers for admins (games.py).
     from games import router as games_router
     dp.include_router(games_router)
+    # 🔥 Morning reminder of the daily games' streak + its 🔕 button (game_reminder.py).
+    from game_reminder import router as game_reminder_router
+    dp.include_router(game_reminder_router)
     # 📩 Instagram Direct AI javoblari: /ig_direct (holat, on/off, test).
     from ig_direct import router as ig_direct_router
     dp.include_router(ig_direct_router)
@@ -407,6 +410,9 @@ async def main():
     # 🗣 2 kunda bir AI xaridorlardan oldingi mahsuloti haqida qisqa fikr so'raydi.
     from feedback_ask import scheduler_loop as feedback_ask_loop
     asyncio.create_task(feedback_ask_loop(bot))
+    # 🔥 07:30 — the daily games' streak reminder (game_reminder.py).
+    from game_reminder import scheduler_loop as game_reminder_loop
+    asyncio.create_task(game_reminder_loop(bot))
 
     # Aksiya / Bonus — closes a campaign out the moment its window ends (so
     # bonuses stop being granted without anyone touching the admin panel) and
