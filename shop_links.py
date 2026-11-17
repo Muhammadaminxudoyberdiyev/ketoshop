@@ -50,7 +50,9 @@ CODE_RE = re.compile(r"^[a-z0-9][a-z0-9_]{0,47}$")
 DEFAULTS = (("kepak", "Kepak"), ("gluten_1_qism", "Gluten 1-qism"),
             # The link sent in Instagram comment replies and Direct (comment_ai.SHOP_LINK,
             # 2026-11-17) — so an Instagram buyer's order says so (order_origin.py).
-            ("instagram", "Instagram"))
+            ("instagram", "Instagram"),
+            # «Do'stga yuborish» from the games (games.py, 2026-11-17).
+            ("oyin", "O'yin"))
 
 ORDER_WINDOW_DAYS = 30        # havoladan keyin shu kun ichidagi buyurtma sanaladi
 NEW_USER_SLACK = timedelta(minutes=10)

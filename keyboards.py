@@ -53,6 +53,7 @@ ADMIN_COMMANDS = [
     BotCommand(command="sayt_havola", description="🔗 Sayt (do'kon) havolasi yasash — trafikni kuzatish"),
     BotCommand(command="sayt_havolalar", description="📊 Sayt havolalari: kim ochdi, kim sotib oldi"),
     BotCommand(command="buyurtma_manba", description="🧭 Buyurtmalar qayerdan: bot, sayt, ilova, AI, Instagram"),
+    BotCommand(command="oyinlar", description="🎮 Saytdagi o'yinlar: kim o'ynadi, qancha Keto"),
     BotCommand(command="reklama_token", description="🔑 Meta reklama tokeni"),
     BotCommand(command="reklama_bog", description="🔗 Reklama kampaniyasi ↔ bot havolasi"),
     BotCommand(command="izohlar", description="💬 Instagram/Facebook izohlari: javobsizlar, AI"),

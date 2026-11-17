@@ -4656,6 +4656,8 @@
 <!-- Background music: public-domain recordings served from /music (site_music.py). -->
 <script type="application/json" id="music-playlist">{{MUSIC_PLAYLIST}}</script>
 <script src="/static/pickup_checkout.js"></script>
+<script src="/static/games2_content.js?v=20261117"></script>
+<script src="/static/games2.js?v=20261117"></script>
 <script>
 const tg = window.Telegram.WebApp;
 tg.ready();
@@ -6375,6 +6377,9 @@ const GAMES = [
   { id: 'quiz', title: ['Keto viktorina', 'Кето-викторина'], sub: ['10 ta savol va qisqa izohlar', '10 вопросов с пояснениями'] },
   { id: 'memory', title: ['Juftini top', 'Найди пару'], sub: ['Mahsulotni foydasi bilan juftlang', 'Соедините продукт с его пользой'] },
 ];
+// 🎮 O'yinlar markazi (2026-11-17): seven more games, the daily puzzle, the
+// story, the map, Keto and the week's board — webapp/games2.js + games.py.
+if (window.G2) { GAMES.unshift(...G2.tiles.slice(0, 3)); GAMES.push(...G2.tiles.slice(3)); Object.assign(GAME_ICONS, G2.icons); }
 
 let gameState = null;  // the running game, or null while the menu shows
 
@@ -6404,6 +6409,8 @@ function saveGameBest(id, value) {
 }
 
 function gameBestLabel(id) {
+  const own = window.G2 ? G2.tileLabel(id) : null;   // the new games say streak / chapter / station
+  if (own !== null) return own;
   const b = gamesBest()[id];
   if (b === undefined) return '';
   if (id === 'keto' || id === 'quiz') return gx('Rekord: ' + b + '/10', 'Рекорд: ' + b + '/10');
@@ -6444,17 +6451,21 @@ function renderGamesPage() {
     '<p class="games-intro">' + escapeHtml(gx(
       "Keto haqida o'ynab o'rganing: qaysi mahsulot mos, qayerda uglevod kam, nima uchun.",
       'Узнавайте о кето играя: что подходит, где меньше углеводов и почему.')) + '</p>' +
+    (window.G2 ? G2.dashHtml() : '') +
     '<div class="games-grid">' + GAMES.map(gameTileHtml).join('') + '</div>' +
     '<p class="games-note">' + escapeHtml(gx(
-      "Uglevod qiymatlari 100 g uchun taxminiy (USDA ma'lumotlari), navi va pishirilishiga qarab farq qiladi. Bu tibbiy maslahat emas. Natijalaringiz faqat shu telefonda saqlanadi.",
-      'Углеводы указаны примерно на 100 г (данные USDA) и зависят от сорта и приготовления. Это не медицинская рекомендация. Результаты хранятся только на этом телефоне.')) + '</p>';
+      "Uglevod qiymatlari 100 g uchun taxminiy (USDA ma'lumotlari), navi va pishirilishiga qarab farq qiladi. Bu tibbiy maslahat emas. Rekordlar shu telefonda, Keto va haftalik reyting — hisobingizda. O'yinlardan Keto kuniga cheklangan.",
+      'Углеводы указаны примерно на 100 г (данные USDA) и зависят от сорта и приготовления. Это не медицинская рекомендация. Рекорды — на этом телефоне, Keto и рейтинг недели — в вашем аккаунте. Keto за игры ограничены в день.')) + '</p>';
   renderGamesTeaser();
+  if (window.G2) G2.refresh();
 }
 
 function openGame(id) {
   if (activePage !== 'games') switchPage('games');
   document.getElementById('page-games').classList.add('playing');
-  ({ keto: startKetoGame, duel: startDuelGame, quiz: startQuizGame, memory: startMemoryGame })[id]();
+  const start = ({ keto: startKetoGame, duel: startDuelGame, quiz: startQuizGame, memory: startMemoryGame })[id]
+    || (window.G2 && G2.starters[id]);
+  if (start) start();
   trk(() => Trk.open('game', id));
   window.scrollTo(0, 0);
 }
@@ -6784,6 +6795,7 @@ function finishGame(id, value, total) {
       '<div class="game-result-big">' + escapeHtml(big) + '</div>' +
       '<div class="game-result-msg">' + escapeHtml(msg) + '</div>' +
       '<div class="game-result-sub">' + escapeHtml(sub) + '</div>' +
+      '<div id="g2-reward" class="g2-reward"></div>' +
       '<div class="game-actions">' +
         '<button type="button" class="game-again" onclick="openGame(\'' + id + '\')">' + escapeHtml(gx("Qayta o'ynash", 'Сыграть ещё')) + '</button>' +
         '<button type="button" class="game-other" onclick="renderGamesPage()">' + escapeHtml(gx("Boshqa o'yin", 'Другая игра')) + '</button>' +
@@ -6793,6 +6805,7 @@ function finishGame(id, value, total) {
       escapeHtml(gx("Keto mahsulotlarini ko'rish", 'Смотреть кето-продукты')) + ' →</button>');
   if (great || record) launchConfetti(document.getElementById('game-result'));
   gameHaptic(true);
+  if (window.G2) G2.report(id, value, total);     // Keto + the week's board (games.py)
   renderGamesTeaser();
 }
 
