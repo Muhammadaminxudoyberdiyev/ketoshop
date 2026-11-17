@@ -152,9 +152,10 @@ class ShopWebView(
             "location_settings" -> runCatching {
                 activity.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
             }
+            "location_state" -> return activity.locationState()
             "location" -> {
                 val id = msg.optInt("id")
-                activity.requestLocation { fix ->
+                activity.requestLocation(msg.optString("lang", "uz")) { fix ->
                     val value = if (fix == null) "null" else JSONObject().apply {
                         put("latitude", fix.latitude)
                         put("longitude", fix.longitude)

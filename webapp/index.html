@@ -10385,7 +10385,16 @@ function getDeviceLocation(timeoutMs) {
       clearTimeout(lmTimer);
       resolve(pos);
     };
-    const timer = setTimeout(() => finish(null), timeoutMs);
+    // A first ask shows a prompt (Telegram's or the phone's access request,
+    // in the Android app also «switch location on»). The buyer's time reading
+    // it must not use up the wait for the fix itself — otherwise they get
+    // «aniqlab bo'lmadi» while still deciding (owner report, 17.11).
+    let promptLikely = true;
+    try {
+      const lmNow = tg.LocationManager;
+      promptLikely = !(lmNow && lmNow.isInited && lmNow.isAccessGranted);
+    } catch (_) {}
+    const timer = setTimeout(() => finish(null), timeoutMs + (promptLikely ? 60000 : 0));
     let lmTimer = null;
     const browser = () => {
       if (done || usedBrowser) return;
