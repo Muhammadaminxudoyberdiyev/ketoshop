@@ -26,6 +26,7 @@ os.environ.setdefault("DATABASE_URL", "postgresql://test/test")
 os.environ.setdefault("BOT_TOKEN", "1:test")
 os.environ.setdefault("OPENAI_API_KEY", "sk-test-not-used")
 
+import ai_dialog
 import ai_memory
 import ai_provider
 import ai_sales
@@ -77,7 +78,7 @@ class _FakeProvider:
     async def step(self, state, rules, catalog, tools, *, user=None, results=None,
                    max_tokens=800, history_limit=40):
         self.calls.append({"user": user, "results": results, "tools": tools,
-                           "rules": rules, "catalog": catalog, "state": state})
+                           "rules": rules, "catalog": catalog, "state": state, "max_tokens": max_tokens})
         return self._turns.pop(0)
 
 
@@ -1139,19 +1140,22 @@ class AiSalesMemoryContextTest(_ProviderSwap):
 
     def setUp(self):
         ai_sales._sessions.clear()
-        ai_sales._group_context.clear()
         ai_sales._catalog_cache = (9e18, "10 | Kokos uni")
         _patch(self, ai_sales, "_dynamic_block", AsyncMock(return_value="KATALOG"))
 
     def tearDown(self):
         ai_sales._sessions.clear()
-        ai_sales._group_context.clear()
         ai_sales._catalog_cache = None
         ai_memory.build_profile = AsyncMock(return_value="")
 
-    def test_profile_and_group_question_open_the_conversation_once(self):
+    def _turn(self, turn_id, channel, question, answer):
+        return {"id": turn_id, "channel": channel, "question": question, "answer": answer,
+                "created_at": datetime(2026, 11, 16, 17, 42)}
+
+    def test_profile_and_recent_dialog_open_the_conversation_once(self):
         ai_memory.build_profile = AsyncMock(return_value="[MIJOZ XOTIRASI] Bodom uni olgan")
-        ai_sales._group_context[777] = (time.time(), "bodom uni bormi?", "Bor, 89 000 so'm")
+        recent = AsyncMock(side_effect=[[self._turn(5, "group", "bodom uni bormi?", "Bor, 89 000 so'm")], []])
+        _patch(self, ai_dialog, "recent", recent)
         provider = self.use([Turn(text="Salom!"), Turn(text="Albatta.")])
         message = _FakeMessage()
 
@@ -1161,9 +1165,32 @@ class AiSalesMemoryContextTest(_ProviderSwap):
         first, second = provider.calls[0]["user"], provider.calls[1]["user"]
         self.assertIn("[MIJOZ XOTIRASI] Bodom uni olgan", first)
         self.assertIn("bodom uni bormi?", first)              # guruhdagi savoli ulandi
+        self.assertIn("Bor, 89 000 so'm", first)              # botda AI javobi ham ko'rinadi
+        self.assertIn("kanal guruhida", first)
         self.assertTrue(first.endswith("[MIJOZ XABARI]\nsalom"))
         self.assertEqual(second, "yana bitta savol")           # ikkinchi marta yo'q
-        self.assertNotIn(777, ai_sales._group_context)
+        self.assertEqual(recent.await_args_list[1].kwargs["after_id"], 5)
+
+    def test_what_they_wrote_in_the_group_meanwhile_reaches_the_bot(self):
+        recent = AsyncMock(side_effect=[
+            [],
+            [self._turn(7, "bot", "salom", "Salom!"),                     # zanjirda bor — qaytarilmaydi
+             self._turn(8, "group", "allulozaning zarari bormi", "Me'yorida ishlatilsa...")],
+            []])
+        _patch(self, ai_dialog, "recent", recent)
+        provider = self.use([Turn(text="Salom!"), Turn(text="Bor."), Turn(text="Mayli.")])
+        message = _FakeMessage()
+
+        _run(ai_sales._respond(None, message, "salom"))
+        _run(ai_sales._respond(None, message, "o'sha savolga javob bering"))
+        _run(ai_sales._respond(None, message, "rahmat"))
+
+        second, third = provider.calls[1]["user"], provider.calls[2]["user"]
+        self.assertIn("allulozaning zarari bormi", second)
+        self.assertNotIn("Mijoz: «salom»", second)
+        self.assertTrue(second.endswith("o'sha savolga javob bering"))
+        self.assertEqual(third, "rahmat")
+        self.assertEqual(recent.await_args_list[2].kwargs["after_id"], 8)
 
 
 class AiMemoryProfileTest(unittest.TestCase):
@@ -1932,7 +1959,7 @@ class AiGroupModeTest(_ProviderSwap):
 
     def setUp(self):
         ai_sales._group_calls.clear()
-        ai_sales._group_context.clear()
+        ai_sales._group_followups.clear()
         _patch(self, ai_sales, "GROUP_CHATS", {self.CHAT})
         _patch(self, ai_sales, "CHANNEL_GROUP", False)
         _patch(self, ai_sales, "ADMIN_IDS", [1])
@@ -1945,7 +1972,7 @@ class AiGroupModeTest(_ProviderSwap):
 
     def tearDown(self):
         ai_sales._group_calls.clear()
-        ai_sales._group_context.clear()
+        ai_sales._group_followups.clear()
         ai_sales._catalog_cache = None
         _settings()
 
@@ -2027,13 +2054,97 @@ class AiGroupModeTest(_ProviderSwap):
 
     def test_answer_quotes_the_post_and_carries_over_to_the_bot(self):
         provider = self.use([Turn(text="89 000 so'm. Buyurtma uchun @ketoshopbot ga yozing.")])
+        record = AsyncMock()
+        _patch(self, ai_dialog, "record", record)
         post = NS(is_automatic_forward=True, sender_chat=NS(type="channel"),
                   from_user=None, text="Yangi: Bodom uni 500gr", caption=None)
         message = self._msg("narxi qancha?", reply=post)
         _run(ai_sales._group_answer(None, message, "narxi qancha?"))
         self.assertIn("Yangi: Bodom uni 500gr", provider.calls[0]["user"])
         message.reply.assert_awaited_once()
-        self.assertIn(42, ai_sales._group_context)
+        record.assert_awaited_once()
+        self.assertEqual(record.await_args.args[:3], (42, "group", "narxi qancha?"))   # post matnisiz
+        self.assertTrue(ai_sales._group_followup(self.CHAT, 42))
+
+    def test_a_follow_up_that_is_not_a_question_still_reaches_the_model(self):
+        # Egasi, 2026-11-16: javob olgan mijozning keyingi gapi javobsiz qolgan.
+        text = "eritritol menga yoqardi"
+        self.assertFalse(self.trigger(self._msg(text)))
+        ai_sales._group_followups[(self.CHAT, 42)] = time.time() - 60
+        self.assertTrue(self.trigger(self._msg(text)))
+        self.assertFalse(self.trigger(self._msg(text, user_id=43)))          # boshqa odam emas
+        ai_sales._group_followups[(self.CHAT, 42)] = time.time() - ai_sales.GROUP_FOLLOWUP - 1
+        self.assertFalse(self.trigger(self._msg(text)))
+
+    def test_requests_count_as_questions(self):
+        for text in ("Farqini ayting", "maslahat bering", "Подскажите, что лучше", "фарқини айтинг"):
+            self.assertTrue(ai_sales.looks_like_question(text), text)
+
+    def test_the_conversation_reaches_the_group_model_but_private_answers_do_not(self):
+        turns = [
+            {"id": 1, "channel": "bot", "question": "raqamim +998 90 123 45 67, bodom uni oldim",
+             "answer": "Buyurtma №5003, 178 000 so'm, Chilonzor 9", "created_at": datetime(2026, 11, 16, 12)},
+            {"id": 2, "channel": "group", "question": "allulozani ham zarari bormi",
+             "answer": "Me'yorida ishlatilsa zarari yo'q.", "created_at": datetime(2026, 11, 16, 17, 42)},
+        ]
+        _patch(self, ai_dialog, "recent", AsyncMock(return_value=turns))
+        _patch(self, ai_dialog, "record", AsyncMock())
+        provider = self.use([Turn(text="Alluloza ta'mi shakarga eng yaqin.")])
+        bot_msg = NS(from_user=NS(id=9, is_bot=True, username=ai_sales.BOT_USERNAME),
+                     is_automatic_forward=False, sender_chat=None, text="Bodom uni - keto uchun eng mos")
+        message = self._msg("Yo'q men shirinlashtirgichlar haqida so'radim", reply=bot_msg)
+        _run(ai_sales._group_answer(None, message, message.text))
+        user = provider.calls[0]["user"]
+        self.assertIn("SHU ODAM BILAN OXIRGI SUHBATLAR", user)
+        self.assertIn("allulozani ham zarari bormi", user)
+        self.assertIn("Me'yorida ishlatilsa zarari yo'q.", user)       # guruhdagi javob — ochiq
+        self.assertIn("bodom uni oldim", user)                         # botdagi mavzu
+        self.assertNotIn("123 45 67", user)                            # telefon yashirin
+        self.assertNotIn("5003", user)                                 # botdagi AI javobi yo'q
+        self.assertTrue(user.rstrip().endswith("Yo'q men shirinlashtirgichlar haqida so'radim"))
+
+    def test_a_fresh_group_question_is_named_next_to_the_follow_up(self):
+        # Jonli sinov, 2026-11-17: kanal posti (unlar) savol yonida turib, "Farqini ayting"
+        # ga unlar solishtirilgan. Post endi fonda, oldingi savol — yangi xabar yonida.
+        now = datetime.utcnow()
+        turns = [{"id": 2, "channel": "group", "question": "allulozani ham zarari bormi",
+                  "answer": "Me'yorida ishlatilsa zarari yo'q.", "created_at": now - timedelta(minutes=1)}]
+        _patch(self, ai_dialog, "recent", AsyncMock(return_value=turns))
+        _patch(self, ai_dialog, "record", AsyncMock())
+        provider = self.use([Turn(text="Alluloza shakarga eng yaqin, eritritol salqin ta'm beradi.")])
+        post = NS(is_automatic_forward=True, sender_chat=NS(type="channel"),
+                  from_user=None, text="Keto va glyutensiz unlar: bodom uni, kokos uni", caption=None)
+        _run(ai_sales._group_answer(None, self._msg("Farqini ayting", reply=post), "Farqini ayting"))
+        user = provider.calls[0]["user"]
+        new = user[user.index("[YANGI XABAR]"):]
+        self.assertIn("[DAVOM:", new)
+        self.assertIn("allulozani ham zarari bormi", new)
+        self.assertNotIn("glyutensiz unlar", new)                      # post — fonda, savol yonida emas
+        self.assertIn("glyutensiz unlar", user[:user.index("[YANGI XABAR]")])
+        self.assertTrue(new.rstrip().endswith("Farqini ayting"))
+
+    def test_a_cut_off_group_reply_never_shows_half_a_word(self):
+        # Jonli sinov, 2026-11-17: "• Choy-qahva uchun, juda oz miqd" — javob uzilgan.
+        self.use([Turn(text="Hammasi me'yorida mos.\n• Choy-qahva uchun, juda oz miqd", truncated=True)])
+        self.assertEqual(_run(ai_sales._group_respond(self.CHAT, "N.I.", "eng bezarari qaysi")),
+                         "Hammasi me'yorida mos.")
+        self.use([Turn(text="Choy-qahva uchun, juda oz miqd", truncated=True)])
+        self.assertEqual(_run(ai_sales._group_respond(self.CHAT, "N.I.", "eng bezarari qaysi")), "")
+        provider = self.use([Turn(text="Bor.")])
+        _run(ai_sales._group_respond(self.CHAT, "N.I.", "bormi?"))
+        self.assertEqual(provider.calls[0]["max_tokens"], ai_sales.MAX_TOKENS)
+
+    def test_an_old_group_question_gets_no_follow_up_hint(self):
+        turns = [{"id": 2, "channel": "group", "question": "allulozani ham zarari bormi", "answer": "Yo'q.",
+                  "created_at": datetime.utcnow() - timedelta(hours=3)}]
+        self.assertEqual(ai_sales._group_thread_hint(turns), "")
+        self.assertEqual(ai_sales._group_thread_hint([]), "")
+
+    def test_rules_cover_follow_ups_and_sweeteners(self):
+        rules = ai_sales._group_rules()
+        self.assertIn("SUHBAT DAVOMI", rules)
+        self.assertIn("Ha, tushunarli", rules)          # YOMON misol
+        self.assertIn("Alluloza", rules)
 
 
 class AiUsagePromoKnowledgeTest(_ProviderSwap):

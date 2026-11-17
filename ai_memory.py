@@ -48,8 +48,9 @@ _KIND_LABEL = {"interest": "qiziqish", "feedback": "fikr", "note": "eslatma",
                "recipe": "retsept berildi"}
 RECIPE_KIND = "recipe"
 
-MAX_NOTES_PER_USER = 80      # eskisi o'chadi — profil cheksiz o'smasin
-PROFILE_NOTES = 25           # promptga tushadigan oxirgi eslatmalar
+# Eslatmalar muddatsiz saqlanadi (egasi, 2026-11-17: "biz hammasini cheksiz
+# saqlashimiz kerak"); avval har mijozga 80 tadan oshgani o'chirilardi.
+PROFILE_NOTES = 25           # promptga tushadigan oxirgi eslatmalar (bazada hammasi)
 PROFILE_ORDERS = 5           # promptga tushadigan oxirgi buyurtmalar
 NOTE_MAX_CHARS = 300
 DEDUP_DAYS = 30              # bir xil gap shu muddat ichida qayta yozilmaydi
@@ -114,11 +115,6 @@ async def remember(user_id: int, kind: str, text: str, product_id: int | None = 
         await conn.execute(
             "INSERT INTO ai_customer_notes (user_id, kind, text, product_id) VALUES ($1, $2, $3, $4)",
             user_id, kind, text, product_id)
-        await conn.execute(
-            """DELETE FROM ai_customer_notes WHERE user_id = $1 AND id NOT IN (
-                   SELECT id FROM ai_customer_notes WHERE user_id = $1
-                   ORDER BY created_at DESC, id DESC LIMIT $2)""",
-            user_id, MAX_NOTES_PER_USER)
     return True
 
 
@@ -158,6 +154,8 @@ async def forget(user_id: int) -> int:
     async with database.pool.acquire() as conn:
         await _ensure(conn)
         result = await conn.execute("DELETE FROM ai_customer_notes WHERE user_id = $1", user_id)
+    import ai_dialog
+    await ai_dialog.forget(user_id)          # oxirgi suhbatlar jurnali ham (xato ko'tarmaydi)
     try:
         return int(result.split()[-1])
     except (ValueError, IndexError, AttributeError):

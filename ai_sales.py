@@ -126,11 +126,14 @@ from aiogram.types import (CallbackQuery, InlineKeyboardButton, InlineKeyboardMa
                            KeyboardButton, Message, ReplyKeyboardMarkup)
 from aiogram.utils.chat_action import ChatActionSender
 
+import ai_dialog
 import ai_memory
 import ai_stats
+import ai_tone
 import cheque_confirm
 import customer_portrait
 import pack_math
+import uzpost
 import ai_provider
 import database
 from config import (ADMIN_IDS, BOT_USERNAME, FREE_DELIVERY_FROM, LOW_STOCK_THRESHOLD,
@@ -161,7 +164,9 @@ MAX_TOKENS = 800          # javoblar qisqa — bu ham ortig'i bilan yetadi
 CATALOG_TTL = 300         # katalog snapshotini 5 daqiqa saqlaymiz
 SESSION_TTL = 3 * 3600    # 3 soat jim tursa, suhbat unutiladi (xotira qoladi)
 HISTORY_LIMIT = 40        # oxirgi 40 xabar — undan oldingisi kesiladi
-GROUP_CONTEXT_TTL = 24 * 3600  # guruhdagi savol botdagi suhbatga shuncha ulanadi
+# Guruhda javob olgan odamning shu vaqt ichidagi keyingi gapi — suhbat davomi:
+# savolga o'xshamasa ham ("Farqini ayting") model ko'radi (egasi, 2026-11-16).
+GROUP_FOLLOWUP = 20 * 60
 MIRROR_TEXT_MAX = 1500
 # Do'kon manzili (egasi, 2026-10-13: "manzil so'ralganda shu linkni bergin
 # hammaga" + mo'ljal). Mijoz DO'KON qayerda deb so'raganda — botda ham, guruhda ham.
@@ -178,7 +183,7 @@ SHOP_PLACE = f"{SHOP_STREET} (mo'ljal: {SHOP_LANDMARK})"
 # Mijoz tanlaydigan yetkazish -> bazadagi delivery_method. Tugmali checkout
 # bilan bir xil to'plam (keyboards.delivery_method_keyboard).
 DELIVERY = {"toshkent_kuryer": "self", "olib_ketish": "pickup", "yandex_taxi": "yandex_taxi",
-            "bts": "bts", "emu": "emu"}
+            "uzpost": uzpost.METHOD, "bts": "bts", "emu": "emu"}
 # Naqd faqat shu ikkisida — kuryerga yoki do'konda qo'lma-qo'l. Qolganida karta oldindan.
 CASH_OK = {"self", "pickup"}
 
@@ -201,7 +206,7 @@ _sessions: dict[int, dict] = {}
 _opted_out: set[int] = set()         # /ai_off bosganlar — avtomatik ochilmaydi
 _paused: dict[int, float] = {}       # user_id -> shu vaqtgacha AI jim (admin javob berdi)
 _inboxes: dict[tuple, dict] = {}     # ketma-ket xabarlarni yig'ish
-_group_context: dict[int, tuple[float, str, str]] = {}   # user_id -> (vaqt, savol, javob)
+_group_followups: dict[tuple[int, int], float] = {}   # (guruh, odam) -> oxirgi javob vaqti
 
 
 def is_enabled() -> bool:
@@ -240,7 +245,7 @@ _CYR_RUN = re.compile(r"[\u0400-\u04FF]+")
 _LAT_RUN = re.compile(r"[A-Za-z'ʻ’]+")
 _WORD = re.compile(r"[\w'ʻ’ʼ`‘]+")
 # Kirill matn ichida ham lotincha qoladigan nomlar ("Keto shopга").
-_KEEP_LATIN = {"keto", "shop", "ketoshop", "yandex", "taxi", "telegram", "bts", "emu", "uzs"}
+_KEEP_LATIN = {"keto", "shop", "ketoshop", "yandex", "taxi", "telegram", "bts", "emu", "uzs", "uzpost"}
 
 
 def fix_mixed_script(text: str) -> str:
@@ -931,8 +936,14 @@ def _keto_knowledge() -> str:
         "elektrolitlar yordam beradi; odatda 1-2 haftada o'tadi.\n"
         "- Shirinlatgichlar: eritritol — kaloriyasi va glikemik indeksi deyarli 0, shakardan "
         "taxminan 30% kam shirin; pishiriqda shakar o'rniga 1:1 yoki biroz ko'proq qo'yiladi, "
-        "juda ko'p yeyilsa qorin dam bo'lishi mumkin. Steviya shakardan yuzlab marta shirin — "
-        "juda oz miqdorda ishlatiladi.\n"
+        "juda ko'p yeyilsa qorin dam bo'lishi mumkin, og'izda salqinlik sezgisi beradi. Steviya "
+        "shakardan yuzlab marta shirin — juda oz miqdorda ishlatiladi, ko'p solinsa achchiq ta'm "
+        "beradi. Alluloza (allyuloza) — tabiatda oz uchraydigan 'noyob shakar': shakardan taxminan "
+        "30% kam shirin, kaloriyasi deyarli 0, qondagi shakarni ko'tarmaydi; ta'mi va pishiriqda "
+        "o'zini tutishi (qizarishi, karamel bo'lishi) shakarga eng yaqin; ko'p yeyilsa qorin dam "
+        "bo'lishi mumkin. 'Eng zararsizi qaysi' deb so'rashsa — biror birini mutlaq zararsiz deb "
+        "va'da berma: me'yorida ishlatilsa hammasi keto uchun mos, farqi ta'mi va ishlatilishida; "
+        "maqsadiga qarab mosini tavsiya qil.\n"
         "- Keto unlar: bodom uni — asosiy keto un, pishiriqda bug'doy unini to'liq almashtira "
         "oladi. Kokos uni suyuqlikni juda ko'p shimadi — bodom unining 1/4-1/3 qismi yetadi, "
         "tuxum va suyuqlik ko'proq kerak. Zig'ir uni — tolaga boy. Psillium — bog'lovchi, "
@@ -955,6 +966,7 @@ def _shop_knowledge() -> str:
     """Yetkazish va to'lov shartlari — checkout bilan bir xil manbadan
     (config.FREE_DELIVERY_FROM, handlers/cart.SELF_DELIVERY_FEE)."""
     from handlers.cart import SELF_DELIVERY_FEE
+    first_kg = uzpost.FIRST_KG + uzpost.SURCHARGE      # mijoz to'laydigan: tarif + 3 000
     return (
         "YETKAZISH VA TO'LOV (do'kon qoidalari — boshqacha va'da berma)\n"
         f"- Toshkent bo'ylab Ketoshop kuryeri: {_fmt(SELF_DELIVERY_FEE)} so'm; mahsulotlar "
@@ -965,9 +977,22 @@ def _shop_knowledge() -> str:
         "ichida yetkazib beramiz. Shu ikki variantni ayt va qaysi biri qulayligini so'ra.\n"
         "- Toshkentda Yandex Taxi bilan ham bo'ladi: yo'l haqini mijoz haydovchiga o'zi to'laydi, "
         "mahsulot puli faqat karta orqali oldindan.\n"
-        "- Viloyatlarga BTS yoki EMU pochtasi orqali: pochta haqi pochtaga alohida to'lanadi, "
-        "mahsulot puli faqat karta orqali oldindan. Muddatini pochta belgilaydi — aniq kun "
-        "va'da qilma.\n"
+        # Egasi, 2026-11-07: "nega uzpostni qo'shmayapsan, uni ham tahminiy narxlari bilan
+        # qo'sh!" — tugmali checkout dagi UzPost (uzpost.py) bilan bir xil shartlar.
+        "- Viloyatlarga UzPost «Bir Qadam» orqali — viloyat uchun birinchi taklif: posilka "
+        "mijozga eng yaqin pochta bo'limiga odatda 1 ish kunida yetib boradi, olishda pasport "
+        "yoki ID karta kerak. Yetkazish narxini buyurtma summasiga qo'shamiz, og'irlikka qarab "
+        f"taxminan: posilka 1 kg gacha ~{_fmt(first_kg)} so'm, har keyingi kg +{_fmt(uzpost.NEXT_KG)} "
+        f"so'm (Qoraqalpog'iston, Xorazm, Surxondaryoga har keyingi kg +{_fmt(uzpost.NEXT_KG_FAR)} "
+        "so'm). Mijoz viloyatga yetkazish narxini so'rasa: mahsulotlarni aytgan bo'lsa — hisob "
+        "dagi UzPost qatorini ayt; aytmagan bo'lsa — AVVAL savatni_korish ni chaqir: savatda "
+        "mahsulot bo'lsa, undagi UzPost qatoridagi aniq summani ayt; savat bo'sh bo'lsa — shu "
+        "taxminiy narxni. Savat yoki ro'yxat summasini aytganda 'savatingizdagi mahsulotlar bilan "
+        "yetkazish ~X so'm, jami ~Y so'm' de — uni '1 kg gacha' tarifi deb aralashtirma. "
+        "Mahsulot va yetkazish puli faqat karta orqali oldindan.\n"
+        "- Viloyatlarga BTS yoki EMU pochtasi orqali ham bo'ladi: pochta haqi pochtaga alohida "
+        "to'lanadi, mahsulot puli faqat karta orqali oldindan. Muddatini pochta belgilaydi — "
+        "aniq kun va'da qilma.\n"
         f"- Do'kondan o'zi olib ketish: BEPUL. Manzil: {SHOP_PLACE}, havola: "
         f"{SHOP_ADDRESS_URL} . Ish vaqti (kelib olib ketish uchun): {SHOP_HOURS}. "
         "Ish vaqti so'ralsa — shuni ayt. Buyurtma tayyor bo'lgach operatorimiz xabar beradi. To'lov naqd "
@@ -977,6 +1002,8 @@ def _shop_knowledge() -> str:
         f"  🚚 Toshkent bo'ylab kuryer — {_fmt(SELF_DELIVERY_FEE)} so'm ({_fmt(FREE_DELIVERY_FROM)} "
         "so'mdan bepul), 24 soat ichida\n"
         "  🏪 Do'kondan olib ketish — bepul\n"
+        f"  📮 Viloyatlarga UzPost — ~{_fmt(first_kg)} so'mdan (og'irlikka qarab), 1 ish kunida "
+        "pochta bo'limiga\n"
         "  📦 Viloyatlarga BTS / EMU pochtasi — pochta haqi alohida\n"
         "  🚖 Toshkentda Yandex Taxi — yo'l haqi haydovchiga\n"
         "- DO'KON MANZILI: mijoz do'kon/ofis qayerda, manzilingiz, adres, lokatsiya, qanday "
@@ -1022,7 +1049,23 @@ def _sales_rules() -> str:
         "- Har xabarda rahmat aytma: xarid, buyurtma yoki chin yordam uchun bir marta yetadi.\n"
         "- Umumiy, ensiklopedik gaplar ('odatda', 'ko'pchilik uchun', 'bu individual') o'rniga "
         "aniq, amaliy javob — o'z mahsuloting bilan.\n"
-        "- Tinish belgilari oddiy, odam yozgandek: uzun tire (—) o'rniga vergul yoki chiziqcha (-).\n\n"
+        "- Tinish belgilari oddiy, odam yozgandek: uzun tire (—) o'rniga vergul yoki chiziqcha (-).\n"
+        "- 'HA, ...' DEB TASDIQLAYVERMA (egasi, 2026-11-08: \"robotga o'xshab faqat "
+        "tasdiqlayvermasin, sezilib qolyapti va noqulay bo'lyapti\"). Mijoz savolini 'Ha, ...' / "
+        "'Albatta, ...' / 'Да, ...' bilan qaytarib tasdiqlama. Birinchi gap darrov foydali bo'lsin: "
+        "qanday ishlatiladi, nimaga e'tibor berish kerak, qaysi biri mos. 'Ha' ekani javobdan "
+        "bilinib turadi.\n"
+        "  Mijoz: 'kompot uchun ham mumkinmi'. YOMON: 'Ha, kompot uchun ham mumkin. Faqat oz-ozdan "
+        "solinadi.' YAXSHI: 'Kompotga ham bemalol solsa bo'ladi 😊 Shakardan ancha shirin, shuning "
+        "uchun ozdan solib, tatib ko'ring.'\n"
+        "  Mijoz: 'uzoq saqlanadimi'. YOMON: 'Ha, to'g'ri saqlansa uzoq turadi.' YAXSHI: 'Og'zi "
+        "yopiq qadoqda, quruq joyda bemalol turadi, muddati qadoqda yozilgan. Faqat nam tegmasin.'\n"
+        "  Mijoz: 'А для выпечки подойдёт?'. YOMON: 'Да, для выпечки подойдёт.' YAXSHI: 'В выпечке "
+        "ведёт себя почти как сахар: печенье, кексы, кремы.'\n"
+        "- Aytsa bo'ladigan narsani keyinga qoldirma: 'Agar xohlasangiz, ... ham aytib beramiz' "
+        "o'rniga o'sha narsani shu javobning o'zida ayt.\n"
+        "- Suhbatda aytilgan narx ro'yxatini keyingi javobda qaytarma — mijoz endi boshqa narsani "
+        "so'rayapti (ishlatish, saqlash, ta'm). Kerak bo'lsa bitta mosini nomi bilan esla.\n\n"
         "GAPIRISH USLUBI\n"
         "- QISQA, lekin QURUQ EMAS: odatda 2-3 jumla, ortiqcha muqaddimasiz va takrorsiz. "
         "Bu Telegram chat, maqola emas. Ro'yxat kerak bo'lsa — 3 qatordan oshmasin.\n"
@@ -1053,7 +1096,7 @@ def _sales_rules() -> str:
         "- Misol. Mijoz: 'psillium bormi'.\n"
         "  YOMON: 'Ha, bor — Psillium sheluxa va Psillium uni bor. Qaysi birini kerak?'\n"
         "  YAXSHI (qatorlarga bo'lingan):\n"
-        "  Ha, albatta bor 😊 Bizda ikki xil:\n"
+        "  Bizda ikki xil psillium bor 😊\n"
         "\n"
         "  • Psillium sheluxa — (narxi): suv yoki kefirga qo'shib ichishga qulay\n"
         "  • Psillium uni — (narxi): keto non va pishiriqda xamirni bog'laydi\n"
@@ -1108,6 +1151,9 @@ def _sales_rules() -> str:
         "SOTUVGA YO'NALTIRISH\n"
         "- Avval ehtiyojni bitta savol bilan aniqla (nima tayyorlamoqchi, keto'dami yoki "
         "PP, kim uchun), keyin aniq mahsulot va narx ayt va aniq so'ra: 'Savatga qo'shamizmi? 🛒' ('qo'shib qo'yaymi?' kabi noaniq so'z emas). "
+        "Bu savol har javobda EMAS: mijoz mahsulotni tanlaganda yoki olishga tayyor bo'lganda, "
+        "ketma-ket ikki javobda emas. Saqlash, ishlatish yoki ta'm haqidagi savolga oddiy javob "
+        "ber, taklif qo'shma. "
         "Boshqa tilda: kirill — 'Саватга қўшамизми? 🛒', rus — 'Добавим в корзину? 🛒', ingliz — "
         "'Shall we add it to your cart? 🛒'.\n"
         "- Mahsulot savatga tushgach — BIR MARTA: 'Yana nima olamiz? 😊' deb so'ra va "
@@ -1205,7 +1251,8 @@ def _sales_rules() -> str:
         "- RASMIYLASHTIRISH — MAKSIMAL SODDA (egasi, 2026-10-16). Savatdan keyin atigi 3 ta "
         "qisqa qadam, har xabarda bitta savol:\n"
         "  1) QANDAY OLASIZ? — yetkazish usullarini narxi bilan bitta ro'yxatda ber (pastdagi "
-        "ro'yxat). Toshkentdan tashqarida bo'lsa — faqat BTS / EMU pochta.\n"
+        "ro'yxat). Toshkentdan tashqarida bo'lsa — UzPost (narxi bilan), BTS yoki EMU pochta; "
+        "UzPost ni birinchi qo'y.\n"
         "  2) RAQAM VA LOKATSIYA — lokatsiya_tugmasi ni chaqir va 'pastdagi tugmalar bilan "
         "raqamingiz va lokatsiyangizni yuboring' de. Do'kondan olib ketishda — faqat raqam. "
         "MIJOZ XOTIRASI da oxirgi manzil va raqam bo'lsa — qayta so'rama: ikkalasini TO'LIQ, "
@@ -1514,7 +1561,7 @@ _TOOL_SPECS = [
                 "yetkazish": {"type": "string", "enum": list(DELIVERY),
                               "description": "Toshkentda toshkent_kuryer, olib_ketish "
                                              "(do'kondan, bepul) yoki yandex_taxi; viloyatda "
-                                             "bts yoki emu"},
+                                             "uzpost (narxi buyurtmaga qo'shiladi), bts yoki emu"},
                 "oldingi_manzil": {"type": "boolean",
                                    "description": "Mijoz MIJOZ XOTIRASI dagi oxirgi buyurtma "
                                                   "manzili va raqamiga yetkazishni tasdiqladi"},
@@ -1806,6 +1853,20 @@ def _drop_mismatched(reply: str, issues: list[dict], lang: str) -> str:
     return f"{text}\n\n{note}" if text else note
 
 
+def _uzpost_line(items: list[dict], goods: float) -> str:
+    """Viloyatga UzPost «Bir Qadam» — tugmali checkout bilan bir xil hisob
+    (uzpost.buyer_fee: og'irlik nomdagi qadoqdan, + quti, + 3 000). Egasi,
+    2026-11-07: "nega uzpostni qo'shmayapsan, uni ham tahminiy narxlari bilan qo'sh!"."""
+    fee, far_fee = uzpost.buyer_fee(items), uzpost.buyer_fee(items, far=True)
+    line = (f"Viloyatga UzPost «Bir Qadam» bilan (faqat Toshkentdan tashqaridagi mijozga), SHU "
+            f"MAHSULOTLAR uchun: yetkazish ~{_fmt(fee)} so'm (posilka ~{uzpost.fmt_kg(uzpost.parcel_kg(items))} kg) "
+            f"-> JAMI ~{_fmt(goods + fee)} so'm, hammasi karta orqali oldindan")
+    if far_fee != fee:
+        line += (f"; Qoraqalpog'iston, Xorazm yoki Surxondaryoga yetkazish ~{_fmt(far_fee)} so'm "
+                 f"-> JAMI ~{_fmt(goods + far_fee)} so'm")
+    return line
+
+
 async def _tool_quote(user_id: int, args: dict) -> str:
     """Savatga solmasdan narx va jami — savat qatori bilan bir xil formula
     (mahsulot chegirmasi bilan). Egasi, 2026-11-02: model «Hisob to'liq»
@@ -1814,7 +1875,7 @@ async def _tool_quote(user_id: int, args: dict) -> str:
     rows = args.get("mahsulotlar") or []
     if not rows:
         return "Xato: mahsulotlar ro'yxati bo'sh."
-    lines, notes, total = [], [], 0.0
+    lines, notes, total, parcel = [], [], 0.0, []
     for row in rows[:30]:
         product_id = int(row.get("mahsulot_id") or 0)
         qty = float(row.get("miqdor") or 0)
@@ -1833,6 +1894,7 @@ async def _tool_quote(user_id: int, args: dict) -> str:
         price = database.effective_price(float(product["price"]), discount, product.get("discount_until"))
         line_total = price * qty
         total += line_total
+        parcel.append({"name": product["name"], "quantity": qty, "unit": product.get("unit")})
         unit = _pack_label(product.get("unit"))
         lines.append(f"- {product['name']} — {qty:g} {unit} × {_fmt(price)} = {_fmt(line_total)} so'm"
                      + (f" (chegirma -{discount}%, asl narxi {_fmt(product['price'])})" if discount else ""))
@@ -1843,7 +1905,8 @@ async def _tool_quote(user_id: int, args: dict) -> str:
         return "Xato: " + "; ".join(notes)
     out = ("HISOB (kod hisobladi, savatga solinmadi). Nom va raqamlarni aynan shundan ko'chir:\n"
            + "\n".join(lines) + f"\nJami (mahsulotlar): {_fmt(total)} so'm\n"
-           "Yetkazish, aksiya sovg'alari va aniq to'lov summasi — savat va buyurtma kartasida.")
+           + _uzpost_line(parcel, total) + "\n"
+           "Toshkent yetkazishi, aksiya sovg'alari va aniq to'lov summasi — savat va buyurtma kartasida.")
     if notes:
         out += "\nDiqqat: " + "; ".join(notes)
     return out
@@ -1886,6 +1949,7 @@ async def _tool_cart(user_id: int) -> str:
     lines.append(f"Mahsulotlar: {_fmt(subtotal)} so'm")
     lines.append(f"Toshkent kuryeri bilan: yetkazish {'BEPUL' if fee <= 0 else _fmt(fee) + ' so' + chr(39) + 'm'}"
                  f" -> JAMI {_fmt(total)} so'm")
+    lines.append(_uzpost_line(items, subtotal))
     lines.append(f"Yandex Taxi yoki viloyat (BTS/EMU) bilan: mahsulotlar uchun {_fmt(subtotal)} so'm "
                  "karta orqali oldindan, yetkazish haqi taksi yoki pochtaga alohida")
     hints = [free_delivery_hint(before_bot, "uz") if fee > 0 else ""]
@@ -2079,8 +2143,8 @@ async def _tool_card(message: Message, args: dict) -> str:
                 "buyurtma berishni taklif qil.")
     delivery = DELIVERY.get((args.get("yetkazish") or "").strip().lower())
     if not delivery:
-        return ("Xato: yetkazish turi toshkent_kuryer, olib_ketish, yandex_taxi, bts yoki emu "
-                "bo'lishi kerak.")
+        return ("Xato: yetkazish turi toshkent_kuryer, olib_ketish, yandex_taxi, uzpost, bts "
+                "yoki emu bo'lishi kerak.")
     if not await database.get_cart(user_id):
         return "Xato: savat bo'sh — avval mahsulotni savatga_qoshish bilan qo'sh."
 
@@ -2137,7 +2201,21 @@ async def _tool_card(message: Message, args: dict) -> str:
     in_tashkent = lat is not None and lng is not None and _is_tashkent(float(lat), float(lng))
     if delivery == "self" and lat is not None and not in_tashkent:
         return ("Xato: lokatsiya Toshkentdan tashqarida — Ketoshop kuryeri faqat Toshkent "
-                "bo'ylab. Viloyatga BTS yoki EMU pochtani taklif qil.")
+                "bo'ylab. Viloyatga UzPost (narxi bilan), BTS yoki EMU pochtani taklif qil.")
+    if delivery == uzpost.METHOD and in_tashkent:
+        return ("Xato: lokatsiya Toshkentda — UzPost faqat viloyatlarga. Toshkentda kuryer, "
+                "Yandex Taxi yoki do'kondan olib ketishni taklif qil.")
+    post_office, far = None, False
+    if delivery == uzpost.METHOD:
+        # Tugmali checkout bilan bir xil (handlers/cart.process_delivery_method):
+        # lokatsiyaga eng yaqin «Bir Qadam» bo'limi buyurtmaga yoziladi, narx
+        # og'irlik va hududdan; bo'lim topilmasa — admin aniqlaydi.
+        from handlers.cart import uzpost_far_for
+        try:
+            post_office = await uzpost.nearest_office(lat, lng)
+        except Exception:
+            logger.warning("UzPost office lookup failed for user %s", user_id, exc_info=True)
+        far = uzpost.is_far(post_office["region"]) if post_office else uzpost_far_for(lat, lng, address)
 
     # Yandex va pochtada faqat karta. Aks holda mijoz aytgani, aytmagan bo'lsa —
     # kartadagi tanlovi (to'lov tugmasi) yoki naqd.
@@ -2158,6 +2236,8 @@ async def _tool_card(message: Message, args: dict) -> str:
         "online_only": online_only, "in_tashkent": in_tashkent,
         "address_note": note, "secondary_phone": secondary,
         "pickup": delivery == "pickup", "pickup_map_url": pickup_url,
+        "post_office": post_office, "post_office_line": uzpost.office_line(post_office) or None,
+        "uzpost_far": far,
         "keto_redeem": int(old.get("keto_redeem") or 0),
     })
     await state.set_state(CheckoutStates.confirming)
@@ -2576,7 +2656,8 @@ _STATUS_MEANING = {
     "cancelled": "bekor qilingan",
 }
 _DELIVERY_NAME = {"self": "Toshkent kuryeri", "pickup": "do'kondan olib ketish",
-                  "yandex_taxi": "Yandex Taxi", "bts": "BTS pochta", "emu": "EMU pochta"}
+                  "yandex_taxi": "Yandex Taxi", uzpost.METHOD: "UzPost pochta",
+                  "bts": "BTS pochta", "emu": "EMU pochta"}
 OPEN_STATUS_SHOWN = 3
 
 
@@ -2587,7 +2668,7 @@ def _status_meaning(order: dict) -> str:
         return "tayyor — do'kondan olib ketsa bo'ladi"
     if method == "pickup" and status == "delivered":
         return "olib ketilgan"
-    if method in ("bts", "emu") and status in ("shipped", "delivering"):
+    if method in ("bts", "emu", uzpost.METHOD) and status in ("shipped", "delivering"):
         office = (order.get("post_office") or "").strip()
         return "pochtaga topshirilgan, yo'lda" + (f" ({office})" if office else "")
     meaning = _STATUS_MEANING.get(status, status)
@@ -2744,7 +2825,8 @@ async def _portrait_hint(user_id: int, session: dict) -> str:
 
 async def _opening_context(user_id: int) -> str:
     """Suhbat boshida modelga bir marta: mijoz xotirasi (buyurtmalar,
-    qiziqishlar, fikr so'rash) va guruhda yaqinda nima so'ragani."""
+    qiziqishlar, fikr so'rash) va oxirgi suhbatlari — botda, saytda va kanal
+    guruhida (ai_dialog). Deploy yoki 3 soat jimlikdan keyin ham gap uzilmaydi."""
     parts = []
     portrait = await _portrait(user_id)
     if portrait and portrait.get("display_name") and not portrait.get("opted_out_at"):
@@ -2754,12 +2836,20 @@ async def _opening_context(user_id: int) -> str:
                                                    portrait=portrait or {}))
     except Exception:
         logger.warning("AI memory profile failed for %s", user_id, exc_info=True)
-    carried = _group_context.pop(user_id, None)
-    if carried and time.time() - carried[0] < GROUP_CONTEXT_TTL:
-        parts.append(f"[Bu mijoz kanal guruhida yaqinda yozgan: «{_short(carried[1], 400)}». "
-                     f"Unga guruhda shunday javob berilgan: «{_short(carried[2], 400)}». "
-                     "Suhbatni shu yerdan davom ettir.]")
+    turns = await ai_dialog.recent(user_id)
+    _session(user_id)["dialog_seen"] = turns[-1]["id"] if turns else 0
+    parts.append(ai_dialog.context_block(turns))
     return "\n\n".join(p for p in parts if p)
+
+
+async def _dialog_news(user_id: int, session: dict) -> str:
+    """Suhbat davomida mijoz kanal guruhida yozgani. Bot va sayt bitta
+    zanjirda — ular modelda allaqachon bor, faqat guruh qo'shiladi."""
+    turns = await ai_dialog.recent(user_id, after_id=int(session.get("dialog_seen") or 0), limit=20)
+    if not turns:
+        return ""
+    session["dialog_seen"] = turns[-1]["id"]
+    return ai_dialog.context_block([t for t in turns if t["channel"] == ai_dialog.PUBLIC_CHANNEL])
 
 
 async def _respond(bot: Bot, message: Message, user_text: str, tools=None) -> str:
@@ -2785,6 +2875,9 @@ async def _respond(bot: Bot, message: Message, user_text: str, tools=None) -> st
         hint = await _portrait_hint(user_id, session)
         if hint:
             user_text = f"{hint}\n\n{user_text}"
+        news = await _dialog_news(user_id, session)
+        if news:
+            user_text = f"{news}\n\n{user_text}"
     note = session.pop("note", None)   # karta tasdiqlandi / bekor qilindi (checkout_event)
     if note:
         user_text = f"{note}\n\n{user_text}"
@@ -2963,14 +3056,20 @@ async def _answer(bot: Bot, message: Message, user_text: str) -> None:
         # Modelning o'z matni — yozuv, ism va minnatdorchilik tekshiruvidan o'tadi.
         reply = polish_reply(reply, lang, customer_text=user_text)
         reply = naturalize(thank_politely(finish_address(reply, message.from_user, user_text, session)))
+        # Ketma-ket "Ha, ..." va har safar "Savatga qo'shamizmi?" — robotning
+        # belgisi (egasi, 2026-11-08). Oldingi javobdagi qolip qaytarilmaydi.
+        reply = ai_tone.vary(reply, session.get("last_reply"))
     if not reply:
         return
     session = _sessions.get(user_id)
+    if session is not None:
+        session["last_reply"] = reply
     if session and session.get("keyboard") == "location" and SHOP_ADDRESS_URL in reply:
         session.pop("keyboard", None)   # do'kon manzili haqida — mijoz lokatsiyasi kerak emas
     await message.answer(reply, reply_markup=await _reply_keyboard(user_id))
     if card and await _send_card(message, fsm):
         reply += "\n🧾 [buyurtma kartasi ko'rsatildi]"
+    await ai_dialog.record(user_id, "bot", user_text, reply)   # guruh va sayt ham ko'radi
     await _mirror(bot, message, user_text, reply)
     if user_id not in ADMIN_IDS and user_id not in database.LEADERBOARD_EXCLUDED_USER_IDS:
         await ai_stats.record_turn(user_id, "bot", user_text)   # /ai_hisobot
@@ -4422,7 +4521,28 @@ def _group_rules() -> str:
         "do'konga aloqasi yo'q gap, reklama yoki spam) — faqat bitta so'z yoz: SKIP\n"
         "- Kimdir botga to'g'ridan-to'g'ri murojaat qilsa (@" + BOT_USERNAME + " yoki "
         "botning xabariga reply) — doim javob ber.\n"
-        "- '[Kanal postiga izoh...]' bo'lsa — savol o'sha postdagi mahsulot haqida.\n\n"
+        "- '[Kanal postiga izoh...]' bo'lsa — savol o'sha postdagi mahsulot haqida, agar shu odam "
+        "bilan suhbatda boshqa mavzu ochiq bo'lmasa (pastga qara).\n\n"
+        "SUHBAT DAVOMI (egasi, 2026-11-16: mijoz allulozani so'radi, keyin 'qaysi birini maslahat "
+        "berasiz' dedi — unga un haqida javob berilgan, keyin 'Ha, tushunarli, siz "
+        "shirinlashtirgichlar haqida so'ragansiz' deyilgan)\n"
+        "- '[SHU ODAM BILAN OXIRGI SUHBATLAR]' bo'lsa — yangi xabar ko'pincha o'sha suhbatning "
+        "davomi. 'Farqini ayting', 'qaysi birini maslahat berasiz', 'eng zararsizi qaysi' — "
+        "suhbatdagi mavzu haqida (masalan shirinlatgichlar), kanal postidagi mahsulotlar haqida EMAS.\n"
+        "- Oldingi savoli javobsiz qolgan bo'lsa ('farqini ayting'), endi unga ham javob ber.\n"
+        "- Mijoz tuzatsa ('yo'q, men X haqida so'radim') — gapini qaytarib tasdiqlama. YOMON: 'Ha, "
+        "tushunarli, siz shirinlatgichlar haqida so'ragansiz 😊'. YAXSHI: 'Kechirasiz, "
+        "tushunmabmiz.' va darrov X haqida aniq javob.\n"
+        "- Javobni 'Ha, ...', 'Tushunarli', 'Albatta' bilan boshlab savolni qaytarma — birinchi gap "
+        "darrov javobning o'zi bo'lsin.\n"
+        "- 'Agar kerak bo'lsa, farqini ham aytib beramiz' kabi va'da berma: aytsa bo'ladiganini shu "
+        "javobning o'zida ayt.\n"
+        "- O'zingning oldingi javobingni qaytarma: aytilgan narx yoki ro'yxatni qayta yozma, 'buyurtma "
+        "uchun @" + BOT_USERNAME + " ga yozing' ni har javobda takrorlama. Mijoz 'olaman' desa — narxni "
+        "qaytarmasdan, qisqa va iliq qilib botda rasmiylashtirishni ayt.\n"
+        "- Botdagi va saytdagi suhbatlari, buyurtmalari, qiziqishlari — SHAXSIY. Guruhda ularni tilga "
+        "olma ('botda so'ragan edingiz', 'siz bodom uni olgansiz' — YO'Q). Ular faqat nima haqida "
+        "gaplashayotganingizni tushunish va mosini tavsiya qilish uchun.\n\n"
         "BU GURUH — SOTUV JOYI EMAS\n"
         "- Guruhda savat ham, buyurtma ham yo'q. Hech kimdan ism, telefon yoki "
         "manzil so'rama va buyurtma qabul qilma.\n"
@@ -4529,13 +4649,24 @@ _QUESTION_RE = re.compile(
     r"сколько|почем|цена|цену|где|как|какой|какая|какие|когда|можно|нужн|хочу|"
     r"заказ|доставк|есть ли|купить|адрес|локац|манзил|рецепт|ретсепт|retsept|resept|"
     r"қанча|канча|нарх|қаер|каер|қандай|кандай|қачон|качон|қайси|кайси|нима|нега|"
-    r"мумкин|керак|буюртма|етказ|сотиб)",
+    r"мумкин|керак|буюртма|етказ|сотиб|"
+    # so'rov: "farqini ayting", "maslahat bering", "подскажите" (egasi, 2026-11-16:
+    # "Farqini ayting" javobsiz qolgan edi)
+    r"ayt(?:ing|ib|sangiz|ingchi)|maslahat|tavsiya|farq|tushuntir|solishtir|"
+    r"айт(?:инг|иб|сангиз)|маслаҳат|тавсия|фарқ|тушунтир|"
+    r"подскаж|посовет|расскаж|объясн|разниц|отлича)",
     re.IGNORECASE,
 )
 
 
 def looks_like_question(text: str) -> bool:
     return bool(_QUESTION_RE.search(text or ""))
+
+
+def _group_followup(chat_id: int, user_id: int) -> bool:
+    """Bu odamga shu guruhda yaqinda javob berdikmi — keyingi gapi suhbat davomi."""
+    at = _group_followups.get((chat_id, user_id))
+    return bool(at and time.time() - at < GROUP_FOLLOWUP)
 
 
 async def _group_trigger(message: Message, bot: Bot) -> bool:
@@ -4562,45 +4693,106 @@ async def _group_trigger(message: Message, bot: Bot) -> bool:
         reply = message.reply_to_message
         if reply is not None and not _is_channel_post(reply):
             return False   # odamlar bir-biriga javob yozyapti
-        if not looks_like_question(text):
-            return False   # savol emas — model chaqirilmaydi
+        if not looks_like_question(text) and not _group_followup(message.chat.id, user.id):
+            return False   # savol emas va suhbat davomi ham emas — model chaqirilmaydi
     import link_guard
     # Guruh admini (yoki ro'yxatni o'qib bo'lmadi) — o'zlari javob beradi.
     return await link_guard.is_privileged(bot, message) is False
 
 
-async def _group_respond(chat_id: int, author: str, text: str) -> str:
+async def _group_respond(chat_id: int, author: str, text: str, context: str = "") -> str:
     """Guruh savoliga javob. tools=None — ataylab: guruhda savat ham, buyurtma
     ham yo'q, ya'ni u yerdan hech narsa sotib bo'lmaydi. "" — javob kerak emas
     (model SKIP dedi).
 
     Zanjirsiz: har savol bo'sh holat bilan ketadi. Zanjir bo'lsa har chaqiruv
-    butun guruh tarixini qayta to'laydi; kerakli kontekst (izoh qaysi postga,
-    botning qaysi javobiga) savolning o'ziga qo'shib yuboriladi."""
+    butun guruh tarixini qayta to'laydi; kerakli kontekst (shu odam bilan
+    oxirgi suhbatlar, izoh qaysi postga, botning qaysi javobiga) savolning
+    o'ziga qo'shib yuboriladi."""
     _group_calls.setdefault(chat_id, []).append(time.time())
+    user = f"{author}: {text}"
+    if context:
+        user = f"{context}\n\n[YANGI XABAR]\n{user}"
     turn = await _step(
         {}, _group_rules(), await _dynamic_block(await _catalog_text()), None,
-        user=f"{author}: {text}", max_tokens=400, history_limit=2,
+        user=user, max_tokens=MAX_TOKENS, history_limit=2,
     )
     if turn.refused:
         return ""
     reply = (turn.text or "").strip()
+    if getattr(turn, "truncated", False):
+        logger.warning("AI group reply was cut off in chat %s — trimmed to the last full sentence", chat_id)
+        reply = _last_full_sentence(reply)
     if not reply or re.fullmatch(r"\W*SKIP\W*", reply, flags=re.IGNORECASE):
         return ""
     return reply
 
 
+def _last_full_sentence(text: str) -> str:
+    """Uzilgan javobdan oxirgi to'liq gapgacha. Guruhga yarim so'z ketmasin;
+    to'liq gap qolmasa — "" (javob umuman yuborilmaydi)."""
+    ends = [m.end() for m in re.finditer(r"[.!?…](?=\s|$)", text or "")]
+    return text[:ends[-1]].rstrip() if ends else ""
+
+
+_GROUP_NOTE_KINDS = ("interest", "feedback")   # "note" (oila, sog'liq) guruh promptiga tushmaydi
+
+
+async def _group_memory(user_id: int, turns: list[dict]) -> str:
+    """Guruh javobi uchun mijoz xotirasi: oxirgi suhbatlari (bot, sayt, guruh)
+    va qiziqishlari. Guruh ochiq joy — bot va saytdagi gaplar faqat mavzu
+    sifatida, AI javoblarisiz (ai_dialog.context_block, public=True)."""
+    parts = [ai_dialog.context_block(turns, public=True)]
+    try:
+        notes = [n["text"] for n in await ai_memory.notes(user_id)
+                 if n.get("kind") in _GROUP_NOTE_KINDS and not n["text"].startswith("guruhda so'radi")]
+    except Exception:
+        notes = []
+    if notes:
+        parts.append("[MIJOZ QIZIQISHLARI (maxfiy: guruhda tilga olma, faqat mosroq tavsiya uchun): "
+                     + "; ".join(_short(n, 120) for n in notes[-5:]) + "]")
+    return "\n\n".join(p for p in parts if p)
+
+
+def _group_thread_hint(turns: list[dict]) -> str:
+    """Bu odam shu guruhda hozirgina savol bergan bo'lsa — yangi xabar yonida
+    aniq eslatma. Jonli sinov (2026-11-17): suhbat tarixi promptda bo'lsa ham,
+    "Farqini ayting" yonidagi kanal posti (unlar) ustun kelib, model unlarni
+    solishtirgan edi. Kanal izohlari doim postga reply bo'ladi — post mavzu
+    belgisi emas."""
+    last = next((t for t in reversed(turns) if t.get("channel") == ai_dialog.PUBLIC_CHANNEL), None)
+    if not last:
+        return ""
+    from datetime import datetime, timezone
+    try:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)      # created_at — UTC, tz siz
+        fresh = (now - last["created_at"]).total_seconds() < GROUP_FOLLOWUP
+    except Exception:
+        fresh = False
+    if not fresh:
+        return ""
+    return (f"[DAVOM: bu odam hozirgina sizdan «{_short(last['question'], 200)}» deb so'ragan edi. Yangi "
+            "xabar shu suhbatning davomi — o'zi boshqa mahsulotni aytmasa, kanal postidagi mahsulotlar "
+            "haqida EMAS.]")
+
+
 async def _group_answer(bot: Bot, message: Message, text: str) -> None:
     chat_id = message.chat.id
+    user_id = message.from_user.id
+    question = text
     replied = message.reply_to_message
+    background = ""
     if _is_channel_post(replied):
-        text = (f"[Kanal postiga izoh. Post matni: «{_short(replied.text or replied.caption or '', 700)}»]"
-                f"\n{text}")
+        background = f"[Kanal postiga izoh. Post matni: «{_short(replied.text or replied.caption or '', 700)}»]"
     elif replied is not None and _addressed_to_bot(message):
-        text = f"[Sening oldingi javobingga reply: «{_short(replied.text or '', 400)}»]\n{text}"
+        background = f"[Sening oldingi javobingga reply: «{_short(replied.text or '', 400)}»]"
+    text = f"{background}\n{question}" if background else question    # statistika uchun, avvalgidek
+    turns = await ai_dialog.recent(user_id)
+    context = "\n\n".join(p for p in (background, await _group_memory(user_id, turns)) if p)
+    hint = _group_thread_hint(turns)
     author = message.from_user.first_name or "Mijoz"
     try:
-        reply = await _group_respond(chat_id, author, text)
+        reply = await _group_respond(chat_id, author, f"{hint}\n{question}" if hint else question, context)
     except Exception:
         logger.exception("AI group turn failed in chat %s", chat_id)
         return
@@ -4608,11 +4800,15 @@ async def _group_answer(bot: Bot, message: Message, text: str) -> None:
         return
     reply = naturalize(thank_politely(strip_name_address(polish_reply(reply),
                                                          customer_names(message.from_user, text))))
+    reply = ai_tone.vary(reply, None)          # "... farqini ham aytib beramiz" — bo'sh va'da
     await message.reply(reply)
-    user_id = message.from_user.id
+    now = time.time()
+    for key in [k for k, at in _group_followups.items() if now - at >= GROUP_FOLLOWUP]:
+        _group_followups.pop(key, None)
+    _group_followups[(chat_id, user_id)] = now
     await ai_stats.record_turn(user_id, "group", text)   # guruhda adminlarga javob yo'q
-    _group_context[user_id] = (time.time(), text, reply)
-    await _remember_quiet(user_id, "interest", f"guruhda so'radi: {_short(text, 200)}")
+    await ai_dialog.record(user_id, "group", question, reply)   # bot va sayt ham ko'radi
+    await _remember_quiet(user_id, "interest", f"guruhda so'radi: {_short(question, 200)}")
 
 
 @router.message(_group_trigger, F.text | F.caption)
