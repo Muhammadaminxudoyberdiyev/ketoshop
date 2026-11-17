@@ -21,9 +21,10 @@ import android.os.Looper
  * permission made the GPS request fail silently; a last known position was
  * used only if under 2 minutes old. Now: every usable provider is asked at
  * once (fused on Android 12+, network, GPS — GPS only with precise
- * permission), a fix within 100 m is taken at once, the best one after 10 s,
- * and at 25 s a last known position up to 10 minutes old. The shop page
- * then lets the buyer move the pin on its map either way.
+ * permission), a fix within 100 m is taken at once, the best one after 8 s,
+ * and at 16 s a last known position up to 10 minutes old — always before
+ * the shop page's own 20 s wait runs out. The shop page then lets the buyer
+ * move the pin on its map either way.
  */
 class LocationFetcher(private val context: Context) {
     private val main = Handler(Looper.getMainLooper())
@@ -95,8 +96,8 @@ class LocationFetcher(private val context: Context) {
 
     private companion object {
         const val GOOD_ENOUGH_M = 100f
-        const val BEST_AFTER_MS = 10_000L
-        const val GIVE_UP_MS = 25_000L
+        const val BEST_AFTER_MS = 8_000L
+        const val GIVE_UP_MS = 16_000L
         const val STALE_OK_MS = 10 * 60_000L
         val TOKEN = Any()
     }

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../app/scope.dart';
@@ -83,6 +84,8 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   Future<void> _openTelegram() async {
     final ticket = _ticket;
     if (ticket == null) return;
+    // Debug builds only (an emulator has no Telegram): the link to open by hand.
+    if (kDebugMode) debugPrint('KS login link: ${ticket.botUrl}');
     final opened = await context.services.native.openUrl(ticket.botUrl);
     if (!opened && mounted) showSnack(context, context.t('login_no_telegram'), error: true);
   }
@@ -131,9 +134,11 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
             children: [
               const _LanguagePicker(),
               const SizedBox(height: Tokens.pad * 2),
-              Icon(Icons.eco_rounded, size: 72, color: theme.colorScheme.primary),
+              Center(
+                child: Image.asset('assets/brand/ketoshop_logo_round.png',
+                    width: 148, height: 148, semanticLabel: 'Ketoshop', filterQuality: FilterQuality.medium),
+              ),
               const SizedBox(height: Tokens.pad),
-              Text('Ketoshop', textAlign: TextAlign.center, style: theme.textTheme.headlineMedium),
               Text(context.t('login_title'), textAlign: TextAlign.center, style: theme.textTheme.titleMedium),
               const SizedBox(height: Tokens.pad * 2),
               if (ticket == null) ...[

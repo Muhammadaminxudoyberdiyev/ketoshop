@@ -41,7 +41,8 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Until Dart says otherwise the window is secure (login shows a code).
-        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        // Debug builds (never given to customers) stay screenshot-able for testing.
+        if (!BuildConfig.DEBUG) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         // Tapjacking: ignore touches while another app draws over this one.
         window.decorView.filterTouchesWhenObscured = true
     }
@@ -76,7 +77,7 @@ class MainActivity : FlutterActivity() {
             "box.clear" -> background(result) { box.clear(); null }
             "env.check" -> background(result) { Integrity.check(applicationContext) }
             "ui.secure" -> {
-                if (call.argument<Boolean>("on") == true) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                if (call.argument<Boolean>("on") == true && !BuildConfig.DEBUG) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
                 else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
                 result.success(null)
             }
@@ -135,18 +136,74 @@ class MainActivity : FlutterActivity() {
         waiters.forEach { it(granted) }
     }
 
-    /** One position for the shop page, or null (it then offers the map). */
-    fun requestLocation(done: (Location?) -> Unit) {
+    /** "ready" (permission + location on), "off" (location switched off) or
+     *  "no_permission" — the shop page uses it to know a prompt will show. */
+    fun locationState(): String {
+        val granted = listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+            .any { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+        return when {
+            !granted -> "no_permission"
+            !locationFetcher.enabled() -> "off"
+            else -> "ready"
+        }
+    }
+
+    /** One position for the shop page, or null (it then offers the map).
+     *  Asks for the permission, and to switch location on if it is off. */
+    fun requestLocation(lang: String, done: (Location?) -> Unit) {
         withLocationPermission { granted ->
-            if (!granted || !locationFetcher.enabled()) return@withLocationPermission done(null)
-            locationWaiters += done
-            if (locationWaiters.size > 1) return@withLocationPermission
-            locationFetcher.current { fix ->
-                val waiters = locationWaiters.toList()
-                locationWaiters.clear()
-                waiters.forEach { it(fix) }
+            when {
+                !granted -> done(null)
+                locationFetcher.enabled() -> fetchLocation(done)
+                else -> askToEnableLocation(lang) { on -> if (on) fetchLocation(done) else done(null) }
             }
         }
+    }
+
+    private fun fetchLocation(done: (Location?) -> Unit) {
+        locationWaiters += done
+        if (locationWaiters.size > 1) return
+        locationFetcher.current { fix ->
+            val waiters = locationWaiters.toList()
+            locationWaiters.clear()
+            waiters.forEach { it(fix) }
+        }
+    }
+
+    private var enableWaiter: ((Boolean) -> Unit)? = null
+
+    /** Location is switched off: say so and open the system switch; the
+     *  answer comes when the buyer is back (onResume). */
+    private fun askToEnableLocation(lang: String, done: (Boolean) -> Unit) {
+        val text = when (lang) {
+            "ru" -> arrayOf("Геолокация выключена", "Включите геолокацию (GPS) на телефоне, чтобы определить адрес доставки.", "Включить", "Отмена")
+            "uz_cyr" -> arrayOf("Жойлашув ўчирилган", "Етказиш манзилини аниқлаш учун телефонингизда жойлашувни (GPS) ёқинг.", "Ёқиш", "Бекор қилиш")
+            else -> arrayOf("Joylashuv o'chirilgan", "Yetkazish manzilini aniqlash uchun telefoningizda joylashuvni (GPS) yoqing.", "Yoqish", "Bekor qilish")
+        }
+        var answered = false
+        android.app.AlertDialog.Builder(this)
+            .setTitle(text[0])
+            .setMessage(text[1])
+            .setPositiveButton(text[2]) { _, _ ->
+                answered = true
+                try {
+                    enableWaiter = done
+                    startActivity(Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                } catch (e: ActivityNotFoundException) {
+                    enableWaiter = null
+                    done(false)
+                }
+            }
+            .setNegativeButton(text[3]) { _, _ -> answered = true; done(false) }
+            .setOnDismissListener { if (!answered) done(false) }
+            .show()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val waiter = enableWaiter ?: return
+        enableWaiter = null
+        waiter(locationFetcher.enabled())
     }
 
     // ── the cheque photo / PDF for the shop page ──

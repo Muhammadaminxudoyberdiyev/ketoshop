@@ -117,17 +117,20 @@
       show: noop, hide: noop, enable: noop, disable: noop, setText: noop, setParams: noop,
       onClick: noop, offClick: noop, showProgress: noop, hideProgress: noop
     },
-    /* Location from the phone itself (the app asks for the permission). */
+    /* Location from the phone itself. The app asks for the permission and,
+       if location is switched off, to switch it on. isAccessGranted is live:
+       false means a prompt will show, so the page waits longer. */
     LocationManager: {
       isInited: true,
       isLocationAvailable: true,
       isAccessRequested: true,
-      isAccessGranted: true,
+      get isAccessGranted() { return send({ type: 'location_state' }) === 'ready'; },
       init: function (cb) { if (cb) setTimeout(cb, 0); },
       getLocation: function (cb) {
         var id = ++seq;
         pending[id] = cb;
-        send({ type: 'location', id: id });
+        /* global `lang` is the shop page's own language setting */
+        send({ type: 'location', id: id, lang: typeof lang === 'string' ? lang : 'uz' });
       },
       openSettings: function () { send({ type: 'location_settings' }); }
     }

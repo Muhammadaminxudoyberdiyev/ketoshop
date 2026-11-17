@@ -40,6 +40,7 @@ android/app/src/main/
     security/               DeviceKey (Keystore imzo), SecureBox (AES-GCM),
                             Integrity (root/hook/debug/imzo)
   assets/ks_telegram_shim.js  saytga Telegram o'rnini bosuvchi JS
+  res/mipmap-*              ilova belgisi (tool/gen_icons.py yasaydi)
 ```
 
 Sayt ilova ichida qanday ishlaydi:
@@ -57,6 +58,10 @@ Qoidalar:
 - Native ekranlar dizayni `app/theme.dart` tokenlari orqali.
 - Matnlar `l10n/uz.json`, `l10n/ru.json`; kirill va yangi alifbo
   serverning `translit.py` si bilan: `python mobile/tool/gen_l10n.py`.
+- Ilova belgisi (ikona) va kirish ekranidagi logo do'kon logosidan
+  (`assets/brand/ketoshop_logo.jpg`, @ketoshop_uz avatari) yasaladi:
+  `python mobile/tool/gen_icons.py` (Pillow kerak). Sifatliroq logo
+  (≥ 1024 px) bo'lsa, shu faylni almashtirib qayta ishga tushiring.
 - Uchinchi tomon paketlari qo'shilmaydi.
 
 ## Qachon yangi APK kerak
