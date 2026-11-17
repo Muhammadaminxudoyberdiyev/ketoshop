@@ -86,14 +86,22 @@ def _parse_ttl() -> int:
 INIT_DATA_MAX_AGE = _parse_ttl()
 
 
-def _validate_init_data(init_data: str, bot_token: str) -> dict | None:
+def _validate_init_data(init_data: str, bot_token: str, allow_app: bool = False) -> dict | None:
     """Validate Telegram WebApp initData and return parsed data.
     Returns dict with user info on success, None on failure (bad hash, expired,
-    or malformed)."""
+    or malformed).
+
+    initData carrying `ks_sid` was minted by this server for the Android
+    app's shop view (app_auth.mint_web_init_data). Only the shop's own /api/*
+    accepts it (allow_app=True, which then checks the app session is still
+    live); the courier board and anything else that reads initData refuse it."""
     try:
         parsed = dict(parse_qsl(init_data, keep_blank_values=True))
         received_hash = parsed.pop("hash", "")
         if not received_hash:
+            return None
+        if "ks_sid" in parsed and not allow_app:
+            logger.info("initData rejected: app-minted outside the shop API")
             return None
 
         # Build data-check-string: sorted key=value pairs joined by \n
@@ -276,7 +284,7 @@ async def auth_middleware(request: web.Request, handler):
     elif auth_header.startswith("tma "):
         init_data_raw = auth_header[4:]
         bot_token = request.app["bot_token"]
-        parsed = _validate_init_data(init_data_raw, bot_token)
+        parsed = _validate_init_data(init_data_raw, bot_token, allow_app=True)
         if not parsed:
             return _json({"error": "invalid initData"}, status=403)
 
@@ -284,6 +292,13 @@ async def auth_middleware(request: web.Request, handler):
         user_id = user.get("id") if isinstance(user, dict) else None
         if not isinstance(user_id, int) or isinstance(user_id, bool):
             return _json({"error": "invalid initData"}, status=403)
+        if "ks_sid" in parsed:
+            # The Android app's shop view: valid only while its app session
+            # is — a logout or «Chiqarib yuborish» ends it at once.
+            import app_auth
+            if not await app_auth.web_session_ok(parsed["ks_sid"], user_id, parsed.get("auth_date")):
+                return _json({"error": "invalid initData"}, status=403)
+            request["app_session"] = int(parsed["ks_sid"])
         # ?startapp=<kod> of the link that launched the Mini App, and the
         # launch's own time — one launch counts once however often the page reloads.
         request["start_param"] = parsed.get("start_param") or ""

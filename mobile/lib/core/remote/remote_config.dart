@@ -10,27 +10,9 @@ import '../platform/native_bridge.dart';
 
 typedef Json = Map<String, Object?>;
 
-/// One block of the server-driven home area (app_config.py). Only the types
-/// this build knows are kept; a type added later is skipped, never a crash.
-class HomeBlock {
-  const HomeBlock(this.type, this.id, this.data);
-
-  static const known = {'banner', 'notice', 'link', 'category', 'products'};
-
-  final String type;
-  final String id;
-  final Json data;
-
-  String text(String key) => (data[key] as String?) ?? '';
-  String? optional(String key) {
-    final v = data[key];
-    return v is String && v.isNotEmpty ? v : null;
-  }
-
-  List<int> get productIds => (data['product_ids'] as List?)?.whereType<num>().map((n) => n.toInt()).toList() ?? const [];
-}
-
-/// What the server decides about the app without a new APK.
+/// What the server decides about the app's own native part (app_config.py).
+/// The shop is the site itself, so everything in it already changes without
+/// a new APK; this is only about the app: its version and the Oferta edition.
 class RemoteConfig {
   const RemoteConfig({
     required this.latestVersion,
@@ -38,10 +20,6 @@ class RemoteConfig {
     required this.minBuild,
     required this.updateUrl,
     required this.updateNotes,
-    required this.features,
-    required this.tashkentMethods,
-    required this.regionMethods,
-    required this.home,
     this.termsVersion = '',
   });
 
@@ -52,10 +30,6 @@ class RemoteConfig {
     minBuild: 0,
     updateUrl: '',
     updateNotes: '',
-    features: {},
-    tashkentMethods: ['self', 'yandex_taxi'],
-    regionMethods: ['uzpost', 'bts', 'emu'],
-    home: [],
   );
 
   final String latestVersion;
@@ -63,50 +37,21 @@ class RemoteConfig {
   final int minBuild;
   final String updateUrl;
   final String updateNotes;
-  final Map<String, bool> features;
-  final List<String> tashkentMethods;
-  final List<String> regionMethods;
-  final List<HomeBlock> home;
 
   /// The Oferta edition in force (app_terms.VERSION).
   final String termsVersion;
 
-  /// A switch the server can flip; unknown switches keep their default.
-  bool enabled(String feature, {bool orElse = true}) => features[feature] ?? orElse;
-
   bool get mustUpdate => AppConfig.appBuild < minBuild && updateUrl.isNotEmpty;
   bool get updateAvailable => AppConfig.appBuild < latestBuild && updateUrl.isNotEmpty;
 
-  static const _deliveryMethods = {'self', 'yandex_taxi', 'uzpost', 'bts', 'emu'};
-
-  factory RemoteConfig.fromJson(Json j) {
-    List<String> methods(Object? v, List<String> orElse) {
-      final list = (v as List?)?.whereType<String>().where(_deliveryMethods.contains).toList();
-      return list == null || list.isEmpty ? orElse : list;
-    }
-
-    final delivery = (j['delivery'] as Map?) ?? const {};
-    final features = <String, bool>{};
-    ((j['features'] as Map?) ?? const {}).forEach((k, v) {
-      if (k is String && v is bool) features[k] = v;
-    });
-    return RemoteConfig(
-      latestVersion: (j['latest_version'] as String?) ?? AppConfig.appVersion,
-      latestBuild: (j['latest_build'] as num?)?.toInt() ?? AppConfig.appBuild,
-      minBuild: (j['min_build'] as num?)?.toInt() ?? 0,
-      updateUrl: _safeUrl(j['update_url']),
-      updateNotes: (j['update_notes'] as String?) ?? '',
-      features: features,
-      tashkentMethods: methods(delivery['tashkent'], fallback.tashkentMethods),
-      regionMethods: methods(delivery['regions'], fallback.regionMethods),
-      termsVersion: (j['terms_version'] as String?) ?? '',
-      home: [
-        for (final b in (j['home'] as List?) ?? const [])
-          if (b is Json && HomeBlock.known.contains(b['type']))
-            HomeBlock(b['type']! as String, (b['id'] as String?) ?? '', b),
-      ],
-    );
-  }
+  factory RemoteConfig.fromJson(Json j) => RemoteConfig(
+        latestVersion: (j['latest_version'] as String?) ?? AppConfig.appVersion,
+        latestBuild: (j['latest_build'] as num?)?.toInt() ?? AppConfig.appBuild,
+        minBuild: (j['min_build'] as num?)?.toInt() ?? 0,
+        updateUrl: _safeUrl(j['update_url']),
+        updateNotes: (j['update_notes'] as String?) ?? '',
+        termsVersion: (j['terms_version'] as String?) ?? '',
+      );
 
   static String _safeUrl(Object? v) {
     final uri = v is String ? Uri.tryParse(v) : null;
@@ -116,7 +61,7 @@ class RemoteConfig {
 
 /// Reads /app/v1/config on start, on return to the app (at most every 30
 /// min) and when the language changes; keeps the last answer encrypted on
-/// the phone so the home area shows instantly and offline.
+/// the phone so the app decides instantly, offline too.
 class RemoteConfigController extends ChangeNotifier {
   RemoteConfigController(this._api, this._native, this._locale);
 

@@ -3,11 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../core/auth/auth_controller.dart';
-import '../data/account_repository.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/unsafe_screen.dart';
-import '../features/gate/gate_screen.dart';
-import '../features/shell/home_shell.dart';
+import '../features/shop/shop_screen.dart';
 import '../features/update/update_views.dart';
 import 'scope.dart';
 import 'theme.dart';
@@ -45,15 +43,7 @@ class _KetoshopAppState extends State<KetoshopApp> with WidgetsBindingObserver {
   }
 
   /// Signing in or out drops every screen pushed for the previous state.
-  void _onAuthChanged() {
-    _navigator.currentState?.popUntil((route) => route.isFirst);
-    if (_auth.status != AuthStatus.signedIn) {
-      final services = context.services;
-      services.cart.reset();
-      services.catalog.invalidate();
-      services.gate.value = null;
-    }
-  }
+  void _onAuthChanged() => _navigator.currentState?.popUntil((route) => route.isFirst);
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -66,7 +56,8 @@ class _KetoshopAppState extends State<KetoshopApp> with WidgetsBindingObserver {
       );
 }
 
-/// Which world the user is in: checking, refused, signed out, or the shop.
+/// Which world the user is in: checking, refused, must update, signed out,
+/// or the shop.
 class _RootView extends StatelessWidget {
   const _RootView();
 
@@ -99,32 +90,13 @@ class _SignedIn extends StatefulWidget {
 }
 
 class _SignedInState extends State<_SignedIn> {
-  late final Future<void> _ready = _prepare();
-
-  Future<void> _prepare() async {
-    final s = context.services;
-    try {
-      await s.account.syncLanguage();
-    } on Object {
-      // the saved language keeps working offline
-    }
-    try {
-      final gate = await s.account.gate();
-      s.gate.value = gate.ok ? null : gate;
-      if (gate.ok) s.cart.refresh().ignore();
-    } on Object {
-      // network trouble shows up on the first screen that loads data
-    }
+  @override
+  void initState() {
+    super.initState();
+    // The app's own screens speak the language the bot and the shop use.
+    unawaited(context.services.account.syncLanguage().catchError((Object _) {}));
   }
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<void>(
-        future: _ready,
-        builder: (context, snap) => snap.connectionState != ConnectionState.done
-            ? const Scaffold(body: Center(child: CircularProgressIndicator()))
-            : ValueListenableBuilder<GateState?>(
-                valueListenable: context.services.gate,
-                builder: (context, gate, _) => gate != null && !gate.ok ? GateScreen(gate: gate) : const HomeShell(),
-              ),
-      );
+  Widget build(BuildContext context) => const ShopScreen();
 }

@@ -4,12 +4,13 @@ import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.location.Location
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.provider.OpenableColumns
 import android.view.WindowManager
+import android.webkit.ValueCallback
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -20,17 +21,22 @@ import uz.ketoshop.app.security.Integrity
 import uz.ketoshop.app.security.SecureBox
 
 /**
- * The single native door for the Dart side ("uz.ketoshop/secure"). Keystore,
- * disk and file work runs off the main thread (in Flutter the UI runs on
- * it); every answer is posted back on the main thread.
+ * The app's native side:
+ *  - the "uz.ketoshop/secure" channel for Dart (Keystore key, encrypted box,
+ *    integrity checks, FLAG_SECURE, opening links);
+ *  - the shop WebView (ShopWebView.kt) and what it needs from the activity:
+ *    location with its permission, the file picker for the cheque.
+ * Keystore and disk work runs off the main thread (Flutter's UI runs on it).
  */
 class MainActivity : FlutterActivity() {
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newFixedThreadPool(2)
     private val box by lazy { SecureBox(applicationContext) }
-    private val location by lazy { LocationFetcher(applicationContext) }
-    private var pendingPick: MethodChannel.Result? = null
-    private var pendingLocation: MethodChannel.Result? = null
+    private val locationFetcher by lazy { LocationFetcher(applicationContext) }
+
+    private val permissionWaiters = mutableListOf<(Boolean) -> Unit>()
+    private val locationWaiters = mutableListOf<(Location?) -> Unit>()
+    private var webFileCallback: ValueCallback<Array<Uri>>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,8 +48,10 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "uz.ketoshop/secure")
-            .setMethodCallHandler(::onCall)
+        val messenger = flutterEngine.dartExecutor.binaryMessenger
+        MethodChannel(messenger, "uz.ketoshop/secure").setMethodCallHandler(::onCall)
+        flutterEngine.platformViewsController.registry
+            .registerViewFactory(ShopWebViewFactory.TYPE, ShopWebViewFactory(this, messenger))
     }
 
     private fun onCall(call: MethodCall, result: MethodChannel.Result) {
@@ -72,10 +80,7 @@ class MainActivity : FlutterActivity() {
                 else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
                 result.success(null)
             }
-            "open.url" -> result.success(openUrl(call.argument<String>("url")))
-            "fs.cacheDir" -> result.success(cacheDir.absolutePath)
-            "location.current" -> currentLocation(result)
-            "file.pickCheque" -> pickCheque(result)
+            "open.url" -> result.success(openExternal(call.argument<String>("url")))
             else -> result.notImplemented()
         }
     }
@@ -93,7 +98,7 @@ class MainActivity : FlutterActivity() {
     }
 
     /** https:// and tg:// only — never intent:, file:, content:, javascript:. */
-    private fun openUrl(url: String?): Boolean {
+    fun openExternal(url: String?): Boolean {
         val uri = runCatching { Uri.parse(url ?: return false) }.getOrNull() ?: return false
         if (uri.scheme != "https" && uri.scheme != "tg") return false
         if (uri.scheme == "https" && uri.host.isNullOrEmpty()) return false
@@ -108,105 +113,78 @@ class MainActivity : FlutterActivity() {
 
     // ── location ──
 
-    private fun currentLocation(result: MethodChannel.Result) {
-        if (pendingLocation != null) return result.error("busy", null, null)
-        if (!location.enabled()) return result.error("disabled", null, null)
-        pendingLocation = result
+    fun withLocationPermission(done: (Boolean) -> Unit) {
         val granted = listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
             .any { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
-        if (granted) fetchLocation()
-        else requestPermissions(
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
-            REQUEST_LOCATION,
-        )
+        if (granted) return done(true)
+        permissionWaiters += done
+        if (permissionWaiters.size == 1) {
+            requestPermissions(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
+                REQUEST_LOCATION,
+            )
+        }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode != REQUEST_LOCATION) return
-        if (grantResults.any { it == PackageManager.PERMISSION_GRANTED }) fetchLocation()
-        else pendingLocation?.error("denied", null, null).also { pendingLocation = null }
+        val granted = grantResults.any { it == PackageManager.PERMISSION_GRANTED }
+        val waiters = permissionWaiters.toList()
+        permissionWaiters.clear()
+        waiters.forEach { it(granted) }
     }
 
-    private fun fetchLocation() {
-        location.current { fix ->
-            val result = pendingLocation ?: return@current
-            pendingLocation = null
-            if (fix == null) result.error("timeout", null, null)
-            else result.success(mapOf("lat" to fix.latitude, "lng" to fix.longitude, "accuracy" to fix.accuracy.toDouble()))
+    /** One position for the shop page, or null (it then offers the map). */
+    fun requestLocation(done: (Location?) -> Unit) {
+        withLocationPermission { granted ->
+            if (!granted || !locationFetcher.enabled()) return@withLocationPermission done(null)
+            locationWaiters += done
+            if (locationWaiters.size > 1) return@withLocationPermission
+            locationFetcher.current { fix ->
+                val waiters = locationWaiters.toList()
+                locationWaiters.clear()
+                waiters.forEach { it(fix) }
+            }
         }
     }
 
-    // ── cheque file ──
+    // ── the cheque photo / PDF for the shop page ──
 
-    private fun pickCheque(result: MethodChannel.Result) {
-        if (pendingPick != null) return result.error("busy", null, null)
-        pendingPick = result
+    fun pickFileForWeb(callback: ValueCallback<Array<Uri>>, acceptTypes: Array<String>?): Boolean {
+        webFileCallback?.onReceiveValue(null)
+        webFileCallback = callback
+        val types = acceptTypes?.filter { it.isNotBlank() }?.flatMap { it.split(",") }?.map { it.trim() }
+            ?.filter { it.startsWith("image/") || it == "application/pdf" }
+            .orEmpty().ifEmpty { listOf("image/*", "application/pdf") }
         val intent = Intent(Intent.ACTION_GET_CONTENT)
             .addCategory(Intent.CATEGORY_OPENABLE)
             .setType("*/*")
-            .putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/*", "application/pdf"))
-        try {
+            .putExtra(Intent.EXTRA_MIME_TYPES, types.toTypedArray())
+        return try {
             @Suppress("DEPRECATION")
-            startActivityForResult(intent, REQUEST_PICK)
+            startActivityForResult(intent, REQUEST_WEB_FILE)
+            true
         } catch (e: ActivityNotFoundException) {
-            pendingPick = null
-            result.error("no_picker", null, null)
+            webFileCallback = null
+            false
         }
+    }
+
+    fun forgetWebFileCallback() {
+        webFileCallback?.onReceiveValue(null)
+        webFileCallback = null
     }
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != REQUEST_PICK) return
-        val result = pendingPick ?: return
-        pendingPick = null
+        if (requestCode != REQUEST_WEB_FILE) return
+        val callback = webFileCallback ?: return
+        webFileCallback = null
         val uri = data?.data
-        if (resultCode != RESULT_OK || uri == null) return result.success(null)
-        worker.execute {
-            try {
-                val picked = readCheque(uri)
-                main.post { if (picked == null) result.error("too_large", null, null) else result.success(picked) }
-            } catch (e: Exception) {
-                main.post { result.error("bad_file", null, null) }
-            }
-        }
-    }
-
-    /** The file's bytes (≤10 MB), its real type from the first bytes, a safe name. */
-    private fun readCheque(uri: Uri): Map<String, Any>? {
-        val bytes = contentResolver.openInputStream(uri)?.use { input ->
-            val out = java.io.ByteArrayOutputStream()
-            val buf = ByteArray(64 * 1024)
-            while (true) {
-                val n = input.read(buf)
-                if (n < 0) break
-                out.write(buf, 0, n)
-                if (out.size() > MAX_CHEQUE_BYTES) return null
-            }
-            out.toByteArray()
-        } ?: throw IllegalStateException("unreadable")
-        val mime = sniff(bytes) ?: throw IllegalArgumentException("not an image or pdf")
-        val shown = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
-            if (it.moveToFirst()) it.getString(0) else null
-        }
-        val name = (shown ?: "chek").replace(Regex("[^A-Za-z0-9._-]"), "_").take(60)
-        return mapOf("bytes" to bytes, "mime" to mime, "name" to name)
-    }
-
-    private fun sniff(b: ByteArray): String? {
-        fun at(i: Int, vararg sig: Int) = b.size >= i + sig.size && sig.indices.all { (b[i + it].toInt() and 0xFF) == sig[it] }
-        // An ISO-BMFF "ftyp" box is also how MP4 video starts: the brand decides.
-        val brand = if (b.size >= 12) String(b, 8, 4, Charsets.US_ASCII) else ""
-        return when {
-            at(0, 0xFF, 0xD8, 0xFF) -> "image/jpeg"
-            at(0, 0x89, 0x50, 0x4E, 0x47) -> "image/png"
-            at(0, 0x52, 0x49, 0x46, 0x46) && at(8, 0x57, 0x45, 0x42, 0x50) -> "image/webp"
-            at(4, 0x66, 0x74, 0x79, 0x70) && brand in setOf("heic", "heix", "heim", "heis", "mif1", "msf1") -> "image/heic"
-            at(0, 0x25, 0x50, 0x44, 0x46) -> "application/pdf"
-            else -> null
-        }
+        callback.onReceiveValue(if (resultCode == RESULT_OK && uri != null) arrayOf(uri) else null)
     }
 
     override fun onDestroy() {
@@ -216,7 +194,6 @@ class MainActivity : FlutterActivity() {
 
     private companion object {
         const val REQUEST_LOCATION = 41
-        const val REQUEST_PICK = 42
-        const val MAX_CHEQUE_BYTES = 10 * 1024 * 1024
+        const val REQUEST_WEB_FILE = 43
     }
 }

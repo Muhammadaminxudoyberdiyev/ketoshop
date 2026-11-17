@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 
-/// What the phone itself reports about its safety (SecurityChannel.kt).
+/// What the phone itself reports about its safety (security/Integrity.kt).
 class DeviceEnv {
   const DeviceEnv({
     required this.rooted,
@@ -31,34 +31,9 @@ class DeviceEnv {
       };
 }
 
-class PickedFile {
-  const PickedFile(this.bytes, this.mime, this.name);
-  final Uint8List bytes;
-  final String mime;
-  final String name;
-}
-
-class GeoPoint {
-  const GeoPoint(this.lat, this.lng);
-  final double lat;
-  final double lng;
-}
-
-class LocationFailure implements Exception {
-  const LocationFailure(this.code);
-
-  /// denied | disabled | timeout | unavailable
-  final String code;
-}
-
-class FileTooLarge implements Exception {
-  const FileTooLarge();
-}
-
-/// The only door to Android: Keystore keys, encrypted storage, integrity
-/// checks, location, file picking and opening links. Everything here is
-/// implemented in the app's own Kotlin (android/app/src/main/kotlin) — no
-/// third-party plugins.
+/// The Dart side's door to Android (MainActivity.kt): Keystore key,
+/// encrypted storage, integrity checks, FLAG_SECURE, opening links. The
+/// shop WebView has its own channel (ShopWebView.kt). No third-party plugins.
 class NativeBridge {
   NativeBridge([MethodChannel? channel]) : _channel = channel ?? const MethodChannel('uz.ketoshop/secure');
 
@@ -100,27 +75,4 @@ class NativeBridge {
 
   /// Opens https:// and tg:// links only (checked again natively).
   Future<bool> openUrl(String url) async => (await _channel.invokeMethod<bool>('open.url', {'url': url})) ?? false;
-
-  Future<String> cacheDir() async => (await _channel.invokeMethod<String>('fs.cacheDir'))!;
-
-  Future<GeoPoint> currentLocation() async {
-    try {
-      final m = (await _channel.invokeMapMethod<String, Object?>('location.current'))!;
-      return GeoPoint((m['lat'] as num).toDouble(), (m['lng'] as num).toDouble());
-    } on PlatformException catch (e) {
-      throw LocationFailure(e.code);
-    }
-  }
-
-  /// Photo or PDF for the payment cheque; `null` when the buyer backs out.
-  Future<PickedFile?> pickCheque() async {
-    try {
-      final m = await _channel.invokeMapMethod<String, Object?>('file.pickCheque');
-      if (m == null) return null;
-      return PickedFile(m['bytes']! as Uint8List, m['mime']! as String, (m['name'] as String?) ?? 'chek');
-    } on PlatformException catch (e) {
-      if (e.code == 'too_large') throw const FileTooLarge();
-      rethrow;
-    }
-  }
 }

@@ -11219,6 +11219,14 @@ function renderProfilePage() {
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="11" rx="5.5"/><path d="M7 10.5v4M5 12.5h4"/><circle cx="15.5" cy="11.5" r=".6" fill="currentColor"/><circle cx="17.5" cy="13.8" r=".6" fill="currentColor"/></svg>' +
       gx("Bilim o'yinlari", 'Игры знаний') +
     '</div>' +
+    // Only inside the Android app (its Telegram stand-in defines KsApp): the
+    // app's own screen — signed-in devices, log out, Oferta shartlari.
+    (window.KsApp && typeof window.KsApp.openSettings === 'function'
+      ? '<div class="profile-menu-item" onclick="KsApp.openSettings()">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>' +
+          gx('Ilova va xavfsizlik', 'Приложение и безопасность') +
+        '</div>'
+      : '') +
     '<div class="profile-menu-item" onclick="contactAdmin()">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>' +
       t.profileHelp +
