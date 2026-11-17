@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import json
 import logging
+import math
 import os
 import re
 import time
@@ -17,6 +18,7 @@ from urllib.parse import parse_qsl, unquote
 from aiohttp import web
 from aiogram import Bot
 
+import database
 import promotions
 
 
@@ -169,11 +171,83 @@ async def bot_can_write(bot, user_id: int) -> bool:
     return ok
 
 
+async def site_gate(bot, user_id: int) -> dict:
+    """Kanal, keyin bot (owner, 2026-11-08: "sayt uchun ham kanal obunasini
+    talab qil, keyin bot obunasini ham"). The shop opens once the buyer is
+    in the channel AND the bot can write to them. Both checks are cached and
+    fail open; admins pass."""
+    from config import BOT_USERNAME, REQUIRED_CHANNEL_USERNAME
+    if bot is None or user_id in ADMIN_IDS:
+        subscribed = True
+    else:
+        import subscription_gate
+        subscribed = await subscription_gate.is_subscribed_for_site(bot, user_id)
+    started = await bot_can_write(bot, user_id)
+    return {"ok": subscribed and started, "bot": BOT_USERNAME,
+            "channel": REQUIRED_CHANNEL_USERNAME.lstrip("@"),
+            "subscribed": subscribed, "started": started}
+
+
+async def ensure_site_user(request: web.Request, user_id: int) -> bool | None:
+    """Create the users row for a Telegram-verified Mini App buyer who has
+    none yet — they reached the shop without the bot's /start (Telegram lets
+    a Mini App launch allow the bot to write) — and run the new-joiner steps
+    a /start would: the admins' note, the 100 Keto, YANGI5
+    (handlers/start._process_new_user). True when the row is new, False when
+    it existed, None for initData without a usable profile."""
+    telegram_user = request.get("telegram_user")
+    if not isinstance(telegram_user, dict) or telegram_user.get("id") != user_id:
+        return None
+    name_parts = [
+        value.strip()
+        for value in (telegram_user.get("first_name"), telegram_user.get("last_name"))
+        if isinstance(value, str) and value.strip()
+    ]
+    is_new = await get_user(user_id) is None
+    # create_user uses INSERT ... ON CONFLICT DO NOTHING to preserve existing
+    # profile, contact and language fields.
+    inserted = await create_user(
+        user_id,
+        username=telegram_user.get("username"),
+        full_name=" ".join(name_parts) or None,
+        language=request.get("user_lang", "uz"),
+    )
+    # False: the bot's /start registered them a moment ago — it greets them.
+    if not is_new or inserted is False:
+        return False
+    # YANGI5 waits for them before the shop's first /api/promo, which starts
+    # it; the rest of the welcome runs in the background below.
+    import welcome_promo
+    await welcome_promo.mark_pending(user_id)
+    # The gift's ceremony waits for their first language pick in the bot.
+    # Best-effort, off the hot path.
+    import asyncio
+    from types import SimpleNamespace
+    from handlers.start import _process_new_user
+    tg_user = SimpleNamespace(id=user_id, username=telegram_user.get("username"),
+                              full_name=" ".join(name_parts) or None)
+    asyncio.create_task(_process_new_user(request.app["bot"], tg_user, None))
+    return True
+
+
 async def api_bot_access(request: web.Request):
     """The Mini App's gate check — open even while the gate is shut."""
-    from config import BOT_USERNAME
-    ok = await bot_can_write(request.app.get("bot"), request["user_id"])
-    return _json({"ok": ok, "bot": BOT_USERNAME})
+    gate = await site_gate(request.app.get("bot"), request["user_id"])
+    # The Mini App's first call on every launch — START pressed or not — so a
+    # tracked link (t.me/<bot>/shop?startapp=<kod>, shop_links.py) is counted
+    # here. The code comes from the signed initData, never from the client.
+    import shop_links
+    await shop_links.record_open(request["user_id"], request.get("start_param"),
+                                 request.get("auth_date"))
+    # Through the gate without ever pressing START in the bot — registered
+    # here, so they too are members (2026-11-08: 12 of 15 people who came in
+    # through a link had no users row).
+    if gate["ok"]:
+        try:
+            await ensure_site_user(request, request["user_id"])
+        except Exception:
+            logger.exception("Site registration failed for %s", request["user_id"])
+    return _json(gate)
 
 
 @web.middleware
@@ -200,6 +274,10 @@ async def auth_middleware(request: web.Request, handler):
     if not isinstance(user_id, int) or isinstance(user_id, bool):
         return _json({"error": "invalid initData"}, status=403)
     request["user_id"] = user_id
+    # ?startapp=<kod> of the link that launched the Mini App, and the launch's
+    # own time — one launch counts once however often the page reloads.
+    request["start_param"] = parsed.get("start_param") or ""
+    request["auth_date"] = parsed.get("auth_date")
     # Keep only the Telegram profile carried by successfully verified initData.
     # Mutating routes may use this data to create a missing user row.
     request["telegram_user"] = user
@@ -212,10 +290,11 @@ async def auth_middleware(request: web.Request, handler):
         if request["user_lang"] not in ("uz", "uz_cyr", "ru"):
             request["user_lang"] = "uz"
 
-    # The shop is for buyers the bot can reach — see "botni ishga tushirish".
-    if path != BOT_ACCESS_PATH and not await bot_can_write(request.app.get("bot"), user_id):
-        from config import BOT_USERNAME
-        return _json({"error": "start_bot", "bot": BOT_USERNAME}, status=403)
+    # The shop is for channel members the bot can reach — see site_gate.
+    if path != BOT_ACCESS_PATH:
+        gate = await site_gate(request.app.get("bot"), user_id)
+        if not gate["ok"]:
+            return _json({"error": "start_bot", **gate}, status=403)
 
     response = await handler(request)
     try:
@@ -253,6 +332,9 @@ async def index(request: web.Request):
     # question every 2 days (daily_quiz.py).
     import quiz_bank
     html = html.replace("{{GAME_BANK}}", quiz_bank.bank_json())
+    import site_music
+    html = html.replace("{{MUSIC_PLAYLIST}}", json.dumps(site_music.playlist(), ensure_ascii=False)
+                        .replace("</", "<\\/"))
     # Yangi alifbo switch (alphabet.py) — the page converts its own text.
     import alphabet
     html = html.replace("{{NEW_ALPHABET}}", "1" if alphabet.is_on() else "0")
@@ -333,8 +415,10 @@ async def api_products(request: web.Request):
         sets = await get_active_sets_for_catalog()
         import bot_discount
         bot_prices = await bot_discount.display_prices([dict(s, is_set=True) for s in sets])
-        serialized = [_serialize_set(s, lang, bp) for s, bp in zip(sets, bot_prices)]
-        
+        stock = await _sets_stock(sets, request.get("user_id"))
+        serialized = [_apply_set_stock(_serialize_set(s, lang, bp), stock[s["id"]])
+                      for s, bp in zip(sets, bot_prices)]
+
         # Paginate sets
         total = len(serialized)
         start = page * per_page
@@ -435,8 +519,23 @@ async def api_set_detail(request: web.Request):
     # serialize set like a product
     import bot_discount
     data = _serialize_set(s, lang, await bot_discount.display_price(dict(s, is_set=True)))
-    data["description"] = "Tarkibi: " + ", ".join([f"{i['name_ru'] if lang == 'ru' and i.get('name_ru') else i['name']} ({i['quantity']})" for i in s["items"]])
-    data["out_of_stock"] = False
+    stock = (await _sets_stock([s], request.get("user_id")))[s["id"]]
+    _apply_set_stock(data, stock)
+    # The parts one per line (the missing one marked) and what they cost one
+    # by one — the sheet used to show only "Tarkibi: Bodom uni (1.0), …" and
+    # always offered «Savatga qo'shish», even when a part had run out.
+    data["description"] = localize_product_text(s.get("description"), s.get("description_ru"), lang) or ""
+    data["items"] = [{
+        "id": i["product_id"],
+        "name": localize_product_text(i.get("name"), i.get("name_ru"), lang),
+        "quantity": _num_text(i["quantity"]),
+        "unit": get_display_unit(i.get("unit") or "piece", lang),
+        "price": float(i.get("price") or 0),
+        "photo_url": photo_url(i.get("image_url") or i.get("photo_id")),
+        "out_of_stock": i["product_id"] in stock["short"],
+    } for i in s["items"]]
+    data["original_total"] = float(s.get("original_total") or 0)
+    data["restock_waiting"] = False
     return _json(data)
 
 
@@ -568,13 +667,25 @@ async def api_leaderboard(request: web.Request):
 
 
 async def api_search(request: web.Request):
-    """Search products by name."""
+    """Search products by name, in Latin or Cyrillic (search_text.py).
+
+    When nothing matches, the closest names come back instead, each marked
+    "near": true — the Mini App shows them under «topilmadi, balki
+    shulardir?» (an older page simply shows them as results)."""
+    import database
     lang = request.get("user_lang", "uz")
     q = request.query.get("q", "").strip()
     if len(q) < 2:
         return _json([])
     products, total = await search_products(q, page=0, per_page=20)
-    return _json(await _serialize_products(products, lang, request.get("user_id")))
+    near = not products
+    if near:
+        products = await database.search_suggestions(q, limit=4)
+    items = await _serialize_products(products, lang, request.get("user_id"))
+    if near:
+        for item in items:
+            item["near"] = True
+    return _json(items)
 
 
 async def api_cart(request: web.Request):
@@ -693,11 +804,24 @@ async def api_restock_wait(request: web.Request):
     import restock_notify
     try:
         data = await request.json()
-        product_id = int(data.get("product_id"))
+        set_id = int(data["set_id"]) if data.get("set_id") else None
+        product_id = None if set_id else int(data.get("product_id"))
     except Exception:
         return _json({"error": "bad_request"}, status=400)
-    status = await restock_notify.subscribe(
-        request["user_id"], product_id, request.get("user_lang", "uz"), "site")
+    lang = request.get("user_lang", "uz")
+    if set_id:
+        # A set comes back when its missing parts do: the buyer waits for
+        # each of them (told per part, the same message as for a product).
+        from database import get_set
+        the_set = await get_set(set_id)
+        if not the_set or not the_set.get("is_active"):
+            return _json({"error": "not_found"}, status=404)
+        short = (await _sets_stock([the_set], request["user_id"]))[set_id]["short"]
+        got = [await restock_notify.subscribe(request["user_id"], pid, lang, "site") for pid in short]
+        got = [g for g in got if g != "not_found"]
+        status = ("added" if "added" in got else "already" if "already" in got else "in_stock")
+        return _json({"ok": True, "status": status})
+    status = await restock_notify.subscribe(request["user_id"], product_id, lang, "site")
     if status == "not_found":
         return _json({"error": "not_found"}, status=404)
     return _json({"ok": True, "status": status})
@@ -726,6 +850,10 @@ async def api_cart_add(request: web.Request):
         # only what no other buyer's cart holds (Savat broni).
     elif set_id:
         set_id = int(set_id)
+        from database import get_set
+        the_set = await get_set(set_id)
+        if not the_set or not the_set.get("is_active"):
+            return _json({"error": "not_found"}, status=404)
 
     # Whether this product/set was already in the cart — only a NEW line gets
     # the "savatingizga qo'shildi" chat message, so the Mini App's own stepper
@@ -737,35 +865,10 @@ async def api_cart_add(request: web.Request):
         _line, before = await get_cart_line_for_set(user_id, set_id) if set_id else (None, 0)
 
     # Cart rows reference users(user_id). Telegram-verified Mini App users may
-    # arrive here before sending /start to the bot, so ensure their row exists.
-    # create_user uses INSERT ... ON CONFLICT DO NOTHING to preserve existing
-    # profile, contact and language fields.
-    telegram_user = request.get("telegram_user")
-    if not isinstance(telegram_user, dict) or telegram_user.get("id") != user_id:
+    # arrive here before sending /start to the bot, so ensure their row exists
+    # — a new one is a new joiner too (ensure_site_user).
+    if await ensure_site_user(request, user_id) is None:
         return _json({"error": "invalid initData"}, status=403)
-    name_parts = [
-        value.strip()
-        for value in (telegram_user.get("first_name"), telegram_user.get("last_name"))
-        if isinstance(value, str) and value.strip()
-    ]
-    is_new = await get_user(user_id) is None
-    await create_user(
-        user_id,
-        username=telegram_user.get("username"),
-        full_name=" ".join(name_parts) or None,
-        language=request.get("user_lang", "uz"),
-    )
-    if is_new:
-        # A Mini App-first buyer is a new joiner too: the admins' "who
-        # joined" note and the 100 Keto start gift, the same as a /start
-        # (handlers/start._process_new_user). The gift's ceremony waits for
-        # their first language pick in the bot. Best-effort, off the hot path.
-        import asyncio
-        from types import SimpleNamespace
-        from handlers.start import _process_new_user
-        tg_user = SimpleNamespace(id=user_id, username=telegram_user.get("username"),
-                                  full_name=" ".join(name_parts) or None)
-        asyncio.create_task(_process_new_user(request.app["bot"], tg_user, None))
     added = await add_to_cart(user_id, product_id=product_id, quantity=quantity, set_id=set_id) - float(before or 0)
     if added <= 0:
         reason = await _limit_reason(user_id, product_id, set_id)
@@ -776,18 +879,20 @@ async def api_cart_add(request: web.Request):
             import cart_reservations
             body["waiting"] = await cart_reservations.wait_for_hold(
                 user_id, int(product_id), request.get("user_lang", "uz"), "held")
+        if set_id:
+            # Which part stops the set — the sheet names it instead of a bare
+            # «Savatga qo'shib bo'lmadi» (11.11: sets 28 opens, 0 adds).
+            short = set((await _sets_stock([the_set], user_id))[set_id]["short"])
+            lang = request.get("user_lang", "uz")
+            body["missing"] = [localize_product_text(i.get("name"), i.get("name_ru"), lang)
+                               for i in the_set["items"] if int(i["product_id"]) in short]
         return _json(body, status=409)
 
     if not before:
         import asyncio
         from handlers.cart import send_added_to_cart
-        from locales import localize_product_text
         lang = request.get("user_lang", "uz")
-        if product_id:
-            item = product
-        else:
-            from database import get_set
-            item = await get_set(set_id) or {}
+        item = product if product_id else the_set
         name = localize_product_text(item.get("name"), item.get("name_ru"), lang) or item.get("name") or ""
         # Fire-and-forget: the Mini App gets its "ok" immediately; the chat
         # message follows a moment later.
@@ -891,6 +996,21 @@ async def api_uzpost_quote(request: web.Request):
         "office": dict(uzpost.localize(office, request.get("user_lang", "uz")),
                        map_url=uzpost.map_url(office)) if office else None,
     })
+
+
+async def api_checkout_phone(request: web.Request):
+    """GET /api/checkout/phone — the buyer's own last number, to fill the
+    checkout's phone field ('+998 90 123 45 67'), or "" when none is known.
+    Only ever this user's own data. Any trouble answers "": the buyer then
+    types it, as before."""
+    import database
+    from phone_utils import format_uz_phone
+    try:
+        phone = await database.get_checkout_phone(request["user_id"])
+    except Exception:
+        logger.exception("Checkout phone lookup failed")
+        phone = None
+    return _json({"phone": format_uz_phone(phone) if phone else ""})
 
 
 async def api_checkout(request: web.Request):
@@ -1194,6 +1314,23 @@ async def _stock_gone(exc: InsufficientStockError, request: web.Request):
         "requested": exc.requested,
         "available": exc.available,
     }, status=409)
+
+async def api_assistant(request: web.Request):
+    """POST /api/assistant {"text": "..."} — saytdagi «Yordamchi» (site_assistant):
+    botdagi AI sotuvchi javobi va rasmli kartochkalar (mahsulot, savat, o'z
+    buyurtmalari). Hech narsa Telegram'ga yuborilmaydi — javob shu yerda."""
+    try:
+        body = await request.json()
+    except Exception:
+        return _json({"error": "bad_request"}, status=400)
+    text = str((body or {}).get("text") or "").strip()
+    if not text:
+        return _json({"error": "empty"}, status=400)
+    import site_assistant
+    user = dict(request.get("telegram_user") or {}, id=request["user_id"])
+    result = await site_assistant.ask(request.app.get("bot"), user, text, request.get("user_lang", "uz"))
+    return _json(result)
+
 
 async def api_orders(request: web.Request):
     """Return the buyer's recent orders with full details for the Mini App
@@ -1653,6 +1790,37 @@ async def api_keto_status(request: web.Request):
     return _json({"enabled": enabled, "balance": balance, "rate": rate})
 
 
+async def api_site_time(request: web.Request):
+    """POST /api/site-time — one beat of real, active time on the site
+    (site_time.py). Only the server counts the time and pays the rungs."""
+    import site_time
+    try:
+        body = await request.json()
+    except Exception:
+        return _json({"ok": False, "error": "bad_json"}, status=400)
+    try:
+        data, status = await site_time.handle_beat(request["user_id"], body)
+    except Exception:
+        logger.exception("Site-time beat failed for %s", request["user_id"])
+        return _json({"ok": False}, status=500)
+    return _json(data, status=status)
+
+
+async def api_site_time_here(request: web.Request):
+    """POST /api/site-time/here — the buyer tapped «Davom etyapsizmi? ✅»."""
+    import site_time
+    try:
+        body = await request.json()
+    except Exception:
+        return _json({"ok": False, "error": "bad_json"}, status=400)
+    try:
+        data, status = await site_time.handle_presence(request["user_id"], body)
+    except Exception:
+        logger.exception("Site-time presence failed for %s", request["user_id"])
+        return _json({"ok": False}, status=500)
+    return _json(data, status=status)
+
+
 async def api_set_lang(request: web.Request):
     """Update user's language preference."""
     user_id = request["user_id"]
@@ -1711,6 +1879,7 @@ async def api_recipes(request: web.Request):
     faqat 1 ta retsept ko'rsat ... hammasini emas"). recipes.py."""
     import recipes
     lang = request.get("user_lang", "uz")
+    await recipes.sync()
     current, _, next_at = recipes.schedule()
     return _json({
         "current": await recipes.view(current, lang),
@@ -1722,8 +1891,9 @@ async def api_recipes(request: web.Request):
 async def api_recipe_one(request: web.Request):
     """One published recipe by slug — the channel post's link names its
     recipe, so a post opened days later still shows that one. Future recipes
-    stay hidden (recipes.find)."""
+    stay hidden (recipes.find), and so do ones still waiting for a photo."""
     import recipes
+    await recipes.sync()
     recipe = recipes.find(request.match_info["slug"])
     if not recipe:
         return _json({"error": "not_found"}, status=404)
@@ -1734,6 +1904,7 @@ async def api_recipe_to_cart(request: web.Request):
     """"🛒 Barcha masalliqlarni savatga" — one pack of every in-stock product."""
     import recipes
     from database import get_cart_count
+    await recipes.sync()
     recipe = recipes.find(request.match_info["slug"])
     if not recipe:
         return _json({"error": "not_found"}, status=404)
@@ -1747,7 +1918,15 @@ async def _welcome_promo(request: web.Request, lang: str):
     try:
         import welcome_promo
         user_id = request.get("user_id")
-        return await welcome_promo.site_payload(user_id, lang) if user_id else None
+        if not user_id:
+            return None
+        # A new member who came to the site without picking a language in the
+        # bot (owner, 2026-11-08: "ularga ham 8 soatlik 5%") — their 8 hours
+        # start here; the site greets them with fireworks. No-op otherwise.
+        bot = request.app.get("bot")
+        if bot is not None:
+            await welcome_promo.maybe_start(bot, user_id, lang)
+        return await welcome_promo.site_payload(user_id, lang)
     except Exception:
         logger.warning("YANGI5 site payload failed", exc_info=True)
         return None
@@ -1870,7 +2049,7 @@ def _serialize_set(s: dict, lang: str, bot_price: float | None = None) -> dict:
         "price": s["set_price"],
         "photo_id": s["image_url"],
         "photo_url": photo_url(s["image_url"]),
-        "unit": "piece",
+        "unit": get_display_unit("piece", lang),
         "quantity": 999,
         "is_set": True,
     }
@@ -1880,10 +2059,68 @@ def _serialize_set(s: dict, lang: str, bot_price: float | None = None) -> dict:
     return data
 
 
+def _num_text(v) -> int | float:
+    v = float(v or 0)
+    return int(v) if v.is_integer() else v
+
+
+def set_capacity(items: list[dict], view: dict[int, dict]) -> dict:
+    """How many of one set a buyer can put in the cart now, from its parts —
+    the same rule database._line_cap enforces when it goes in: each part's
+    free stock (shelf minus other buyers' holds, `view` from
+    database.stock_view) divided by what one set takes, the scarcest part
+    decides. {"available": n, "short": [product ids that stop it],
+    "held": True when every stopping part is only held in other carts}."""
+    caps, short, held = [], [], True
+    for it in items:
+        need = float(it.get("quantity") or 0)
+        if need <= 0:
+            continue
+        pid = int(it["product_id"])
+        v = view.get(pid) or {"shelf": 0.0, "held": 0.0, "free": 0.0}
+        free = float(v["free"]) if it.get("is_active", 1) else 0.0
+        can = math.floor(free / need + 1e-9)
+        caps.append(can)
+        if can <= 0:
+            short.append(pid)
+            if not it.get("is_active", 1) or float(v["shelf"]) < need:
+                held = False
+    if not caps:
+        return {"available": int(database.SET_WITHOUT_ITEMS_STOCK), "short": [], "held": False}
+    available = min(caps)
+    return {"available": available, "short": short, "held": bool(short) and held}
+
+
+async def _sets_stock(sets: list[dict], viewer: int | None) -> dict[int, dict]:
+    """{set_id: set_capacity(...)} for `viewer`, one stock query for all.
+    A failed lookup shows the set as before (orderable); adding it is still
+    checked by the database, so nothing wrong can get into a cart."""
+    pids = {int(i["product_id"]) for s in sets for i in s.get("items") or []}
+    try:
+        view = await database.stock_view(pids, viewer) if pids else {}
+    except Exception:
+        logger.warning("set stock lookup failed", exc_info=True)
+        return {s["id"]: {"available": int(database.SET_WITHOUT_ITEMS_STOCK), "short": [], "held": False}
+                for s in sets}
+    return {s["id"]: set_capacity(s.get("items") or [], view) for s in sets}
+
+
+def _apply_set_stock(data: dict, stock: dict) -> dict:
+    """A set card says what the buyer can really do: a set whose part has run
+    out is «Yo'lda 🚚» like a sold-out product (it stays on the shelf), one
+    whose part sits in other carts is «⏳ Band»."""
+    available = int(stock["available"])
+    data["quantity"] = min(max(available, 0), int(database.SET_WITHOUT_ITEMS_STOCK))
+    data["out_of_stock"] = available <= 0
+    data["held_out"] = available <= 0 and bool(stock.get("held"))
+    return data
+
+
 # The Mini App tracker's batches (see "SITE ANALYTICS" in webapp/index.html).
 # Anything malformed is dropped silently — analytics must never cost a buyer
 # an error, and a bad client can't push more than 60 short rows per call.
-TRACK_KINDS = {"open", "view", "time", "scroll", "row", "search", "cart_add", "fav", "checkout", "game"}
+TRACK_KINDS = {"open", "view", "time", "scroll", "row", "search", "cart_add", "fav", "checkout", "game",
+               "assistant"}
 _TRACK_SID = re.compile(r"[A-Za-z0-9_-]{6,40}")
 
 
@@ -2028,11 +2265,14 @@ def create_webapp(bot: Bot, storage=None) -> web.Application:
     app.router.add_post("/api/cart/update", api_cart_update)
     app.router.add_post("/api/cart/clear", api_cart_clear)
     app.router.add_post("/api/checkout", api_checkout)
+    app.router.add_get("/api/checkout/phone", api_checkout_phone)
     app.router.add_get("/api/uzpost/quote", api_uzpost_quote)
     app.router.add_post("/api/site-feedback", api_site_feedback)
     app.router.add_get("/api/site-feedback/due", api_site_feedback_due)
     app.router.add_post("/api/site-feedback/shown", api_site_feedback_shown)
     app.router.add_post("/api/track", api_track)
+    app.router.add_post("/api/site-time", api_site_time)
+    app.router.add_post("/api/site-time/here", api_site_time_here)
     app.router.add_post("/api/checkout/cheque", api_checkout_cheque)
     app.router.add_post("/api/checkout/pay-in-chat", api_checkout_pay_in_chat)
     app.router.add_get("/api/orders", api_orders)
@@ -2042,6 +2282,7 @@ def create_webapp(bot: Bot, storage=None) -> web.Application:
     app.router.add_get("/api/lang", api_get_lang)
     app.router.add_post("/api/lang", api_set_lang)
     app.router.add_get("/api/keto/status", api_keto_status)
+    app.router.add_post("/api/assistant", api_assistant)
     app.router.add_get("/api/photo/{file_id}", api_photo)
 
     # Admin website (/admin) + uploaded-image serving (/img/{id}).
@@ -2049,6 +2290,12 @@ def create_webapp(bot: Bot, storage=None) -> web.Application:
     # paths because they don't start with /api/.
     from admin_web import setup_admin_routes
     setup_admin_routes(app)
+    # Meta webhook (Instagram/Facebook izohlari) — imzo X-Hub-Signature-256
+    # bilan tekshiriladi, sessiya yoki initData emas (meta_comments.py).
+    import meta_comments
+    meta_comments.setup_routes(app)
+    import site_music
+    site_music.setup_routes(app)        # /music/<id>.mp3 — the site's background recordings
 
     # Serve the webapp/ directory at /static/ so we can self-host vendor
     # assets (Leaflet, etc) instead of relying on a CDN — flaky CDN

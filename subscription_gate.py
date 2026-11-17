@@ -57,6 +57,28 @@ async def _is_subscribed(bot, user_id: int, force: bool = False) -> bool:
     return subscribed
 
 
+_site_recheck_at: dict[int, float] = {}
+SITE_RECHECK = 5   # s — the site's join screen polls; a "not yet" is re-asked this often
+
+
+async def is_subscribed_for_site(bot, user_id: int) -> bool:
+    """The Mini App's channel check (webapp_server.site_gate, owner
+    2026-11-08). Shares the bot's cache, but a "not yet" is asked again every
+    few seconds: the site's entry screen waits while the buyer goes to join.
+    Fails open like the bot's."""
+    now = time.monotonic()
+    cached = _cache.get(user_id)
+    if cached and not cached[0]:
+        if now - _site_recheck_at.get(user_id, 0) < SITE_RECHECK:
+            return False
+        subscribed = await _is_subscribed(bot, user_id, force=True)
+    else:
+        subscribed = await _is_subscribed(bot, user_id)
+    if not subscribed:
+        _site_recheck_at[user_id] = now
+    return subscribed
+
+
 async def _awaiting_cheque(data: dict) -> bool:
     """True while the user owes the bot a payment cheque for an order they
     already placed (CheckoutStates.waiting_cheque) — never block that."""
@@ -86,6 +108,18 @@ def _gate_text(lang: str) -> str:
         "va yangiliklardan birinchi bo'lib xabardor bo'lasiz. 💚\n\n"
         "Obuna bo'lgach, pastdagi <b>✅ Tekshirish</b> tugmasini bosing."
     )
+
+
+def _is_privacy_request(event) -> bool:
+    """/malumotlarim va uning tugmalari (customer_portrait.py): saqlangan
+    ma'lumotni ko'rish va o'chirish obunasiz ham ishlaydi — Mini App dagi
+    Yordamchi obunasiz odam bilan ham gaplashadi."""
+    if isinstance(event, Message):
+        command = (event.text or "").strip().split(maxsplit=1)[0:1]
+        return bool(command) and command[0].split("@")[0].lower() == "/malumotlarim"
+    if isinstance(event, CallbackQuery):
+        return (event.data or "").startswith("mydata:")
+    return False
 
 
 def _gate_keyboard(lang: str) -> InlineKeyboardMarkup:
@@ -122,6 +156,8 @@ class SubscriptionGateMiddleware(BaseMiddleware):
         # there about the channel would spam the whole group.
         if isinstance(event, Message) and event.chat.type != "private":
             return await handler(event, data)
+        if _is_privacy_request(event):
+            return await handler(event, data)
 
         bot = data["bot"]
         # Best-effort language hint before any DB record exists — Telegram's
@@ -135,19 +171,29 @@ class SubscriptionGateMiddleware(BaseMiddleware):
                 # ran, so they have no users row yet and any referral
                 # payload was never processed) — see _pending_start_payload.
                 product_id = None
+                shop_code = None
                 is_new = False
                 try:
                     import referral_contest
                     import bloggers
                     import ad_sources
                     import product_card
-                    from handlers.start import ensure_registered
+                    from handlers.start import ensure_registered, is_site_payload, remember_site_return
 
                     payload = _pending_start_payload.pop(user.id, None)
                     referrer_id = referral_contest.parse_ref_payload(payload)
-                    blogger_code = bloggers.parse_payload(payload)
+                    # ?start=sayt — sent here by the site's entry screen.
+                    site_return = is_site_payload(payload)
+                    if site_return:
+                        remember_site_return(user.id)
                     ad_source = ad_sources.parse_payload(payload)
                     product_id = product_card.parse_product_payload(payload)
+                    # ?start=<kod> — a tracked ad link, already counted when the
+                    # gate first stopped them; now it only brings the shop button.
+                    if not (site_return or referrer_id or ad_source or product_id is not None):
+                        import shop_links
+                        shop_code = await shop_links.code_for_start(payload)
+                    blogger_code = None if (site_return or shop_code) else bloggers.parse_payload(payload)
                     is_new = await ensure_registered(bot, user, referrer_id, blogger_code, ad_source)
                 except Exception:
                     logger.warning("Deferred registration failed for user %s", user.id, exc_info=True)
@@ -168,6 +214,12 @@ class SubscriptionGateMiddleware(BaseMiddleware):
                 except Exception:
                     pass
                 await event.answer()
+                if shop_code:
+                    from handlers.start import send_open_shop
+                    if not is_new:
+                        import database
+                        lang = await database.get_user_language(user.id)
+                    await send_open_shop(bot, user.id, lang)
                 # They came from the channel's «Kun mahsuloti» post and were
                 # stopped here to subscribe first — now show them the product
                 # they actually tapped, not an empty menu.
@@ -194,6 +246,10 @@ class SubscriptionGateMiddleware(BaseMiddleware):
                 parts = event.text.split(maxsplit=1)
                 if len(parts) > 1:
                     _pending_start_payload[user.id] = parts[1].strip()
+                    # A tracked ad link (?start=kepak) is counted now — whether
+                    # or not they go on to join the channel.
+                    import shop_links
+                    await shop_links.note_start(user.id, parts[1].strip())
             if isinstance(event, CallbackQuery):
                 await event.answer()
                 try:

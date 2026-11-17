@@ -78,8 +78,10 @@ class AdminStates(StatesGroup):
     # product picker states above (branched on order_type='b2b' in FSM data),
     # but skips phone/address/payment/delivery/status: just company name,
     # products, confirm.
-    b2b_company = State()
+    b2b_company = State()          # yangi B2B mijozning ismi
     b2b_confirm = State()
+    b2b_pick_customer = State()    # saqlangan mijozlar tugmalari + «➕ Yangi mijoz»
+    b2b_new_phone = State()
     # B2B Eritritol order
     b2b_eritritol_address = State()
     b2b_eritritol_phone = State()
@@ -148,6 +150,9 @@ async def show_admin_submenu(callback: CallbackQuery, state: FSMContext):
         kb = admin_users_menu_keyboard(lang)
     elif menu_type == "marketing":
         kb = admin_marketing_menu_keyboard(lang)
+    elif menu_type == "ads":
+        from keyboards import admin_ads_menu_keyboard
+        kb = admin_ads_menu_keyboard(lang)
     else:
         await callback.answer()
         return
@@ -2390,17 +2395,90 @@ async def show_b2b_sales(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
+# ── B2B mijozlar (egasi, 2026-11-15): "b2b ulgurji buyurtmani kirgazayotganda
+# mijozlarimizni saqlab qo'yishimiz kerak … mijozni ismlarini (tugma) tanlab
+# ularga biriktirsak … raqamlarini ham kiritishimiz kerak … Yangi mijoz +".
+# Ikkala B2B yo'li (boshqa mahsulotlar, optom Eritritol) mijoz tanlashdan
+# boshlanadi; yangi mijoz ismi va telefoni bilan saqlanadi, Eritritol uchun
+# manzili ham — keyingi safar so'ralmaydi.
+
+B2B_CUSTOMERS_PAGE = 20
+
+
+def b2b_customer_keyboard(customers: list[dict], lang: str, page: int = 0) -> InlineKeyboardMarkup:
+    start = page * B2B_CUSTOMERS_PAGE
+    chunk = customers[start:start + B2B_CUSTOMERS_PAGE]
+    rows, row = [], []
+    for c in chunk:
+        row.append(InlineKeyboardButton(text=f"👤 {c['name'][:28]}", callback_data=f"b2bc:pick:{c['id']}"))
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton(text="⬅️", callback_data=f"b2bc:page:{page - 1}"))
+    if start + B2B_CUSTOMERS_PAGE < len(customers):
+        nav.append(InlineKeyboardButton(text="➡️", callback_data=f"b2bc:page:{page + 1}"))
+    if nav:
+        rows.append(nav)
+    rows.append([InlineKeyboardButton(text=get_text("btn_b2b_new_customer", lang), callback_data="b2bc:new")])
+    rows.append([InlineKeyboardButton(text="❌ Bekor qilish" if lang != "ru" else "❌ Отмена",
+                                      callback_data="admin_panel")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def _show_b2b_customers(message, state: FSMContext, lang: str, page: int = 0, edit: bool = True) -> None:
+    from database import list_b2b_customers
+    data = await state.get_data()
+    title = ("🛒 Optom Eritritol" if data.get("order_type") == "b2b_eritritol"
+             else ("B2B savdo kiritish" if lang != "ru" else "Добавить B2B продажу"))
+    customers = await list_b2b_customers()
+    text = get_text("b2b_pick_customer", lang, title=title)
+    if not customers:
+        text += "\n\n" + get_text("b2b_no_customers", lang)
+    kb = b2b_customer_keyboard(customers, lang, page)
+    await state.set_state(AdminStates.b2b_pick_customer)
+    if edit:
+        try:
+            await message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+            return
+        except Exception:
+            pass
+    await message.answer(text, reply_markup=kb, parse_mode="HTML")
+
+
+async def _b2b_after_customer(message, state: FSMContext, lang: str) -> None:
+    """Mijoz tanlandi yoki qo'shildi — keyingi qadam: mahsulotlar yoki Eritritol."""
+    data = await state.get_data()
+    line = get_text("b2b_customer_line", lang, name=html.escape(data.get("name") or ""),
+                    phone=html.escape(data.get("phone") or "—"))
+    if data.get("order_type") == "b2b_eritritol":
+        if data.get("address"):
+            await state.set_state(AdminStates.b2b_eritritol_quantity)
+            await message.answer(f"{line}\n📍 {html.escape(data['address'])}\n\n"
+                                 + get_text("b2b_eritritol_quantity", lang),
+                                 parse_mode="HTML", reply_markup=admin_cancel_keyboard(lang))
+        else:
+            await state.set_state(AdminStates.b2b_eritritol_address)
+            await message.answer(f"{line}\n\n" + get_text("b2b_eritritol_address", lang),
+                                 parse_mode="HTML", reply_markup=admin_cancel_keyboard(lang))
+        return
+    await state.update_data(items=[])
+    await state.set_state(AdminStates.manual_pick_category)
+    await message.answer(line, parse_mode="HTML")
+    await _show_manual_category_picker(message, state, lang)
+
+
 @router.callback_query(F.data == "admin:b2b_order")
 async def b2b_order_start(callback: CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
         return
     lang = await get_user_language(callback.from_user.id)
+    await state.clear()
     await state.update_data(lang=lang, order_type="b2b")
-    await state.set_state(AdminStates.b2b_company)
-    await callback.message.edit_text(
-        get_text("b2b_order_intro", lang),
-        parse_mode="HTML",
-    )
+    await _show_b2b_customers(callback.message, state, lang)
     await callback.answer()
 
 
@@ -2409,14 +2487,72 @@ async def b2b_eritritol_start(callback: CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
         return
     lang = await get_user_language(callback.from_user.id)
+    await state.clear()
     await state.update_data(lang=lang, order_type="b2b_eritritol")
-    await state.set_state(AdminStates.b2b_eritritol_address)
-    await callback.message.edit_text(
-        get_text("b2b_eritritol_address", lang),
-        parse_mode="HTML",
-        reply_markup=admin_cancel_keyboard(lang)
-    )
+    await _show_b2b_customers(callback.message, state, lang)
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith("b2bc:page:"), AdminStates.b2b_pick_customer)
+async def b2b_customers_page(callback: CallbackQuery, state: FSMContext):
+    lang = (await state.get_data()).get("lang", "uz")
+    try:
+        page = max(0, int(callback.data.split(":")[2]))
+    except ValueError:
+        page = 0
+    await _show_b2b_customers(callback.message, state, lang, page)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("b2bc:pick:"), AdminStates.b2b_pick_customer)
+async def b2b_customer_pick(callback: CallbackQuery, state: FSMContext):
+    from database import get_b2b_customer
+    if not is_admin(callback.from_user.id):
+        return
+    lang = (await state.get_data()).get("lang", "uz")
+    try:
+        customer = await get_b2b_customer(int(callback.data.split(":")[2]))
+    except ValueError:
+        customer = None
+    if not customer:
+        await callback.answer("❌", show_alert=True)
+        await _show_b2b_customers(callback.message, state, lang)
+        return
+    await state.update_data(name=customer["name"], phone=customer.get("phone"),
+                            address=customer.get("address"), b2b_customer_id=customer["id"])
+    await callback.answer(f"✅ {customer['name']}")
+    await _b2b_after_customer(callback.message, state, lang)
+
+
+@router.callback_query(F.data == "b2bc:new", AdminStates.b2b_pick_customer)
+async def b2b_customer_new(callback: CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        return
+    lang = (await state.get_data()).get("lang", "uz")
+    await state.update_data(name=None, phone=None, address=None, b2b_customer_id=None)
+    await state.set_state(AdminStates.b2b_company)
+    await callback.message.edit_text(get_text("b2b_new_name", lang), parse_mode="HTML",
+                                     reply_markup=admin_cancel_keyboard(lang))
+    await callback.answer()
+
+
+@router.message(AdminStates.b2b_new_phone, F.text)
+async def b2b_customer_phone(message: Message, state: FSMContext):
+    from database import save_b2b_customer
+    from phone_utils import normalize_uz_phone
+    if not is_admin(message.from_user.id):
+        await state.clear()
+        return
+    data = await state.get_data()
+    lang = data.get("lang", "uz")
+    phone = normalize_uz_phone(message.text)
+    if not phone:
+        await message.answer(get_text("b2b_bad_phone", lang), reply_markup=admin_cancel_keyboard(lang))
+        return
+    customer = await save_b2b_customer(data["name"], phone, None, message.from_user.id)
+    await state.update_data(name=customer["name"], phone=customer.get("phone"),
+                            address=customer.get("address"), b2b_customer_id=customer["id"])
+    await _b2b_after_customer(message, state, lang)
 
 
 @router.message(AdminStates.b2b_eritritol_address, F.text)
@@ -2425,6 +2561,14 @@ async def b2b_eritritol_address(message: Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("lang", "uz")
     await state.update_data(address=message.text)
+    if data.get("b2b_customer_id"):
+        from database import set_b2b_customer_address
+        await set_b2b_customer_address(data["b2b_customer_id"], message.text)
+    if data.get("phone"):
+        # Mijoz tanlangan — raqami bor, keyingi safar manzil ham so'ralmaydi.
+        await state.set_state(AdminStates.b2b_eritritol_quantity)
+        await message.answer(get_text("b2b_eritritol_quantity", lang), reply_markup=admin_cancel_keyboard(lang))
+        return
     await state.set_state(AdminStates.b2b_eritritol_phone)
     await message.answer(get_text("b2b_eritritol_phone", lang), reply_markup=admin_cancel_keyboard(lang))
 
@@ -2529,6 +2673,8 @@ async def b2b_eritritol_confirm(callback: CallbackQuery, state: FSMContext):
         quantity=data["quantity"],
         total=data["total"],
         cost_per_kg=data.get("cost_per_kg") or 0,
+        customer_name=data.get("name"),
+        b2b_customer_id=data.get("b2b_customer_id"),
     )
     await state.clear()
     await callback.message.edit_text(get_text("b2b_saved", lang, order_id=order_id), reply_markup=admin_panel_keyboard(lang))
@@ -2544,12 +2690,13 @@ async def b2b_company_name(message: Message, state: FSMContext):
         return
     data = await state.get_data()
     lang = data.get("lang", "uz")
-    # Reuses the manual-order category/product picker states below — they
-    # only touch `items`/`lang`/`pending_*`, never phone/address, so they
-    # work unchanged for the B2B flow.
-    await state.update_data(name=name, items=[])
-    await state.set_state(AdminStates.manual_pick_category)
-    await _show_manual_category_picker(message, state, lang)
+    # Yangi mijoz: ism → telefon → (saqlanadi) → mahsulotlar yoki Eritritol.
+    # The product picker reuses the manual-order states below — they only
+    # touch `items`/`lang`/`pending_*`, never phone/address.
+    await state.update_data(name=name)
+    await state.set_state(AdminStates.b2b_new_phone)
+    await message.answer(get_text("b2b_new_phone", lang, name=html.escape(name)), parse_mode="HTML",
+                         reply_markup=admin_cancel_keyboard(lang))
 
 
 @router.message(AdminStates.manual_name, F.text)
@@ -3084,7 +3231,7 @@ async def manual_finish_items(callback: CallbackQuery, state: FSMContext):
         ]])
         await callback.message.edit_text(
             get_text("b2b_confirm", lang,
-                company=html.escape(data["name"]),
+                company=html.escape(data["name"]) + (f" · 📞 {html.escape(data['phone'])}" if data.get("phone") else ""),
                 items=items_block,
                 total=_fmt_price(_items_total(items)),
             ),
@@ -3303,6 +3450,8 @@ async def b2b_save(callback: CallbackQuery, state: FSMContext):
         company_name=data["name"],
         items_data=items,
         total=_items_total(items),
+        phone=data.get("phone"),
+        b2b_customer_id=data.get("b2b_customer_id"),
     )
     import order_admin_feed
     order_admin_feed.manual_created(callback.bot, order_id, callback.from_user, b2b=True)

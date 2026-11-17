@@ -77,7 +77,7 @@ TEXTS = {
         "uz": "📂 Kategoriyani tanlang:",
         "ru": "📂 Выберите категорию:",
     },
-    "cat_keto_flour": {"uz": "🥣 Keto & Glutensiz unlar", "ru": "🥣 Кето и безглютеновые муки"},
+    "cat_keto_flour": {"uz": "🥣 Keto & glyutensiz unlar", "ru": "🥣 Кето и безглютеновые муки"},
     "cat_coconut": {"uz": "🥥 Kokos mahsulotlari", "ru": "🥥 Кокосовые продукты"},
     "cat_pp_flour": {"uz": "🥗 PP unlar", "ru": "🥗 ПП мука"},
     "cat_supplements": {"uz": "💊 Oziq-ovqat qo'shimchalari", "ru": "💊 Пищевые добавки"},
@@ -525,6 +525,33 @@ TEXTS = {
             "💰 <b>Итого: {total} сум</b>\n\n"
             "Сохранить?"
         ),
+    },
+    "b2b_pick_customer": {
+        "uz": ("🏢 <b>{title}</b>\n\n"
+               "Mijozni tanlang yoki «➕ Yangi mijoz» bilan qo'shing — keyingi safar ismi shu ro'yxatda turadi."),
+        "ru": ("🏢 <b>{title}</b>\n\n"
+               "Выберите клиента или добавьте через «➕ Новый клиент» — в следующий раз он будет в этом списке."),
+    },
+    "b2b_no_customers": {
+        "uz": "Hozircha saqlangan mijoz yo'q.",
+        "ru": "Сохранённых клиентов пока нет.",
+    },
+    "btn_b2b_new_customer": {"uz": "➕ Yangi mijoz", "ru": "➕ Новый клиент"},
+    "b2b_new_name": {
+        "uz": "👤 <b>Yangi mijoz</b>\n\nIsmi yoki kompaniya nomini kiriting:",
+        "ru": "👤 <b>Новый клиент</b>\n\nВведите имя или название компании:",
+    },
+    "b2b_new_phone": {
+        "uz": "📞 <b>{name}</b> telefon raqamini kiriting (masalan: 90 123 45 67):",
+        "ru": "📞 Введите номер телефона <b>{name}</b> (например: 90 123 45 67):",
+    },
+    "b2b_bad_phone": {
+        "uz": "❌ Raqam noto'g'ri. O'zbekiston raqamini kiriting, masalan: 90 123 45 67",
+        "ru": "❌ Неверный номер. Введите узбекский номер, например: 90 123 45 67",
+    },
+    "b2b_customer_line": {
+        "uz": "👤 {name} · 📞 {phone}",
+        "ru": "👤 {name} · 📞 {phone}",
     },
     "b2b_saved": {
         "uz": "✅ B2B savdo #{order_id} saqlandi va statistikaga qo'shildi.",
@@ -1129,6 +1156,22 @@ TEXTS = {
         "ru": "Товары: <b>{goods}</b> сум (было {old_goods})\nИтого к оплате: <b>{total}</b> сум (было {old_total})",
     },
     "oe_btn_add": {"uz": "➕ Mahsulot qo'shish", "ru": "➕ Добавить товар"},
+    "oe_btn_price": {"uz": "💰 {name}: {price} so'm — narxini o'zgartirish",
+                     "ru": "💰 {name}: {price} сум — изменить цену"},
+    "oe_ask_price": {
+        "uz": ("💰 <b>{name}</b> — yangi narx (1 dona uchun).\n\n"
+               "Hozir: {price} so'm · katalogda: {base} so'm\n\n"
+               "Narxni yozing (masalan <code>92000</code>) yoki chegirma foizini "
+               "(masalan <code>10%</code>). <code>0</code> — chegirmasiz narx."),
+        "ru": ("💰 <b>{name}</b> — новая цена (за 1 шт.).\n\n"
+               "Сейчас: {price} сум · в каталоге: {base} сум\n\n"
+               "Напишите цену (например <code>92000</code>) или процент скидки "
+               "(например <code>10%</code>). <code>0</code> — цена без скидки."),
+    },
+    "oe_bad_price": {
+        "uz": "Narxni tushunmadim. Masalan: 92000 yoki 10%",
+        "ru": "Не понял цену. Например: 92000 или 10%",
+    },
     "oe_btn_save": {"uz": "💾 Saqlash", "ru": "💾 Сохранить"},
     "oe_btn_cancel": {"uz": "✖️ Bekor qilish", "ru": "✖️ Отмена"},
     "oe_not_editable": {
@@ -1812,9 +1855,13 @@ TEXTS = {
     },
     "search_empty": {
         "uz": "😔 \"{query}\" bo'yicha hech narsa topilmadi.\n"
-              "Boshqa so'z bilan qidirib ko'ring.",
+              "Boshqa so'z bilan qidirib ko'ring yoki nima kerakligini shu chatga yozing — topib beramiz.",
         "ru": "😔 По запросу \"{query}\" ничего не найдено.\n"
-              "Попробуйте другое слово.",
+              "Попробуйте другое слово или напишите в этот чат, что ищете, — подберём.",
+    },
+    "search_near": {
+        "uz": "Balki shulardan birini qidiryapsizmi?",
+        "ru": "Может быть, вы ищете одно из этих?",
     },
     "search_item": {
         "uz": "{i}. <b>{name}</b> — {price} so'm/{unit}\n",
@@ -2455,6 +2502,19 @@ def reorder_categories(ordered_keys: list[str]) -> None:
     new order to actually show up everywhere."""
     known = set(CATEGORIES)
     CATEGORIES[:] = [k for k in ordered_keys if k in known] + [k for k in CATEGORIES if k not in ordered_keys]
+
+
+def keep_only_categories(active_keys: list[str]) -> None:
+    """Faqat bazadagi faol bo'limlar qoladi (yashirilgan/o'chirilgani —
+    boshlang'ich ro'yxatdagisi ham — bot va sayt tugmalaridan chiqadi).
+    Tartib — active_keys tartibi. Nomlar TEXTS da qoladi: eski buyurtma
+    yoki xabar o'sha bo'limni nomi bilan ko'rsata oladi."""
+    CATEGORIES[:] = list(dict.fromkeys(active_keys))
+
+
+def unregister_category(key: str) -> None:
+    if key in CATEGORIES:
+        CATEGORIES.remove(key)
 
 
 def get_unit_name(unit_key: str, lang: str) -> str:

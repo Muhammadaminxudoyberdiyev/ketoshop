@@ -1,0 +1,254 @@
+"""Qayta aloqa (comment_followup.py, 2026-11-13): kimga, qachon, nima yoziladi."""
+import os
+import sys
+import unittest
+from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, patch
+
+os.environ.setdefault("DATABASE_URL", "postgresql://ci:ci@localhost:5432/ci")
+os.environ.setdefault("BOT_TOKEN", "123456:CI-TOKEN")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import comment_ai  # noqa: E402
+import comment_followup as cf  # noqa: E402
+import database  # noqa: E402
+import meta_comments as mc  # noqa: E402
+
+NOON = datetime(2026, 11, 13, 12, 0)          # Toshkent vaqti
+NIGHT = datetime(2026, 11, 13, 22, 0)
+
+
+def row(key, cid, text="Narxi qancha?", parent=None):
+    return {"id": key, "comment_id": cid, "parent_id": parent, "platform": "ig", "media_id": "M1",
+            "username": f"user{key}", "text": text, "reply_text": "135 000 so'm",
+            "created_at": datetime.utcnow() - timedelta(days=40), "status": "answered"}
+
+
+class SendOneTest(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.state = {"followup_on": True, "kb": {}}
+        self.stats = {"today": 0, "total": 0, "skipped": 0, "queue": 2, "last": []}
+        self.candidates = [row(1, "c1"), row(2, "c2")]
+        self.marked, self.sent = [], []
+        self.texts = {}
+
+        async def mark(key, text):
+            self.marked.append((key, text))
+
+        async def reply_public(session, ident, c, text):
+            if c["comment_id"] in getattr(self, "broken", ()):
+                raise mc.GraphError(100, "comment gone")
+            self.sent.append((c["comment_id"], text))
+            return "r1"
+
+        async def compose(r, kb=None, extra=None):
+            return self.texts.get(r["comment_id"])
+
+        for p in [
+            patch.object(database, "get_meta_comments_state", AsyncMock(side_effect=lambda: dict(self.state))),
+            patch.object(database, "meta_comment_followup_stats", AsyncMock(side_effect=lambda d: self.stats)),
+            patch.object(database, "meta_comment_followup_candidates",
+                         AsyncMock(side_effect=lambda d, n: self.candidates[:n])),
+            patch.object(database, "mark_meta_comment_followup", mark),
+            patch.object(mc, "load_token", AsyncMock()), patch.object(mc, "token", lambda: "T"),
+            patch.object(mc, "identity", AsyncMock(return_value={"page_token": "T"})),
+            patch.object(mc, "reply_public", reply_public),
+            patch.object(cf, "compose", compose),
+            patch.object(cf, "new_products_text", AsyncMock(return_value="")),
+            patch.object(cf, "offers_text", AsyncMock(return_value="")),
+        ]:
+            p.start()
+            self.addCleanup(p.stop)
+
+    async def test_sends_one_reply_under_the_old_comment(self):
+        self.texts = {"c1": "Agar olgan bo'lsangiz, qanday chiqdi? Retseptlar @ketoshopbot da 🌿"}
+        self.assertEqual(await cf.send_one(None, NOON), "sent")
+        self.assertEqual(self.sent, [("c1", self.texts["c1"])])
+        self.assertEqual(self.marked, [(1, self.texts["c1"])])
+
+    async def test_ai_declines_then_the_next_person_gets_it(self):
+        self.texts = {"c2": "Ko'rdingizmi? Yangi mahsulotlarimiz bor 🌿"}
+        self.assertEqual(await cf.send_one(None, NOON), "sent")
+        self.assertEqual(self.sent, [("c2", self.texts["c2"])])
+        self.assertEqual(self.marked, [(1, ""), (2, self.texts["c2"])])   # c1 never picked again
+
+    async def test_deleted_comment_is_marked_and_skipped(self):
+        self.texts = {"c1": "Salom 🌿", "c2": "Salom 🌿"}
+        self.broken = {"c1"}
+        self.assertEqual(await cf.send_one(None, NOON), "sent")
+        self.assertEqual(self.marked, [(1, ""), (2, "Salom 🌿")])
+
+    async def test_cap_off_and_no_token_send_nothing(self):
+        self.texts = {"c1": "Salom 🌿"}
+        self.stats["today"] = cf.DAILY
+        self.assertEqual(await cf.send_one(None, NOON), "cap")
+        self.stats["today"] = 0
+        self.state["followup_on"] = False
+        self.assertEqual(await cf.send_one(None, NOON), "off")
+        self.state["followup_on"] = True
+        with patch.object(mc, "token", lambda: ""):
+            self.assertEqual(await cf.send_one(None, NOON), "no_token")
+        self.assertEqual((self.sent, self.marked), ([], []))
+
+    async def test_quiet_at_night(self):
+        # Egasi, 2026-11-16: "instagram bloklash xavfiga yaqinlashmasin" — tunda ommaviy javob yo'q.
+        self.texts = {"c1": "Salom 🌿"}
+        self.assertEqual(await cf.send_one(None, datetime(2026, 11, 16, 23, 30)), "quiet")
+        self.assertEqual(await cf.send_one(None, NOON), "sent")
+
+    async def test_send_all_goes_through_the_whole_queue(self):
+        self.candidates = [row(i, f"c{i}") for i in range(1, 6)]
+        self.texts = {f"c{i}": "Salom 🌿" for i in range(1, 6)}
+
+        async def candidates(days, n):
+            return [r for r in self.candidates if r["id"] not in {k for k, _ in self.marked}][:n]
+
+        with patch.object(database, "meta_comment_followup_candidates", AsyncMock(side_effect=candidates)), \
+                patch.object(cf, "GAP", 0), patch.object(cf, "GAP_MAX", 0):
+            stats = await cf.send_all(None, NOON)
+        self.assertEqual(stats["sent"], 5)
+        self.assertEqual(stats["stop"], "none")
+        self.assertEqual([c for c, _ in self.sent], ["c1", "c2", "c3", "c4", "c5"])
+
+    async def test_instagram_limit_stops_without_burning_the_queue(self):
+        self.candidates = [row(1, "c1"), row(2, "c2")]
+        self.texts = {"c1": "Salom 🌿", "c2": "Salom 🌿"}
+
+        async def limited(session, ident, c, text):
+            raise mc.GraphError(4, "Application request limit reached")
+
+        with patch.object(mc, "reply_public", limited), patch.object(cf, "GAP", 0), patch.object(cf, "GAP_MAX", 0):
+            stats = await cf.send_all(None, NOON)
+        self.assertEqual(stats["stop"], "throttled")
+        self.assertEqual(self.marked, [])                       # nobody marked — they wait for the next round
+        self.assertTrue(cf.throttled(mc.GraphError(368, "temporarily blocked for spam")))
+        self.assertFalse(cf.throttled(mc.GraphError(100, "Unsupported post request")))
+
+    async def test_empty_queue(self):
+        self.candidates = []
+        self.assertEqual(await cf.send_one(None, NOON), "none")
+
+
+class PaceTest(unittest.TestCase):
+    def test_everyone_waiting_but_at_a_human_pace(self):
+        # Egasi, 2026-11-16: "har 10 daqiqada yozilmagan hammasiga yoz" + "bloklash xavfiga yaqinlashmasin".
+        self.assertEqual(cf.EVERY, 600)
+        self.assertGreaterEqual(cf.GAP, 90)                             # ≤ ~40 replies an hour
+        self.assertGreater(cf.GAP_MAX, cf.GAP)                          # random, not a machine rhythm
+        self.assertLessEqual(cf.DAILY, 200)
+        self.assertEqual(cf.HOURS, (8, 23))
+
+    def test_resumes_by_itself_after_an_instagram_block(self):
+        # Egasi, 2026-11-16: "to'xtab qolsa avtomatik davom etishi kerak ochilgandan keyin".
+        self.assertEqual(cf.next_wait(0), cf.EVERY)                    # normal: every 10 minutes
+        self.assertEqual([cf.next_wait(n) for n in (1, 2, 3)], [1200, 2400, 4800])
+        self.assertEqual(cf.next_wait(10), cf.MAX_BACKOFF)             # never longer than 2 hours
+
+    def test_admin_api_shows_the_progress(self):
+        src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "admin_web.py"),
+                   encoding="utf-8").read()
+        self.assertIn('"followup": followup', src)
+
+
+class ComposeTest(unittest.IsolatedAsyncioTestCase):
+    async def test_ai_gets_the_old_comment_post_and_new_products(self):
+        seen = {}
+
+        async def ask(key, model, instructions, user, effort, image=None, schema=None):
+            seen.update(instructions=instructions, user=user, image=image, schema=schema)
+            return {"reply": "Assalomu alaykum! Kepakli un hozir ham bizda bor 🌾 Agar olgan bo'lsangiz, "
+                             "nima pishirdingiz? Retseptlar @ketoshopbot da.", "skip": False}
+
+        with patch.object(comment_ai, "provider", AsyncMock(return_value="openai")), \
+                patch.object(comment_ai, "_openai_key", AsyncMock(return_value="k")), \
+                patch.object(comment_ai, "catalog_text", AsyncMock(return_value="- Kepakli bug'doy uni — 10 000 so'm")), \
+                patch.object(comment_ai, "_ask_openai", ask), \
+                patch.object(mc, "post_context", AsyncMock(return_value=("Kepak reel", "https://img/1.jpg"))):
+            text = await cf.compose(row(1, "c1"), {}, ("- Bodom uni — 90 000 so'm", "- 2 ta un → 1 sovg'a"))
+        self.assertIn("@ketoshopbot", text)
+        self.assertIs(seen["schema"], comment_ai.FOLLOWUP_SCHEMA)
+        self.assertEqual(seen["image"], "https://img/1.jpg")
+        self.assertIn("ESKI IZOH:\nNarxi qancha?", seen["user"])
+        self.assertIn("Kepak reel", seen["user"])
+        self.assertIn("Bodom uni", seen["instructions"])
+        self.assertIn("2 ta un", seen["instructions"])
+
+    async def test_skip_means_no_text(self):
+        with patch.object(comment_ai, "provider", AsyncMock(return_value="openai")), \
+                patch.object(comment_ai, "_openai_key", AsyncMock(return_value="k")), \
+                patch.object(comment_ai, "catalog_text", AsyncMock(return_value="")), \
+                patch.object(comment_ai, "_ask_openai", AsyncMock(return_value={"reply": "", "skip": True})), \
+                patch.object(mc, "post_context", AsyncMock(return_value=("", ""))):
+            self.assertIsNone(await cf.compose(row(1, "c1"), {}, ("", "")))
+
+    async def test_no_gpt_no_followup(self):
+        with patch.object(comment_ai, "provider", AsyncMock(return_value="anthropic")), \
+                patch.object(mc, "post_context", AsyncMock(return_value=("", ""))):
+            self.assertIsNone(await cf.compose(row(1, "c1"), {}, ("", "")))
+
+
+class RulesTest(unittest.TestCase):
+    def test_no_manipulation_and_bot_for_recipes(self):
+        rules = comment_ai.FOLLOWUP_RULES
+        for phrase in ("Shoshiltirma", "faqat bugun", "buyurma", "Boshqa chegirma o'ylab topma",
+                       "@ketoshopbot", "Agar olgan bo'lsangiz", "skip=true", "\"biz\""):
+            self.assertIn(phrase, rules)
+
+    def test_free_recipes_cta_names_the_bot_and_the_channel(self):
+        # Egasi, 2026-11-13: "mos holatlarda botimiz va kanalimiz orqali bepul
+        # retseptlarni joylab boryapmiz deb cta qil".
+        for rules in (comment_ai.RULES, comment_ai.FOLLOWUP_RULES):
+            self.assertIn("bepul retseptlarni", rules.lower())
+            self.assertIn("@ketoshopbot", rules)
+            self.assertIn("@ketoshop_uz", rules)
+            self.assertNotIn("{kanal}", rules)
+        self.assertIn("Shikoyat, sog'liq, manzil, yetkazish va spamda qo'shma", comment_ai.RULES)
+
+    def test_iltimos_only_where_natural(self):
+        # Egasi, 2026-11-13: "iltimos deyilmaydigan joylarda iltimos deb notabiiy yozyapsan".
+        f = comment_ai.finalize
+        self.assertTrue(f("@ketoshop.uz рахмат", "Илтимос 🤍 Раҳмат сизга!").startswith("Арзимайди 🤍"))
+        self.assertTrue(f("Rahmat", "Iltimos! Sizga ham rahmat 🙂").startswith("Arzimaydi."))
+        self.assertIn("Agar xohlasangiz, botga", f("Narxi?", "Iltimos, agar xohlasangiz, botga kiring."))
+        self.assertIn("Iltimos, bizga Direct", f("Kelmadi", "Kechirasiz 😕 Iltimos, bizga Direct'ga yozing."))
+        self.assertEqual(f("Rahmat", "Iltimos Direct'ga yozing"), "Iltimos Direct'ga yozing")   # not a "you're welcome"
+        self.assertIn("faqat odamdan aniq bir ish so'raganda", comment_ai.RULES)
+
+    def test_bot_and_channel_are_said_to_be_on_telegram(self):
+        # Egasi, 2026-11-13: "ketoshopbot bu telegramda … telegramda ekanini aytib o't".
+        f = comment_ai.finalize
+        self.assertEqual(f("Narxi?", "Narxlar @ketoshopbot da 🌿"), "Narxlar Telegram'dagi @ketoshopbot da 🌿")
+        self.assertEqual(f("Нархи", "Нархлар @ketoshopbot да"), "Нархлар Телеграмдаги @ketoshopbot да")
+        self.assertIn("@ketoshopbot (Telegram)", f("Сколько?", "Цены в боте @ketoshopbot, пишите"))
+        self.assertEqual(f("Narxi?", "Telegram botimiz @ketoshopbot da"), "Telegram botimiz @ketoshopbot da")
+        self.assertIn("Telegram'dagi @ketoshop_uz", f("Rahmat", "Retseptlar @ketoshop_uz kanalimizda"))
+        for rules in (comment_ai.RULES, comment_ai.FOLLOWUP_RULES):
+            self.assertIn("Telegram botimiz @ketoshopbot", rules)
+
+    def test_direct_in_cyrillic(self):
+        out = comment_ai.finalize("Тел номер беринг", "Agar xohlasangiz, Direct'ga ham yo'llab qo'yamiz 🙂")
+        self.assertIn("Директга", out)
+        self.assertNotIn("c", out.replace("@", ""))
+
+    def test_admin_menu_has_the_command(self):
+        import keyboards
+        self.assertIn("izoh_qayta", str(keyboards.__dict__))
+
+
+class NewProductsTest(unittest.IsolatedAsyncioTestCase):
+    async def test_only_recent_in_stock_retail(self):
+        now = datetime.utcnow()
+        products = [
+            {"name": "Bodom uni", "created_at": now - timedelta(days=5), "quantity": 3, "price": 90000},
+            {"name": "Eski un", "created_at": now - timedelta(days=200), "quantity": 3, "price": 10000},
+            {"name": "Tugagan", "created_at": now - timedelta(days=2), "quantity": 0, "price": 10000},
+            {"name": "Optom", "created_at": now - timedelta(days=2), "quantity": 9, "price": 10000, "b2b_only": 1},
+        ]
+        with patch.object(database, "admin_list_products", AsyncMock(return_value=products)), \
+                patch("manual_order.shelf_price", lambda p: p["price"]):
+            text = await cf.new_products_text()
+        self.assertEqual(text, "- Bodom uni — 90 000 so'm")
+
+
+if __name__ == "__main__":
+    unittest.main()

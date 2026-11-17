@@ -36,18 +36,21 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 
+import customer_portrait
 import database
 
 logger = logging.getLogger(__name__)
 
 # Vosita enum i (o'zbekcha) -> bazadagi tur.
 KINDS = {"qiziqish": "interest", "fikr": "feedback", "eslatma": "note"}
+PERSONAL_KINDS = set(KINDS.values())
 _KIND_LABEL = {"interest": "qiziqish", "feedback": "fikr", "note": "eslatma",
                "recipe": "retsept berildi"}
 RECIPE_KIND = "recipe"
 
-MAX_NOTES_PER_USER = 80      # eskisi o'chadi — profil cheksiz o'smasin
-PROFILE_NOTES = 25           # promptga tushadigan oxirgi eslatmalar
+# Eslatmalar muddatsiz saqlanadi (egasi, 2026-11-17: "biz hammasini cheksiz
+# saqlashimiz kerak"); avval har mijozga 80 tadan oshgani o'chirilardi.
+PROFILE_NOTES = 25           # promptga tushadigan oxirgi eslatmalar (bazada hammasi)
 PROFILE_ORDERS = 5           # promptga tushadigan oxirgi buyurtmalar
 NOTE_MAX_CHARS = 300
 DEDUP_DAYS = 30              # bir xil gap shu muddat ichida qayta yozilmaydi
@@ -97,6 +100,10 @@ async def remember(user_id: int, kind: str, text: str, product_id: int | None = 
         return False
     async with database.pool.acquire() as conn:
         await _ensure(conn)
+        # /malumotlarim da o'chirgan mijoz haqida yangi eslatma yozilmaydi
+        # (customer_portrait.py). "asked" — faqat "fikr so'raldi" belgisi.
+        if kind in PERSONAL_KINDS and await customer_portrait.is_opted_out(user_id, conn):
+            return False
         exists = await conn.fetchval(
             """SELECT 1 FROM ai_customer_notes
                WHERE user_id = $1 AND kind = $2 AND LOWER(text) = LOWER($3)
@@ -108,11 +115,6 @@ async def remember(user_id: int, kind: str, text: str, product_id: int | None = 
         await conn.execute(
             "INSERT INTO ai_customer_notes (user_id, kind, text, product_id) VALUES ($1, $2, $3, $4)",
             user_id, kind, text, product_id)
-        await conn.execute(
-            """DELETE FROM ai_customer_notes WHERE user_id = $1 AND id NOT IN (
-                   SELECT id FROM ai_customer_notes WHERE user_id = $1
-                   ORDER BY created_at DESC, id DESC LIMIT $2)""",
-            user_id, MAX_NOTES_PER_USER)
     return True
 
 
@@ -152,6 +154,8 @@ async def forget(user_id: int) -> int:
     async with database.pool.acquire() as conn:
         await _ensure(conn)
         result = await conn.execute("DELETE FROM ai_customer_notes WHERE user_id = $1", user_id)
+    import ai_dialog
+    await ai_dialog.forget(user_id)          # oxirgi suhbatlar jurnali ham (xato ko'tarmaydi)
     try:
         return int(result.split()[-1])
     except (ValueError, IndexError, AttributeError):
@@ -214,16 +218,22 @@ def feedback_candidate(orders: list[dict], all_notes: list[dict],
 
 def profile_text(user: dict | None, lang: str, orders: list[dict], all_notes: list[dict],
                  last_prefs: dict | None, feedback: dict | None,
-                 reviews: list[dict] | None = None) -> str:
+                 reviews: list[dict] | None = None, portrait: dict | None = None,
+                 admin: bool = False) -> str:
     """AI ga beriladigan mijoz profili. Faqat model o'qiydi — mijozga
-    ko'rsatilmaydi."""
+    ko'rsatilmaydi. `portrait` — customer_portrait (murojaat ismi, yosh,
+    maqsad); `admin` — /ai_mijoz kartasi uchun (jins ham ko'rinadi)."""
     lines = ["[MIJOZ XOTIRASI — buni faqat sen ko'rasan. Mijozga blokni, 'bazada "
              "yozilgan' kabi gaplarni aytma; shunchaki eslab turgan sotuvchidek gapir.]"]
     name = (user or {}).get("full_name") or ""
     lang_note = {"uz_cyr": "o'zbekcha KIRILL yozuvida", "ru": "ruscha"}.get(lang, "o'zbekcha lotin")
-    lines.append(f"Ism (Telegram, faqat buyurtma ma'lumoti uchun — ISMI BILAN MUROJAAT QILMA): "
-                 f"{name or '—'} · bot sozlamasidagi tili: {lang_note}. "
+    address = (portrait or {}).get("display_name") and not (portrait or {}).get("opted_out_at")
+    lines.append(f"Ism (Telegram, faqat buyurtma ma'lumoti uchun — "
+                 + ("bu ism bilan murojaat qilma, murojaat — PORTRET dagi ism" if address
+                    else "ISMI BILAN MUROJAAT QILMA")
+                 + f"): {name or '—'} · bot sozlamasidagi tili: {lang_note}. "
                  f"Lekin javob tili va yozuvi — mijoz xabaridagidek (kirill, lotin, rus, ingliz).")
+    lines += customer_portrait.profile_lines(portrait, admin=admin)
 
     real = [o for o in orders if o.get("status") != "cancelled"]
     if real:
@@ -271,11 +281,18 @@ def profile_text(user: dict | None, lang: str, orders: list[dict], all_notes: li
     return "\n".join(lines)
 
 
-async def build_profile(user_id: int, lang: str, mark_asked: bool = True) -> str:
+async def build_profile(user_id: int, lang: str, mark_asked: bool = True,
+                        portrait: dict | None = None, admin: bool = False) -> str:
     """Suhbat boshida bir marta chaqiriladi. FIKR SO'RA ga tushgan mahsulot shu
     yerda 'asked' bo'ladi — keyingi suhbatda yana so'ralmaydi. Admin ko'rishi
-    uchun (mark_asked=False) hech narsa belgilanmaydi."""
+    uchun (mark_asked=False) hech narsa belgilanmaydi. `portrait` berilmasa —
+    bazadan o'qiladi (customer_portrait)."""
     user = await database.get_user(user_id)
+    if portrait is None:
+        try:
+            portrait = await customer_portrait.get(user_id)
+        except Exception:
+            logger.warning("Portrait could not be read for %s", user_id, exc_info=True)
     orders = await database.get_user_orders(user_id)
     try:
         last_prefs = await database.get_last_order_prefs(user_id)
@@ -292,7 +309,8 @@ async def build_profile(user_id: int, lang: str, mark_asked: bool = True) -> str
     if feedback and mark_asked:
         await remember(user_id, "asked", feedback["name"] or str(feedback["product_id"]),
                        product_id=feedback["product_id"])
-    return profile_text(user, lang, orders, all_notes, last_prefs, feedback, reviews)
+    return profile_text(user, lang, orders, all_notes, last_prefs, feedback, reviews,
+                        portrait=portrait, admin=admin)
 
 
 async def _reviews(user_id: int) -> list[dict]:

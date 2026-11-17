@@ -87,8 +87,10 @@ class SendTest(unittest.TestCase):
         with patch.object(wr, "_pop_pending", AsyncMock(side_effect=RuntimeError("db"))):
             self.assertFalse(run(wr.maybe_send(AsyncMock(), 9, "uz")))
 
-    def test_every_recipe_has_its_photo(self):
-        for r in RECIPES:
+    def test_every_recipe_already_out_has_its_photo(self):
+        # The welcome recipe is today's (recipes.schedule), and the schedule
+        # never picks a recipe without its photo (test_recipe_queue).
+        for r in RECIPES[:recipes.LEGACY_COUNT]:
             self.assertTrue((wr.PHOTO_DIR / f"{r['slug']}.jpg").exists(), r["slug"])
 
 

@@ -41,8 +41,11 @@ from handlers.courier import router as courier_router
 from bloggers import router as bloggers_router
 from meta_leads import router as meta_leads_router
 from meta_ads import router as meta_ads_router
+from ad_campaigns import router as ad_campaigns_router
+from admin_ads_menu import router as admin_ads_menu_router
 from ads_impact import router as ads_impact_router
 from ad_sources import router as ad_sources_router
+from shop_links import router as shop_links_router
 from ai_sales import router as ai_sales_router
 from abandoned_cart import router as abandoned_cart_router
 from daily_quiz import router as daily_quiz_router
@@ -63,6 +66,7 @@ from retention_stats import router as retention_stats_router
 from review_stats import router as review_stats_router
 from jar_stats import router as jar_stats_router
 from sinov_buyurtma import router as sinov_buyurtma_router
+from customer_portrait import router as customer_portrait_router
 
 from webapp_server import create_webapp
 
@@ -242,8 +246,28 @@ async def main():
     # ⚖️ Yurist-agent: every message in its group topic is a question (yurist.py).
     from yurist import router as yurist_router
     dp.include_router(yurist_router)
+    # 💬 Instagram/Facebook izohlari: admin kartochkaga reply qilsa — izohga
+    # javob. Filtri faqat izoh kartochkasiga reply'ni ushlaydi, shuning uchun
+    # erta turadi (admin boshqa FSM holatida bo'lsa ham javob ketadi).
+    from meta_comments import router as meta_comments_router
+    dp.include_router(meta_comments_router)
+    from channel_voice import router as channel_voice_router
+    dp.include_router(channel_voice_router)
+    from comment_followup import router as comment_followup_router
+    dp.include_router(comment_followup_router)
+    # 📩 Instagram Direct AI javoblari: /ig_direct (holat, on/off, test).
+    from ig_direct import router as ig_direct_router
+    dp.include_router(ig_direct_router)
+    from push_cap import router as push_cap_router
+    dp.include_router(push_cap_router)
+    from feedback_ask import router as feedback_ask_router
+    dp.include_router(feedback_ask_router)
+    from gemini_compare import router as gemini_compare_router
+    dp.include_router(gemini_compare_router)
     dp.include_router(webapp_data_router)
     dp.include_router(start_router)
+    # 🔐 /malumotlarim — mijoz o'zi haqida saqlanganini ko'radi va o'chiradi.
+    dp.include_router(customer_portrait_router)
     dp.include_router(onboarding_video_router)
     dp.include_router(welcome_recipe_router)
     dp.include_router(broadcast_admin_router)
@@ -265,9 +289,15 @@ async def main():
     # brauzerdagi FB profiliga bog'liq; bu esa token bilan ishlaydi,
     # shuning uchun statistika har doim qo'l ostida bo'ladi.
     dp.include_router(meta_ads_router)
+    # /reklama_bog — Meta kampaniyasi ↔ bot start kodi (ad_campaigns.py).
+    dp.include_router(ad_campaigns_router)
+    # Admin panel → «📣 Reklama va havolalar» buttons (admin_ads_menu.py).
+    dp.include_router(admin_ads_menu_router)
     # /reklama ichidagi 🎬 Videolar / 📦 Mahsulotlar / 📈 Bog'liqlik tugmalari.
     dp.include_router(ads_impact_router)
     dp.include_router(ad_sources_router)
+    # /sayt_havola, /sayt_havolalar — tracked Mini App links (shop_links.py).
+    dp.include_router(shop_links_router)
     dp.include_router(referral_stats_router)
     dp.include_router(referral_program_router)
     dp.include_router(retention_stats_router)
@@ -343,6 +373,27 @@ async def main():
     from meta_ads import scheduler_loop as meta_ads_scheduler_loop
     meta_ads_task = asyncio.create_task(meta_ads_scheduler_loop(bot))
 
+    # Instagram/Facebook izohlari: reklama nusxalari va postlar tekshiruvi
+    # (webhook sozlanmagan bo'lsa ham) — /izoh_token berilmaguncha jim.
+    from meta_comments import scheduler_loop as meta_comments_loop
+    asyncio.create_task(meta_comments_loop(bot))
+    # 💸 AI sarfi adminlarga: 09–21 da har 3 soatda, izohlar sarfi alohida.
+    from meta_comments import spend_loop as ai_spend_loop
+    asyncio.create_task(ai_spend_loop(bot))
+    # 📌 Tasdiqlanmagan buyurtmalar adminlarda pin; tasdiqlangani olinadi.
+    from order_pins import loop as order_pins_loop
+    asyncio.create_task(order_pins_loop(bot))
+    # 🔁 Bir oy oldin izoh qoldirganlarga qayta, samimiy yozish (kuniga 25 tagacha).
+    from comment_followup import loop as comment_followup_loop
+    asyncio.create_task(comment_followup_loop(bot))
+    # 📩 Instagram Direct: har daqiqada suhbatlar, javobsiz xabarga AI javob
+    # (24 soat ichida); izohlar tokeni bo'lmasa jim. /ig_direct off — to'xtatish.
+    from ig_direct import loop as ig_direct_loop
+    asyncio.create_task(ig_direct_loop(bot))
+    # 🗣 2 kunda bir AI xaridorlardan oldingi mahsuloti haqida qisqa fikr so'raydi.
+    from feedback_ask import scheduler_loop as feedback_ask_loop
+    asyncio.create_task(feedback_ask_loop(bot))
+
     # Aksiya / Bonus — closes a campaign out the moment its window ends (so
     # bonuses stop being granted without anyone touching the admin panel) and
     # keeps the shared campaign cache warm. No-op tick when nothing is running.
@@ -396,6 +447,9 @@ async def main():
     # One-off stock corrections (stock_corrections.py) — each applied once.
     from stock_corrections import run_once as stock_corrections_once
     asyncio.create_task(stock_corrections_once(bot))
+    # One-off category name fixes (category_corrections.py) — each applied once.
+    from category_corrections import run_once as category_corrections_once
+    asyncio.create_task(category_corrections_once())
 
     # Qayta sotuv — one personal message a week at most: "tugab qolmadimi?",
     # 2nd-order gift, win-back. Daily at 09:30, see retention.py.
@@ -483,6 +537,10 @@ async def main():
     # AI sotuvchi: har kuni 23:58 da adminlarga o'sha kungi token va $ sarfi.
     from ai_sales import usage_report_loop as ai_usage_report_loop
     ai_usage_report_task = asyncio.create_task(ai_usage_report_loop(bot))
+    # 🧑‍🤝‍🧑 Mijoz portreti: har kuni 23:30 da adminlarga qaysi ma'lumot nechta
+    # mijozdan yig'ilgani (customer_portrait.py). PORTRAIT_REPORT=0 — o'chiq.
+    from customer_portrait import report_loop as portrait_report_loop
+    portrait_report_task = asyncio.create_task(portrait_report_loop(bot))
 
     # One-off channel post: the all-time top 20 (owner, 2026-10-04), sent
     # once right after this deploy — see top20_post.py.
@@ -524,6 +582,7 @@ async def main():
         release_notes_task.cancel()
         jar_stats_task.cancel()
         ai_usage_report_task.cancel()
+        portrait_report_task.cancel()
         meta_leads_task.cancel()
         meta_ads_task.cancel()
         if runner:

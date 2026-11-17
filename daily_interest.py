@@ -188,6 +188,11 @@ async def send_batch(bot: Bot, only_user: int | None = None) -> tuple[int, int, 
                 skipped += 1
                 continue
             text += await bot_discount.footer(lang)
+            if only_user is None:
+                import push_cap
+                if not await push_cap.claim(uid, "qiziqish"):
+                    skipped += 1
+                    continue
             try:
                 await bot.send_message(uid, text, parse_mode=ParseMode.HTML,
                                         disable_web_page_preview=True, reply_markup=keyboard)

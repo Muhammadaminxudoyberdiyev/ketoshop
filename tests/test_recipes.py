@@ -73,7 +73,9 @@ class ScheduleTest(unittest.TestCase):
         self.assertIsNotNone(recipes.find(RECIPES[0]["slug"], recipes.START + timedelta(days=4)))
 
     def test_cycles_after_the_library_runs_out(self):
-        n = len(RECIPES)
+        # The first 15 ran out on 05.11 and cycled until the photo-gated
+        # queue (test_recipe_queue.py) took over on 15.11.
+        n = recipes.LEGACY_COUNT
         current, earlier, _ = recipes.schedule(recipes.START + timedelta(days=2 * n))
         self.assertEqual(current["slug"], RECIPES[0]["slug"])
         self.assertEqual(len(earlier), n - 1)
@@ -86,14 +88,17 @@ class ContentTest(unittest.TestCase):
     def test_every_recipe_is_complete(self):
         for r in RECIPES:
             with self.subTest(r["slug"]):
-                self.assertTrue((ROOT / "webapp" / "recipes" / f"{r['slug']}.jpg").exists())
+                if r in RECIPES[:recipes.LEGACY_COUNT]:      # out already; newer ones wait for theirs
+                    self.assertTrue((ROOT / "webapp" / "recipes" / f"{r['slug']}.jpg").exists())
                 for key in ("title", "intro", "servings", "tip"):
                     self.assertTrue(r[key]["uz"] and r[key]["ru"])
                 self.assertGreaterEqual(len(r["steps"]), 5)
                 self.assertTrue(any(i.get("match") for i in r["ingredients"]))
 
     def test_every_shop_ingredient_finds_a_product(self):
-        for r in RECIPES:
+        # This catalog is the one the first 15 were written against; all 30
+        # are checked against the whole active catalog in test_recipe_queue.
+        for r in RECIPES[:recipes.LEGACY_COUNT]:
             for item in r["ingredients"]:
                 if item.get("match"):
                     with self.subTest(r["slug"], item=item["name"]["uz"]):

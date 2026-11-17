@@ -348,6 +348,41 @@ async def keto_off(message: Message):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Saytda faol vaqt uchun Keto (site_time.py, 2026-11-15)
+#   /sayt_keto     — holat, pog'onalar, nechta odam, shubhali sessiyalar
+#   /sayt_keto_on  — yoqish (sukut bo'yicha yoqilgan)
+#   /sayt_keto_off — faqat shu qismni to'xtatish (/keto_off hammasini)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.message(Command("sayt_keto"))
+async def sayt_keto(message: Message):
+    import site_time
+    state = await database.get_gamification_state()
+    stats = await database.get_site_time_stats()
+    await message.answer(
+        site_time.admin_status_text(bool(state.get("site_time_enabled", True)),
+                                    bool(state["enabled"]), stats),
+        parse_mode=ParseMode.HTML,
+    )
+
+
+@router.message(Command("sayt_keto_on"))
+async def sayt_keto_on(message: Message):
+    await database.set_site_time_enabled(True)
+    await message.answer("🟢 Saytda faol vaqt uchun Keto <b>yoqildi</b>.", parse_mode=ParseMode.HTML)
+
+
+@router.message(Command("sayt_keto_off"))
+async def sayt_keto_off(message: Message):
+    await database.set_site_time_enabled(False)
+    await message.answer(
+        "🔴 Saytda faol vaqt uchun Keto <b>to'xtatildi</b>. Vaqt hisoblanmaydi, sovg'a "
+        "berilmaydi (oldin berilganlar saqlanib qoladi).",
+        parse_mode=ParseMode.HTML,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Kunlik qiziqish eslatmasi (daily_interest.py)
 #   /qiziqish_status — holat, oluvchilar soni, jadval
 #   /qiziqish_on     — yoqish
@@ -440,6 +475,12 @@ async def kun_status(message: Message):
     last_str = last.strftime("%d.%m.%Y") if last else "— (hali yo'q)"
     product, cycle = await product_of_day.pick_product()
     keyingi = f"{product.get('name')} (#{product['id']})" if product else "— (zaxirada mahsulot yo'q)"
+    if product and not product.get("in_channel"):
+        keyingi += " 🆕"
+    gap = await database.get_product_of_day_channel_gap()
+    yangilar = f"📣 Kanalga hali chiqmagan: <b>{gap['in_stock']}</b> ta — navbatda birinchi"
+    if gap["out_of_stock"]:
+        yangilar += f" (yana {gap['out_of_stock']} tasi zaxira kelganda)"
 
     history = await database.get_product_of_day_history(7)
     tarix = "\n".join(
@@ -454,6 +495,7 @@ async def kun_status(message: Message):
         f"Vaqt: har kuni <b>{product_of_day.SEND_HOUR:02d}:00</b> (Toshkent)\n"
         f"Oxirgi yuborilgan kun: {last_str}\n"
         f"Navbatdagi mahsulot: <b>{keyingi}</b>\n"
+        f"{yangilar}\n"
         f"Aylanma: {cycle + 1}-doira\n\n"
         f"<b>Oxirgi kunlar:</b>\n{tarix}",
         parse_mode=ParseMode.HTML,

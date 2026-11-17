@@ -1365,6 +1365,18 @@ _CARD_EXTRAS: dict[tuple[int, int], list[int]] = {}
 _CARD_EXTRAS_MAX = 500
 
 
+async def _is_order_card(message, order_id: int) -> bool:
+    chat = getattr(message, "chat", None)
+    message_id = getattr(message, "message_id", None)
+    if chat is None or not isinstance(message_id, int):
+        return False
+    try:
+        import database
+        return await database.order_card_order(chat.id, message_id) == order_id
+    except Exception:
+        return False
+
+
 async def drop_card_extras(message) -> None:
     """Delete the pin/cheque sent under the order card `message` (if any)."""
     if message is None or getattr(message, "chat", None) is None:
@@ -1608,7 +1620,7 @@ async def render_order_card(callback: CallbackQuery, order_id: int, ret: str = "
 
     is_admin = callback.from_user.id in ADMIN_IDS
     kb = seller_order_keyboard(lang, order_id, order["status"], is_admin=is_admin,
-                               ret=ret, notify=notify)
+                               ret=ret, notify=notify, source=order.get("source"))
     # Pin/cheque from an earlier draw of this same card go; fresh ones follow.
     await drop_card_extras(callback.message)
     # Never bare-edit a photo/cheque message into text — send the card instead.
@@ -1826,6 +1838,13 @@ async def handle_order_action(callback: CallbackQuery, bot: Bot):
 
     # The card (or list row) is left behind either way — its pin/cheque go too.
     await drop_card_extras(callback.message)
+
+    # The order's own card in this chat (the new-order notification or a
+    # status card): order_admin_feed edits it to the new status with the next
+    # buttons — it stays the order's one message (owner, 2026-11-13).
+    if list_ctx is None and await _is_order_card(callback.message, order_id):
+        await callback.answer(get_text(msg_key, lang))
+        return
 
     # Came from the admin order list — its quick buttons, or a card opened
     # from it — → refresh that same list (filter+page) in place and surface

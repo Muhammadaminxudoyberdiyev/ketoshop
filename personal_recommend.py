@@ -525,6 +525,11 @@ async def send_personal_batch(bot: Bot, only_user: int | None = None) -> tuple[i
             # CTA under every personal reco — the recipe above is one tap from
             # the products it calls for (owner request 2026-09-17).
             markup = reco_keyboard(lang, orders)
+            if record:
+                import push_cap
+                if not await push_cap.claim(uid, "reco"):
+                    skipped += 1
+                    continue
             try:
                 await bot.send_message(uid, text, parse_mode=ParseMode.HTML, disable_web_page_preview=True,
                                         reply_markup=markup)
@@ -586,6 +591,10 @@ async def send_personal_batch(bot: Bot, only_user: int | None = None) -> tuple[i
                 delivered = False
                 text += await bot_discount.footer(lang)
                 markup = _product_button(product, lang)
+                import push_cap
+                if not await push_cap.claim(uid, "reco"):
+                    skipped += 1
+                    continue
                 try:
                     await bot.send_message(uid, text, parse_mode=ParseMode.HTML, disable_web_page_preview=True,
                                             reply_markup=markup)
