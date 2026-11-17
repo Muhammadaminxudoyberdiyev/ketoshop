@@ -7766,7 +7766,13 @@ function launchFireworks(canvas) {
 // typing introduction plays once per launch of the shop; the conversation is
 // kept on this phone (last MAX_KEEP messages) so reopening shows it.
 const Assistant = (() => {
-  const HIDE_ON = ['cart', 'checkout'];
+  // Only where people browse (owner, 2026-11-17: "o'yinlarda va ko'p joyda
+  // chiqib xalaqit beryapti") — never over games, cart, checkout, the cheque
+  // page, orders, profile or favourites. Scrolling down tucks it away so it
+  // never sits on a product's «+ Savatga»; scrolling up brings it back.
+  const SHOW_ON = ['home', 'catalog'];
+  const TUCK_AFTER = 80, SCROLL_STEP = 12;
+  let tucked = false, lastY = 0, syncedPage = null;
   const MAX_KEEP = 40;
   const INTRO_FIRST = 3500, INTRO_HOLD = 12000, TYPE_MS = 24;
   let started = false, busy = false, history = null, introTimer = null, introToken = 0;
@@ -7936,16 +7942,30 @@ const Assistant = (() => {
   function sync() {
     const fab = $('asst-fab');
     if (!fab || !started) return;
-    const hide = HIDE_ON.includes(activePage) || _isModalOpen('asst-modal');
+    if (syncedPage !== activePage) {          // a new page starts with the button in view
+      syncedPage = activePage;
+      tucked = false;
+      lastY = pageY();
+    }
+    const hide = !SHOW_ON.includes(activePage) || tucked || _isModalOpen('asst-modal');
     fab.classList.toggle('hidden', hide);
     if (hide) hideIntro();
+  }
+
+  function pageY() { return window.scrollY || document.documentElement.scrollTop || 0; }
+  function onScroll() {
+    const y = pageY(), dy = y - lastY;
+    if (Math.abs(dy) < SCROLL_STEP) return;
+    lastY = y;
+    const t = dy > 0 && y > TUCK_AFTER;
+    if (t !== tucked) { tucked = t; sync(); }
   }
 
   async function playIntro() {
     const my = ++introToken;
     const bubble = $('asst-bubble'), out = $('asst-bubble-text');
     for (let i = 0; i < 20 && blocked(); i++) await sleep(1500);   // wait out the gate, party, dock hint, sheets
-    if (my !== introToken || blocked() || HIDE_ON.includes(activePage) || _isModalOpen('asst-modal')) return;
+    if (my !== introToken || blocked() || !SHOW_ON.includes(activePage) || tucked || _isModalOpen('asst-modal')) return;
     trk(() => Trk.ev('assistant', 'intro', null, activePage));
     out.innerHTML = '<span class="asst-typing"><i></i><i></i><i></i></span>';
     bubble.classList.add('on');
@@ -8058,6 +8078,7 @@ const Assistant = (() => {
     applyText();
     wire();
     sync();
+    window.addEventListener('scroll', onScroll, { passive: true });
     let shown = false;
     try { shown = sessionStorage.getItem('ketoshop_asst_intro') === '1'; } catch (_) {}
     if (!shown) {
