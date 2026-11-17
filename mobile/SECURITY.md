@@ -11,13 +11,35 @@ serverda `app_auth.py`.
    hisoblaydi va tekshiradi. Ilova faqat tanlovni yuboradi. Ilovani butunlay
    buzib, o'zgartirgan odam ham boshqaning buyurtmasini ko'ra olmaydi yoki
    narxni o'zgartira olmaydi.
-2. **Kalit telefondan chiqmaydi.** Har bir so'rov Android Keystore ichida
+2. **Kalit telefondan chiqmaydi.** Ilovaning o'z so'rovlari (kirish,
+   sessiya, sayt sessiyasini olish, qurilmalar) Android Keystore ichida
    (TEE) yaratilgan P-256 kalit bilan imzolanadi. Serverda faqat ochiq kalit
-   saqlanadi. Token o'g'irlansa ham (log, zaxira nusxa, tarmoq), boshqa
-   qurilmada ishlamaydi.
+   saqlanadi. Token o'g'irlansa ham boshqa qurilmada ishlamaydi.
 3. **Uchinchi tomon kodi yo'q.** Ilovada birorta tashqi Dart paketi yoki
-   Android plagini yo'q — faqat Flutter SDK va o'zimizning kod. Ta'minot
-   zanjiri hujumi uchun eshik yo'q.
+   Android plagini yo'q — faqat Flutter SDK va o'zimizning kod.
+
+## Do'kon (sayt) ilova ichida
+
+Do'kon — Mini App sahifasining o'zi, native WebView'da (`ShopWebView.kt`):
+
+- **Faqat bizning domen** (`https://keto.standart-eko.uz`) ochiladi; boshqa
+  havolalar tashqi ilovada (Telegram, brauzer) ochiladi; begona sahifa
+  yuklana boshlasa to'xtatiladi. `file://` yo'q, aralash (http) kontent yo'q,
+  uchinchi tomon cookie yo'q, Safe Browsing yoqiq, TLS xatosi hech qachon
+  e'tiborsiz qoldirilmaydi.
+- **Sayt sessiyasi** (`POST /app/v1/web-session`, imzolangan so'rov bilan) —
+  Telegram initData formatida, `ks_sid` bilan. Faqat do'kon `/api/*` i qabul
+  qiladi va har so'rovda sessiya tirikligini tekshiradi: 12 soatdan eski
+  yoki chiqish / «Chiqarib yuborish» qilingan bo'lsa — rad. Kuryer doskasi
+  va admin panel bunday initData'ni umuman qabul qilmaydi.
+- **Telegram skripti o'rniga** ilova o'z `ks_telegram_shim.js` ini beradi —
+  telegram.org'dan kod yuklanmaydi.
+- **Sayt ↔ ilova aloqasi** `prompt('__ks__')` orqali; ilova faqat o'z
+  domenimizdan kelganiga javob beradi. Kanal orqali faqat zararsiz amallar:
+  tebranish, havolani tashqarida ochish (faqat https/tg), joylashuv,
+  sozlamalarni ochish. Kalit yoki token bu kanaldan hech qachon o'tmaydi.
+- Do'kon sahifasida skrinshot mumkin (Telegram'dagidek); kirish kodi va
+  «Ilova va xavfsizlik» ekranlarida — yo'q (FLAG_SECURE).
 
 ## Tahdidlar va to'siqlar
 
@@ -35,11 +57,11 @@ serverda `app_auth.py`.
 | Kirish so'rovlari bilan bazani to'ldirish | IP bo'yicha va umumiy tezlik chegarasi; eski so'rovlar o'chiriladi | `RateLimit` |
 | Boshqa xaridorning savatini o'chirish (IDOR) | `/api/cart/remove` endi savat qatori egasini tekshiradi (avval tekshirmasdi — Mini App uchun ham tuzatildi) | `webapp_server.api_cart_remove` |
 | Telefondagi ma'lumotni o'g'irlash | Tokenlar AES-256-GCM bilan, kaliti Keystore'da; zaxira nusxa va telefondan-telefonga ko'chirish o'chirilgan | `SecureBox.kt`, `data_extraction_rules.xml` |
-| Ekran rasmi / yozib olish, "so'nggi ilovalar" oynasi | Login, checkout, chek, buyurtmalar va profilda FLAG_SECURE | `SecureScreenController` |
+| Ekran rasmi / yozib olish, "so'nggi ilovalar" oynasi | Kirish kodi va «Ilova va xavfsizlik» ekranlarida FLAG_SECURE | `SecureScreenController` |
 | Ilova ustidan yolg'on oyna (tapjacking) | Ustida boshqa ilova chizganda bosishlar qabul qilinmaydi | `MainActivity.onCreate` |
 | Boshqa ilova bizning Activity'ni o'g'irlashi (task hijacking) | `taskAffinity=""`, faqat launcher activity eksport qilingan | `AndroidManifest.xml` |
-| Zararli havola ochish | Faqat `https://` va `tg://`; `intent:`, `file:`, `content:`, `javascript:` yo'q | `MainActivity.openUrl` |
-| Chek o'rnida zararli fayl | Fayl turi birinchi baytlardan aniqlanadi (JPEG/PNG/WEBP/HEIC/PDF), ≤10 MB; serverda ham 10 MB chegarasi | `MainActivity.readCheque`, `app_auth.read_body` |
+| Zararli havola ochish | Faqat `https://` va `tg://`; `intent:`, `file:`, `content:`, `javascript:` yo'q; do'kon WebView'i faqat bizning domenni ko'rsatadi | `MainActivity.openExternal`, `ShopWebView` |
+| Chek o'rnida zararli fayl | Tanlovda faqat rasm va PDF; serverda 10 MB chegarasi va chekni administrator tekshiradi | `MainActivity.pickFileForWeb`, `webapp_server` |
 | APK'ni ochib, o'zgartirib qayta tarqatish | R8 obfuskatsiya + Dart `--obfuscate`; imzo sertifikati tekshiriladi; Frida/Xposed/debugger topilsa ilova ishlamaydi; holat serverga yuboriladi (`APP_REQUIRE_CLEAN=1` bo'lsa server rad etadi) | `Integrity.kt`, `AuthController.bootstrap` |
 | Logga sir tushishi | Release'da `debugPrint` va `android.util.Log` o'chirilgan; native xatolarda xabar matni qaytarilmaydi | `main.dart`, `proguard-rules.pro` |
 

@@ -618,7 +618,68 @@ async def handle_revoke_others(request: web.Request) -> web.Response:
     return _json({"ok": True, "revoked": int(result.split()[-1])})
 
 
+# ───────────────────────────── the shop view ──────────────────────────────
+# The app shows the shop itself — the Mini App page — inside a WebView. That
+# page authenticates the Telegram way (Authorization: tma <initData>), so the
+# signed-in app asks for initData minted here for its own session: same
+# format and HMAC as Telegram's (the server holds the bot token), plus
+# `ks_sid`. webapp_server accepts it only on the shop's /api/*, only while
+# the session is live, and for at most WEB_TTL.
+
+WEB_TTL = 12 * 3600
+
+
+def mint_web_init_data(session: AppSession, bot_token: str, now: float | None = None) -> str:
+    import hmac as _hmac
+    from urllib.parse import quote, urlencode
+    profile = session.profile or {}
+    user = {k: v for k, v in {
+        "id": session.user_id,
+        "first_name": profile.get("first_name") or "",
+        "last_name": profile.get("last_name") or "",
+        "username": profile.get("username") or "",
+        "language_code": profile.get("language_code") or "",
+        "allows_write_to_pm": True,
+    }.items() if v != ""}
+    fields = {
+        "auth_date": str(int(now if now is not None else time.time())),
+        "ks_sid": str(session.id),
+        "user": json.dumps(user, ensure_ascii=False, separators=(",", ":")),
+    }
+    check = "\n".join(f"{k}={v}" for k, v in sorted(fields.items()))
+    secret = _hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
+    fields["hash"] = _hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
+    return urlencode(fields, quote_via=quote)
+
+
+async def web_session_ok(sid, user_id: int, auth_date) -> bool:
+    """Minted initData is good while its app session is: not revoked, not
+    expired, the same buyer, and no older than WEB_TTL."""
+    try:
+        sid, auth = int(sid), int(auth_date)
+    except (TypeError, ValueError):
+        return False
+    if not 0 <= time.time() - auth <= WEB_TTL:
+        return False
+    await ensure_schema()
+    async with database.pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """SELECT user_id FROM app_sessions
+               WHERE id = $1 AND revoked_at IS NULL AND refresh_expires > now()""", sid)
+    return row is not None and row["user_id"] == user_id
+
+
+async def handle_web_session(request: web.Request) -> web.Response:
+    session = await authenticate(request)
+    if isinstance(session, web.Response):
+        return session
+    from config import BOT_TOKEN
+    return _json({"init_data": mint_web_init_data(session, request.app.get("bot_token") or BOT_TOKEN),
+                  "expires_in": WEB_TTL, "server_time": _now_ms()})
+
+
 def add_routes(app: web.Application) -> None:
+    app.router.add_post("/app/v1/web-session", handle_web_session)
     app.router.add_post("/app/v1/auth/start", handle_start)
     app.router.add_post("/app/v1/auth/poll", handle_poll)
     app.router.add_post("/app/v1/auth/refresh", handle_refresh)

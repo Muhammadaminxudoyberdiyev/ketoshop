@@ -168,6 +168,17 @@ class HelpersTest(unittest.TestCase):
         self.assertFalse(app_auth.is_app_login_event(
             CallbackQuery(id="1", from_user=user, chat_instance="c", data="main_menu")))
 
+    def test_minted_init_data_only_for_the_shop_api(self):
+        import webapp_server as ws
+        session = app_auth.AppSession(7, 4242, "Pixel", {"first_name": "Ali", "username": "ali"})
+        minted = app_auth.mint_web_init_data(session, "1:test")
+        # The courier board and anything else that reads initData refuse it.
+        self.assertIsNone(ws._validate_init_data(minted, "1:test"))
+        parsed = ws._validate_init_data(minted, "1:test", allow_app=True)
+        self.assertEqual((parsed["user"]["id"], parsed["ks_sid"]), (4242, "7"))
+        self.assertTrue(parsed["user"]["allows_write_to_pm"])
+        self.assertIsNone(ws._validate_init_data(minted, "2:other-bot", allow_app=True))
+
     def test_cheque_from_raw_body(self):
         import webapp_server as ws
         req = make_mocked_request("POST", "/api/checkout/cheque",
@@ -314,6 +325,40 @@ class LoginFlowTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(r.status, 200)
         r = await self.client.post("/app/v1/terms/accept", json={"version": app_terms.VERSION})
         self.assertEqual(r.status, 401)
+
+    async def test_shop_view_session(self):
+        """The app's WebView shows the Mini App page, which authenticates with
+        initData minted for the app session."""
+        device = Device()
+        tokens = await self.login(device)
+        r = await self.call("POST", "/app/v1/web-session", device, token=tokens["access_token"])
+        self.assertEqual(r.status, 200, await r.text())
+        minted = (await r.json())["init_data"]
+
+        ok = await self.client.get("/api/echo", headers={"Authorization": f"tma {minted}"})
+        self.assertEqual(ok.status, 200, await ok.text())
+        self.assertEqual((await ok.json())["user_id"], self.USER)
+
+        forged = minted.replace("ks_sid=", "ks_sid=9")
+        self.assertEqual((await self.client.get("/api/echo", headers={"Authorization": f"tma {forged}"})).status, 403)
+
+        # Logout ends the shop view too.
+        await self.call("POST", "/app/v1/auth/logout", device, token=tokens["access_token"])
+        gone = await self.client.get("/api/echo", headers={"Authorization": f"tma {minted}"})
+        self.assertEqual(gone.status, 403)
+
+    async def test_shop_view_session_expires(self):
+        import time as _time
+        device = Device()
+        await self.login(device)
+        async with self.pool.acquire() as conn:
+            sid = await conn.fetchval("SELECT id FROM app_sessions")
+        session = app_auth.AppSession(sid, self.USER, "Pixel 8", {"first_name": "Ali"})
+        old = app_auth.mint_web_init_data(session, "1:test", now=_time.time() - app_auth.WEB_TTL - 60)
+        r = await self.client.get("/api/echo", headers={"Authorization": f"tma {old}"})
+        self.assertEqual(r.status, 403)
+        fresh = app_auth.mint_web_init_data(session, "1:test")
+        self.assertEqual((await self.client.get("/api/echo", headers={"Authorization": f"tma {fresh}"})).status, 200)
 
     async def test_wrong_number_kills_the_login(self):
         device = Device()
