@@ -631,11 +631,16 @@ async def announce(bot: Bot) -> tuple[int, int]:
 # photo, Cyrillic, no inline button so its comments stay open; the bot is a
 # link in the text). Once: the key is claimed before anything is sent.
 
-EXTEND_KEY = "gift-extend-2026-10-18"
-EXTEND_FROM = datetime(2026, 10, 18).date()
-EXTEND_DAYS = 30
+# Second comeback (owner, 2026-11-17: "100gr eritritol bonus ishlayaptimi? buni
+# 3 kun to'xtatib keyin yana davom ettir 40 kunlik qilib"): the 18.10 run ended
+# on 17.11 at 09:00; after a 3-day pause (17–19.11) it is back on 20.11 at 09:00
+# for 40 days, until 30.12, with the same announcement. The 18.10 key is
+# already claimed, so only the new one can fire.
+EXTEND_KEY = "gift-extend-2026-11-20"
+EXTEND_FROM = datetime(2026, 11, 20).date()
+EXTEND_DAYS = 40
 EXTEND_WINDOW = (9, 12)
-EXTEND_RETRY_DAYS = 2      # 18–20.10 mornings, if the gift product was missing on the first
+EXTEND_RETRY_DAYS = 2      # 20–22.11 mornings, if the gift product was missing on the first
 CHANNEL_LANG = "uz_cyr"
 
 _EXTEND = {
@@ -672,6 +677,13 @@ _EXTEND_TAIL = {
     # The channel has no button — the bot is a link in the text.
     "channel": {"uz": "\n\n🛒 Buyurtma berish: {bot}", "ru": "\n\n🛒 Заказать: {bot}"},
 }
+
+
+def comeback_day(day) -> bool:
+    """The morning the gift comes back and is announced to everyone. The 07:45
+    feedback ask and the 08:00 tip skip it, so the announcement isn't cut by
+    the daily message cap (push_cap: one a day for most users)."""
+    return day == EXTEND_FROM
 
 
 def extension_text(lang: str, until: datetime, channel: bool = False) -> str:
@@ -824,7 +836,7 @@ async def _tick(bot: Bot) -> None:
             f"🔁 «Yana sovg'a olishni istaysizmi?» — {stats['again']} ta\n"
             f"⚠️ Yetmadi: {stats['failed']} ta"))
 
-    # 1d. 30 more days from 09:00 on EXTEND_FROM (owner, 2026-10-17): the
+    # 1d. EXTEND_DAYS more days from 09:00 on EXTEND_FROM (owner, 2026-10-17; again 2026-11-17): the
     # campaign comes back on together with the announcement to everyone and
     # the channel. Claimed first — never twice. Not without the gift product.
     if (row.get("announced_at") is not None and not _active_row(row)

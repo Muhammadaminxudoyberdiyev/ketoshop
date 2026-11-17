@@ -256,6 +256,11 @@ async def _tick(bot: Bot):
         last_tk = last + TZ_OFFSET
         elapsed_days = (now_tk.date() - last_tk.date()).days
         due = elapsed_days >= INTERVAL_DAYS and now_tk.hour >= SEND_HOUR
+        # The gift's comeback morning belongs to its announcement (push cap:
+        # one message a day for most users) — the tip goes out tomorrow.
+        import gift_campaign
+        if due and gift_campaign.comeback_day(now_tk.date()):
+            due = False
 
     if due:
         await send_next_tip(bot)

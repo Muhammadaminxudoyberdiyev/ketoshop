@@ -237,6 +237,9 @@ async def _tick(bot: Bot) -> None:
     now = _now_tk()
     if not is_ask_day(now.date()) or (now.hour, now.minute) < SEND_AT or now.hour >= LAST_HOUR:
         return
+    import gift_campaign
+    if gift_campaign.comeback_day(now.date()):
+        return          # the gift's comeback announcement takes this morning's slot
     if not await enabled():
         return
     if not await database.claim_release_notes(f"feedback-ask-{now.date().isoformat()}"):
