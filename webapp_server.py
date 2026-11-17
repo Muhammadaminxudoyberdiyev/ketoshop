@@ -1255,6 +1255,7 @@ async def api_checkout(request: web.Request):
 
     from handlers.cart import _notify_sellers
     await _notify_sellers(bot, order_id, items_data, {
+        "placed": "app" if request.get("app_session") else "webapp",   # order_origin.py
         "customer_name": customer_name,
         "phone": phone,
         "secondary_phone": None,  # Mini App doesn't collect a backup number yet
@@ -1648,6 +1649,7 @@ async def api_checkout_cheque(request: web.Request):
     await _forward_cheque_to_admins(bot, order_id, customer_name, kind, file_id,
                                     skip={admin_with_copy})
     await _notify_sellers(bot, order_id, items_data, {
+        "placed": "app" if request.get("app_session") else "webapp",   # order_origin.py
         "customer_name": customer_name,
         "phone": data["pending_phone"],
         "secondary_phone": data.get("pending_secondary_phone"),
@@ -1750,6 +1752,7 @@ async def api_order_cheque(request: web.Request):
     items_raw = order.get("items")
     items = json.loads(items_raw) if isinstance(items_raw, str) else (items_raw or [])
     await _notify_sellers(bot, order_id, items, {
+        "placed": "app" if request.get("app_session") else "webapp",   # order_origin.py
         "customer_name": customer_name,
         "phone": order.get("phone", ""),
         "secondary_phone": order.get("secondary_phone"),

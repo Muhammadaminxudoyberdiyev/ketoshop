@@ -48,7 +48,8 @@ class CodeTest(unittest.TestCase):
         self.assertEqual(shop_links.slugify("!!!"), "")
 
     def test_owner_links(self):
-        self.assertEqual(dict(shop_links.DEFAULTS), {"kepak": "Kepak", "gluten_1_qism": "Gluten 1-qism"})
+        self.assertEqual(dict(shop_links.DEFAULTS), {"kepak": "Kepak", "gluten_1_qism": "Gluten 1-qism",
+                                                       "instagram": "Instagram"})
         self.assertTrue(shop_links.link("kepak").endswith("/shop?startapp=kepak"))
         self.assertTrue(shop_links.link("kepak").startswith("https://t.me/"))
         for code, name in shop_links.DEFAULTS:

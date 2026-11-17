@@ -306,6 +306,9 @@ async def main():
     dp.include_router(ad_sources_router)
     # /sayt_havola, /sayt_havolalar — tracked Mini App links (shop_links.py).
     dp.include_router(shop_links_router)
+    # /buyurtma_manba — orders by where they came from (order_origin.py).
+    from order_origin import router as order_origin_router
+    dp.include_router(order_origin_router)
     dp.include_router(referral_stats_router)
     dp.include_router(referral_program_router)
     dp.include_router(retention_stats_router)

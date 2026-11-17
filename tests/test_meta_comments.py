@@ -292,11 +292,11 @@ class PolicyTest(unittest.TestCase):
 
     def test_direct_thanks_carries_the_shop_link(self):
         out = comment_ai.dm_text("Zo'r!", "Izohingiz uchun rahmat, mahsulotlarimizni ko'ring https://evil.example")
-        self.assertTrue(out.endswith("👉 https://t.me/ketoshopbot/shop"))
+        self.assertTrue(out.endswith("👉 https://t.me/ketoshopbot/shop?startapp=instagram"))
         self.assertNotIn("evil.example", out)
         cyr = comment_ai.dm_text("Раҳмат!", "")
         self.assertIn("Изоҳингиз учун катта раҳмат", cyr)                   # default, in the comment's script
-        self.assertTrue(cyr.endswith("https://t.me/ketoshopbot/shop"))
+        self.assertTrue(cyr.endswith("https://t.me/ketoshopbot/shop?startapp=instagram"))
 
     def test_canned_direct_reply_still_needs_an_answer_for_questions(self):
         self.assertTrue(mc.needs_answer_after_auto("Адрес қаерда", "Rahmat! Sizga Direct orqali javob yubordik 📩"))
