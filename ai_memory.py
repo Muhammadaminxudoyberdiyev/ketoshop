@@ -158,6 +158,8 @@ async def forget(user_id: int) -> int:
     async with database.pool.acquire() as conn:
         await _ensure(conn)
         result = await conn.execute("DELETE FROM ai_customer_notes WHERE user_id = $1", user_id)
+    import ai_dialog
+    await ai_dialog.forget(user_id)          # oxirgi suhbatlar jurnali ham (xato ko'tarmaydi)
     try:
         return int(result.split()[-1])
     except (ValueError, IndexError, AttributeError):

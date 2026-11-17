@@ -109,6 +109,7 @@ class Turn:
     calls: list = field(default_factory=list)
     refused: bool = False
     usage: Usage = field(default_factory=Usage)
+    truncated: bool = False      # chiqish tokenlari tugab, matn yarmida uzilgan
 
 
 @dataclass
@@ -198,7 +199,7 @@ class AnthropicProvider:
         if response.stop_reason == "tool_use":
             calls = [ToolCall(b.id, b.name, dict(b.input))
                      for b in response.content if b.type == "tool_use"]
-        return Turn(text=text, calls=calls, usage=usage)
+        return Turn(text=text, calls=calls, usage=usage, truncated=response.stop_reason == "max_tokens")
 
 
 def _anthropic_usage(u) -> Usage:
@@ -297,7 +298,10 @@ class OpenAIProvider:
                     getattr(part, "type", "") == "refusal" for part in (item.content or []))
         if refused and not calls:
             return Turn(refused=True, usage=usage)
-        return Turn(text=(response.output_text or "").strip(), calls=calls, usage=usage)
+        # Fikrlash tokenlari ham max_output_tokens ichida: tugasa status "incomplete"
+        # bo'ladi va matn so'z o'rtasida uziladi (jonli sinov, 2026-11-17, guruh).
+        truncated = getattr(response, "status", None) == "incomplete"
+        return Turn(text=(response.output_text or "").strip(), calls=calls, usage=usage, truncated=truncated)
 
 
 def _openai_usage(u) -> Usage:

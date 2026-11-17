@@ -26,8 +26,10 @@ import logging
 import time
 from types import SimpleNamespace
 
+import ai_dialog
 import ai_provider
 import ai_sales
+import ai_tone
 import database
 from locales import get_delivery_method_name, get_display_unit, get_order_status, localize_product_text
 
@@ -248,6 +250,9 @@ async def ask(bot, tg_user: dict, text: str, lang: str) -> dict:
         reply = ai_sales.polish_reply(reply, lang, customer_text=text)
         reply = ai_sales.naturalize(ai_sales.thank_politely(
             ai_sales.finish_address(reply, message.from_user, text, session)))
+        reply = ai_tone.vary(reply, session.get("last_reply"))   # botdagidek — takror qolip yo'q
+        session["last_reply"] = reply
+        await ai_dialog.record(user_id, "site", text, reply)     # bot va guruh ham ko'radi
     try:
         cards = await build_cards(user_id, lang, message.web_cards)
     except Exception:
