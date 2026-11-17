@@ -260,25 +260,39 @@ async def auth_middleware(request: web.Request, handler):
         return await handler(request)
 
     auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("tma "):
+    app_session = None
+    if auth_header.startswith("Bearer "):
+        # The Android app (app_auth.py): a device-bound session instead of
+        # initData. Same routes, same rules from here on.
+        import app_auth
+        app_session = await app_auth.authenticate(request)
+        if isinstance(app_session, web.Response):
+            return app_session
+        user = dict(app_session.profile, id=app_session.user_id)
+        user_id = app_session.user_id
+        request["app_session"] = app_session.id
+        request["start_param"] = ""
+        request["auth_date"] = None
+    elif auth_header.startswith("tma "):
+        init_data_raw = auth_header[4:]
+        bot_token = request.app["bot_token"]
+        parsed = _validate_init_data(init_data_raw, bot_token)
+        if not parsed:
+            return _json({"error": "invalid initData"}, status=403)
+
+        user = parsed.get("user", {})
+        user_id = user.get("id") if isinstance(user, dict) else None
+        if not isinstance(user_id, int) or isinstance(user_id, bool):
+            return _json({"error": "invalid initData"}, status=403)
+        # ?startapp=<kod> of the link that launched the Mini App, and the
+        # launch's own time — one launch counts once however often the page reloads.
+        request["start_param"] = parsed.get("start_param") or ""
+        request["auth_date"] = parsed.get("auth_date")
+    else:
         return _json({"error": "unauthorized"}, status=401)
-
-    init_data_raw = auth_header[4:]
-    bot_token = request.app["bot_token"]
-    parsed = _validate_init_data(init_data_raw, bot_token)
-    if not parsed:
-        return _json({"error": "invalid initData"}, status=403)
-
-    user = parsed.get("user", {})
-    user_id = user.get("id") if isinstance(user, dict) else None
-    if not isinstance(user_id, int) or isinstance(user_id, bool):
-        return _json({"error": "invalid initData"}, status=403)
     request["user_id"] = user_id
-    # ?startapp=<kod> of the link that launched the Mini App, and the launch's
-    # own time — one launch counts once however often the page reloads.
-    request["start_param"] = parsed.get("start_param") or ""
-    request["auth_date"] = parsed.get("auth_date")
-    # Keep only the Telegram profile carried by successfully verified initData.
+    # Keep only the Telegram profile carried by successfully verified initData
+    # (for the app: the one Telegram gave the bot when the login was approved).
     # Mutating routes may use this data to create a missing user row.
     request["telegram_user"] = user
     # Use saved language from DB, fall back to Telegram app language
@@ -297,6 +311,14 @@ async def auth_middleware(request: web.Request, handler):
             return _json({"error": "start_bot", **gate}, status=403)
 
     response = await handler(request)
+    if app_session is not None and isinstance(response, web.Response):
+        # Personal data never sits in a shared cache; the phone's mobile
+        # link gets JSON gzipped (the catalog is ~10x smaller).
+        response.headers.setdefault("Cache-Control", "no-store")
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        body = response.body if isinstance(response.body, bytes) else b""
+        if len(body) > 1024 and "gzip" in request.headers.get("Accept-Encoding", ""):
+            response.enable_compression(web.ContentCoding.gzip)
     try:
         import activity
         label = activity.site_action(request.method, path)
@@ -922,9 +944,13 @@ async def _limit_reason(user_id: int, product_id: int | None, set_id: int | None
 
 
 async def api_cart_remove(request: web.Request):
-    """Remove item from cart."""
+    """Remove one of the buyer's own cart lines. Cart ids are sequential, so
+    the ownership check is what stops one buyer emptying another's cart."""
     body = await request.json()
     cart_id = int(body["cart_id"])
+    item = await get_cart_item(cart_id)
+    if not item or item["user_id"] != request["user_id"]:
+        return _json({"error": "not_found"}, status=404)
     await remove_from_cart(cart_id)
     return _json({"ok": True})
 
@@ -1138,11 +1164,9 @@ async def api_checkout(request: web.Request):
             keto_redeem = max(0, min(requested, balance, int(total)))
     total -= keto_redeem
 
-    # Get customer name from Telegram initData
-    auth_header = request.headers.get("Authorization", "")
-    init_data_raw = auth_header[4:] if auth_header.startswith("tma ") else ""
-    parsed = _validate_init_data(init_data_raw, request.app["bot_token"])
-    user = (parsed or {}).get("user", {})
+    # Customer name from the Telegram profile the auth middleware verified
+    # (initData in the Mini App, the approved login in the Android app).
+    user = request.get("telegram_user") or {}
     customer_name = " ".join(filter(None, [user.get("first_name"), user.get("last_name")])) or "—"
     customer_username = user.get("username")
 
@@ -1405,6 +1429,16 @@ async def _read_cheque_upload(request: web.Request) -> tuple[bytes, str, str] | 
     on failure. Caps mirror Telegram's photo limit so we reject early
     instead of streaming megabytes only to bounce."""
     MAX_BYTES = 10 * 1024 * 1024
+    raw = request.get("raw_body")
+    if raw is not None:
+        # The Android app sends the file itself as the body (image/* or
+        # application/pdf) — app_auth.read_body already read and capped it
+        # while checking the signature.
+        if not raw:
+            return {"error": "empty_file", "status": 400}
+        content_type = (request.content_type or "").lower()
+        name = re.sub(r"[^A-Za-z0-9._-]", "", request.headers.get("X-File-Name", ""))[:80]
+        return raw, content_type, name or ("cheque.jpg" if content_type.startswith("image/") else "cheque.pdf")
     reader = await request.multipart()
     file_field = None
     while True:
@@ -1771,7 +1805,11 @@ async def api_get_lang(request: web.Request):
     """Return user's saved language preference. `is_admin` lets the Mini App
     skip the birdsong's night silence for admins, so they can test it."""
     lang = request.get("user_lang", "uz")
-    return _json({"lang": lang, "is_admin": request.get("user_id") in ADMIN_IDS})
+    # Yangi alifbo (alphabet.py): the Mini App gets it baked into its HTML;
+    # the Android app reads it here and converts Latin text the same way.
+    import alphabet
+    return _json({"lang": lang, "is_admin": request.get("user_id") in ADMIN_IDS,
+                  "new_alphabet": alphabet.is_on()})
 
 
 async def api_keto_status(request: web.Request):
@@ -2237,6 +2275,15 @@ def create_webapp(bot: Bot, storage=None) -> web.Application:
     app["bot"] = bot
     app["bot_token"] = BOT_TOKEN
     app["storage"] = storage
+
+    # 📱 The Android app's login and session routes (/app/v1/*), and the
+    # server-driven part of the app (version, features, home blocks).
+    import app_auth
+    import app_config
+    import app_terms
+    app_auth.add_routes(app)
+    app_config.add_routes(app)
+    app_terms.add_routes(app)
 
     app.router.add_get("/healthz", healthz)
     app.router.add_get("/", index)

@@ -1,0 +1,21 @@
+name: ketoshop
+description: Ketoshop — keto mahsulotlari do'koni (Android).
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.0
+
+# No third-party packages, on purpose: every line that runs in the app is
+# either the Flutter SDK or ours (lib/ and android/app/src/main/kotlin).
+# Fewer dependencies = nothing to hijack upstream and a smaller APK.
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

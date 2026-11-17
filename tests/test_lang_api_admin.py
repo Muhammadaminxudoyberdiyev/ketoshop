@@ -22,10 +22,13 @@ def call(user_id, lang="uz"):
 
 class LangApiTest(unittest.TestCase):
     def test_admin_flag(self):
+        import alphabet
+        # new_alphabet: the Android app converts Latin text itself (alphabet.py).
+        on = alphabet.is_on()
         admin = next(iter(webapp_server.ADMIN_IDS)) if webapp_server.ADMIN_IDS else None
         if admin is not None:
-            self.assertEqual(call(admin), {"lang": "uz", "is_admin": True})
-        self.assertEqual(call(999_000_111, "ru"), {"lang": "ru", "is_admin": False})
+            self.assertEqual(call(admin), {"lang": "uz", "is_admin": True, "new_alphabet": on})
+        self.assertEqual(call(999_000_111, "ru"), {"lang": "ru", "is_admin": False, "new_alphabet": on})
 
 
 if __name__ == "__main__":

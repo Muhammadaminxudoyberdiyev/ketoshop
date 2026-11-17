@@ -158,6 +158,11 @@ class SubscriptionGateMiddleware(BaseMiddleware):
             return await handler(event, data)
         if _is_privacy_request(event):
             return await handler(event, data)
+        # 📱 Android app login (app_auth.py): confirming who you are is not
+        # shopping — the app's own requests still meet the channel gate.
+        import app_auth
+        if app_auth.is_app_login_event(event):
+            return await handler(event, data)
 
         bot = data["bot"]
         # Best-effort language hint before any DB record exists — Telegram's
