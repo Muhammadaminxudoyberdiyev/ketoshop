@@ -16,3 +16,4 @@ require('./test_admin_product_sale_type.js');
 require('./test_expense_crud.js');
 require('./test_admin_portraits.js');
 require('./assistant_fab_check.js');
+require('./games2_check.js');

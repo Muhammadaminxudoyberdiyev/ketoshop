@@ -263,6 +263,9 @@ async def main():
     dp.include_router(channel_voice_router)
     from comment_followup import router as comment_followup_router
     dp.include_router(comment_followup_router)
+    # /oyinlar — the games centre's numbers for admins (games.py).
+    from games import router as games_router
+    dp.include_router(games_router)
     # 📩 Instagram Direct AI javoblari: /ig_direct (holat, on/off, test).
     from ig_direct import router as ig_direct_router
     dp.include_router(ig_direct_router)

@@ -2300,6 +2300,9 @@ def create_webapp(bot: Bot, storage=None) -> web.Application:
     import app_config
     import app_terms
     app_auth.add_routes(app)
+    # 🎮 O'yinlar markazi: /api/games/state, /api/games/finish (games.py).
+    import games
+    games.add_routes(app)
     app_config.add_routes(app)
     app_terms.add_routes(app)
 
