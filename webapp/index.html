@@ -5,11 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Ketoshop</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<!-- Leaflet for the map-picker modal. Self-hosted under /static/ so we
-     don't depend on third-party CDN reachability from Uzbekistan
-     (cdnjs/unpkg can be slow or blocked, leaving the map blank). -->
-<link rel="stylesheet" href="/static/leaflet.css">
-<script src="/static/leaflet.js"></script>
+<!-- Leaflet (the map picker) is self-hosted under /static/ and loaded only
+     when the map opens — loadLeaflet() — not in front of the first paint
+     (owner, 2026-11-18: "bosh sahifa sekin yuklanyapti"). -->
 <style>
   /* ═══════════════════════════════════════════════════════════════════════
      KETOSHOP — "QUYOSH" DESIGN SYSTEM (2026-10-02)
@@ -4681,8 +4679,8 @@
 <!-- Background music: public-domain recordings served from /music (site_music.py). -->
 <script type="application/json" id="music-playlist">{{MUSIC_PLAYLIST}}</script>
 <script src="/static/pickup_checkout.js"></script>
-<script src="/static/games2_content.js?v=20261117"></script>
-<script src="/static/games2.js?v=20261117"></script>
+<script src="/static/games2_content.js?v=20261118" defer></script>
+<script src="/static/games2.js?v=20261118"></script>
 <script>
 const tg = window.Telegram.WebApp;
 tg.ready();
@@ -8666,6 +8664,12 @@ function closeRecipe() {
 }
 
 async function renderHomePage() {
+  // Tezroq (owner, 2026-11-18: "bosh Sahifa sekin yuklanyapti, tezroq qil"):
+  // the category rows come from the catalogue list the shop already asked for
+  // at start — one request, not one per category — and every part is drawn the
+  // moment its own answer comes, into a place kept in the page's order, so
+  // nothing waits for the slowest call. Rows go in one per tick: the first
+  // screen paints at once and the rest follow.
   homeRendered = true;
   loadRecipes();
   const container = document.getElementById('home-sections');
@@ -8676,107 +8680,123 @@ async function renderHomePage() {
   loading.style.display = 'block';
   loading.textContent = t.loading;
 
-  try {
-    // Load each category's products in parallel
-    const promises = categories.map(cat =>
-      api('/api/products?category=' + cat.key + '&page=0&per_page=200')
-        .then(data => ({ cat, products: data.products || [], total: data.total || 0 }))
-        .catch(() => ({ cat, products: [], total: 0 }))
-    );
-    const [topProducts, results, allProductsResp, topCustomers, popular] = await Promise.all([
-      api('/api/top').catch(() => []),
-      Promise.all(promises),
-      // Every product — the API caps a page at 200, well above the catalogue.
-      api('/api/products?page=0&per_page=200').catch(() => ({ products: [] })),
-      api('/api/leaderboard').catch(() => []),
-      api('/api/popular').catch(() => []),
-    ]);
-    const allProducts = allProductsResp.products || [];
+  const place = parent => {
+    const d = document.createElement('div');
+    d.className = 'home-slot';
+    d.hidden = true;
+    parent.appendChild(d);
+    return d;
+  };
+  // A place becomes its content (so the rows stay direct children and keep
+  // their colours) or disappears when there is nothing to show.
+  const fill = (slot, el) => { if (el) { slot.replaceWith(el); trk(() => Trk.rows(el)); } else slot.remove(); };
+  const autoSlot = place(topSlot), popularSlot = place(topSlot);
+  const podiumSlot = place(container);
+  const catSlots = {};
+  (categories || []).forEach(c => { catSlots[c.key] = place(container); });
+  const customersSlot = place(container);
+  const hideLoading = () => { loading.style.display = 'none'; };
 
-    loading.style.display = 'none';
-
-    // All-products carousel — auto-rotating, above the banners: the first
-    // thing on the page is the whole catalogue moving by.
-    if (Array.isArray(allProducts) && allProducts.length) {
-      const auto = buildAutoCarousel(allProducts);
+  const all = fetchCatalogList('all').then(({ products }) => {
+    hideLoading();
+    let auto = null;
+    if (products.length) {
+      auto = buildAutoCarousel(products);
       trk(() => { auto.dataset.row = 'carousel'; });
-      topSlot.appendChild(auto);
     }
-
-    // «🔥 Ko'p olinadi» right under it, still on the first screen: what
-    // people buy most, with «+ Savatga» on the card itself.
-    const popularInStock = Array.isArray(popular) ? popular.filter(p => !p.out_of_stock) : [];
-    if (popularInStock.length >= 3) {
-      const row = buildPopularRow(popularInStock);
-      trk(() => { row.dataset.row = 'popular'; });
-      topSlot.appendChild(row);
-    }
-
-    // Top-3 most-ordered products — podium just below the all-products carousel.
-    if (Array.isArray(topProducts) && topProducts.length) {
-      const podium = buildPodium(topProducts);
-      trk(() => { podium.dataset.row = 'top'; });
-      container.appendChild(podium);
-    }
-
-    results.forEach(({ cat, products, total }) => {
-      if (products.length === 0) return;
-      homeProductsCache[cat.key] = products;
-
-      const section = document.createElement('div');
-      section.className = 'home-section';
-      section.dataset.row = cat.key;
-
-      // Section header
-      const header = document.createElement('div');
-      header.className = 'section-header';
-
-      const title = document.createElement('div');
-      title.className = 'section-title';
-      title.textContent = cat.name;
-
-      header.appendChild(title);
-      section.appendChild(header);
-
-      // Carousel — every product in the category, no "N more" pager;
-      // the buyer just scrolls the row to see the rest.
-      const carousel = document.createElement('div');
-      carousel.className = 'carousel';
-      products.forEach(p => {
-        carousel.appendChild(createCarouselCard(p));
-      });
-      section.appendChild(carousel);
-      container.appendChild(section);
+    fill(autoSlot, auto);
+    const byCat = {};
+    orderCatalog(products, true).forEach(p => { (byCat[p.category] = byCat[p.category] || []).push(p); });
+    const keys = (categories || []).map(c => c.key).filter(k => k !== 'sets');
+    return new Promise(resolve => {
+      const step = () => {
+        const k = keys.shift();
+        if (k === undefined) { resolve(); return; }
+        const cat = categories.find(c => c.key === k);
+        fill(catSlots[k], (byCat[k] || []).length ? buildHomeSection(cat, byCat[k]) : null);
+        setTimeout(step, 0);
+      };
+      step();
     });
-
-    trk(() => { Trk.rows(topSlot); Trk.rows(container); });
-
-    // Most-active-customers podium — marketing hook so buyers compete for a spot.
-    // A little confetti burst the first time it scrolls into view.
-    if (Array.isArray(topCustomers) && topCustomers.length) {
-      const podiumSection = buildCustomerPodium(topCustomers);
-      container.appendChild(podiumSection);
-      podiumSection.dataset.row = 'customers';
-      trk(() => Trk.rows(podiumSection));
-      const io = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            launchConfetti(podiumSection);
-            io.disconnect();
-          }
-        });
-      }, { threshold: 0.4 });
-      io.observe(podiumSection);
+  });
+  const sets = catSlots.sets
+    ? fetchCatalogList('sets').then(({ products }) => {
+        fill(catSlots.sets, products.length ? buildHomeSection(categories.find(c => c.key === 'sets'), products) : null);
+      }).catch(() => fill(catSlots.sets, null))
+    : Promise.resolve();
+  const popular = api('/api/popular').then(list => {
+    // «🔥 Ko'p olinadi» under the carousel, still on the first screen.
+    const inStock = Array.isArray(list) ? list.filter(p => !p.out_of_stock) : [];
+    let row = null;
+    if (inStock.length >= 3) {
+      row = buildPopularRow(inStock);
+      trk(() => { row.dataset.row = 'popular'; });
     }
-
-    if (container.children.length === 0) {
-      container.innerHTML = '<div class="empty-state"><div class="emoji">📦</div><div>' + t.empty + '</div></div>';
+    fill(popularSlot, row);
+  }).catch(() => fill(popularSlot, null));
+  const top = api('/api/top').then(list => {
+    let podium = null;
+    if (Array.isArray(list) && list.length) {
+      podium = buildPodium(list);
+      trk(() => { podium.dataset.row = 'top'; });
     }
-  } catch(e) {
-    loading.style.display = 'none';
-    console.error('Home load error:', e);
+    fill(podiumSlot, podium);
+  }).catch(() => fill(podiumSlot, null));
+  const customers = api('/api/leaderboard').then(topCustomers => {
+    if (!(Array.isArray(topCustomers) && topCustomers.length)) { fill(customersSlot, null); return; }
+    const podiumSection = buildCustomerPodium(topCustomers);
+    fill(customersSlot, podiumSection);
+    podiumSection.dataset.row = 'customers';
+    trk(() => Trk.rows(podiumSection));
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          launchConfetti(podiumSection);
+          io.disconnect();
+        }
+      });
+    }, { threshold: 0.4 });
+    io.observe(podiumSection);
+  }).catch(() => fill(customersSlot, null));
+
+  const results = await Promise.allSettled([all, sets, popular, top, customers]);
+  hideLoading();
+  if (results[0].status === 'rejected') {
+    console.error('Home load error:', results[0].reason);
     showToast(t.errorLoad, true);
   }
+  if (!topSlot.querySelector('.home-section') && !container.querySelector('.home-section')) {
+    container.innerHTML = '<div class="empty-state"><div class="emoji">📦</div><div>' + t.empty + '</div></div>';
+  }
+}
+
+function buildHomeSection(cat, products) {
+  homeProductsCache[cat.key] = products;
+
+  const section = document.createElement('div');
+  section.className = 'home-section';
+  section.dataset.row = cat.key;
+
+  // Section header
+  const header = document.createElement('div');
+  header.className = 'section-header';
+
+  const title = document.createElement('div');
+  title.className = 'section-title';
+  title.textContent = cat.name;
+
+  header.appendChild(title);
+  section.appendChild(header);
+
+  // Carousel — every product in the category, no "N more" pager;
+  // the buyer just scrolls the row to see the rest.
+  const carousel = document.createElement('div');
+  carousel.className = 'carousel';
+  products.forEach(p => {
+    carousel.appendChild(createCarouselCard(p));
+  });
+  section.appendChild(carousel);
+  return section;
 }
 
 function buildPodium(top) {
@@ -10706,7 +10726,39 @@ function _addTileLayer(map, providerIdx) {
 
 // `rough` — a low-accuracy fix from getLocation(): start there, but the
 // buyer still has to drag the pin onto their house.
+// Leaflet comes the first time the map opens (2026-11-18) — 45 KB that every
+// other visit never needs. Our top-level `const L` (the texts) is a lexical
+// binding; Leaflet sets window.L, which is what the map code reads.
+let _leafletLoad = null;
+function loadLeaflet() {
+  if (window.L && typeof window.L.map === 'function') return Promise.resolve();
+  if (_leafletLoad) return _leafletLoad;
+  _leafletLoad = new Promise((resolve, reject) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = '/static/leaflet.css';
+    document.head.appendChild(css);
+    const s = document.createElement('script');
+    s.src = '/static/leaflet.js';
+    s.onload = () => resolve();
+    s.onerror = () => { _leafletLoad = null; reject(new Error('leaflet')); };
+    document.head.appendChild(s);
+  });
+  return _leafletLoad;
+}
+
 function openMapPicker(rough) {
+  if (!window.L || typeof window.L.map !== 'function') {
+    document.getElementById('map-modal-title').textContent = t.mapPickerTitle;
+    document.getElementById('map-address').textContent = t.mapPickerLoading;
+    document.getElementById('map-modal').classList.add('show');
+    updateBackButton();
+    loadLeaflet().then(() => {
+      if (window.L && typeof window.L.map === 'function') openMapPicker(rough);
+      else _setMapError('Xaritani yuklab bo\'lmadi. Tarmoq aloqasini tekshiring.');
+    }).catch(() => _setMapError('Xaritani yuklab bo\'lmadi. Tarmoq aloqasini tekshiring.'));
+    return;
+  }
   trk(() => Trk.ev('checkout', 'checkout', 'map'));
   if (!window.L || typeof window.L.map !== 'function') {
     // Leaflet itself didn't load. Show a clear in-app message rather than
