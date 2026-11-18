@@ -44,6 +44,14 @@ class SiteMusicTest(unittest.TestCase):
         self.assertTrue(self.r["iosRouted"])
         self.assertTrue(self.r["iosPlays"])
 
+    def test_music_comes_back_after_the_phone_stopped_it(self):
+        # Egasi, 2026-11-18: "musiqa o'zidan o'zi o'chib qolyapti".
+        self.assertTrue(self.r["backAfterSystemPause"])
+        self.assertTrue(self.r["waitsAfterRefusal"])
+        self.assertTrue(self.r["touchBringsItBack"])        # any touch, not only the first one
+        self.assertTrue(self.r["retriedWithoutTouch"])      # asked again after ~10 s
+        self.assertTrue(self.r["stallMovesOn"])             # a stalled download → the next piece
+
     def test_rests_on_the_ordering_screens(self):
         self.assertTrue(self.r["silentAtCheckout"])
         self.assertTrue(self.r["backAfterCheckout"])
@@ -159,6 +167,36 @@ class PageTest(unittest.TestCase):
         server = (ROOT / "webapp_server.py").read_text(encoding="utf-8")
         self.assertIn('html.replace("{{MUSIC_PLAYLIST}}", json.dumps(site_music.playlist()', server)
         self.assertIn("site_music.setup_routes(app)", server)
+
+
+
+class BirdClipsTest(unittest.TestCase):
+    """Haqiqiy qush ovozlari (egasi, 2026-11-18): seven short clips, each named,
+    each credited (CC BY-SA) on the page and in webapp/birds/CREDITS.md."""
+
+    def test_clips_names_and_credits_match(self):
+        import re
+        birds = ROOT / "webapp" / "birds"
+        html = (ROOT / "webapp" / "index.html").read_text(encoding="utf-8")
+        start = html.index("const BIRDS = [")
+        ids = re.findall(r"\{ id: '([a-z]+)', uz: '[^']+'|\{ id: '([a-z]+)', uz: \"", html[start:html.index("];", start)])
+        ids = [a or b for a, b in ids]
+        self.assertEqual(len(ids), 7)
+        credits = (birds / "CREDITS.md").read_text(encoding="utf-8")
+        for bird in ids:
+            clip = birds / f"{bird}.mp3"
+            self.assertTrue(clip.exists(), bird)
+            self.assertLess(clip.stat().st_size, 120_000, bird)          # ~11 s, fetched one at a time
+            self.assertIn(f"| {bird}.mp3 |", credits)
+            self.assertEqual(clip.read_bytes()[:3], b"ID3")
+        self.assertIn("CC BY-SA", credits)
+        self.assertIn('id="sound-credits"', html)
+
+    def test_the_bird_waits_for_its_clip_and_falls_back_to_the_whistles(self):
+        html = (ROOT / "webapp" / "index.html").read_text(encoding="utf-8")
+        sing = html[html.index("  function sing() {"):html.index("  function whistle() {")]
+        self.assertIn("fetchBird(b)", sing)
+        self.assertIn("whistle()", sing)
 
 
 if __name__ == "__main__":

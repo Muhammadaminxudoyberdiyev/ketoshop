@@ -12,8 +12,10 @@ const vm = require('vm');
 
 const html = fs.readFileSync(path.join(__dirname, '..', 'webapp', 'index.html'), 'utf8');
 const start = html.indexOf('const Birdsong = (() => {');
-const end = html.indexOf('})();', html.indexOf('return { start, sync, sing', start)) + 5;
-if (start < 0 || end < 5) throw new Error('Birdsong module not found');
+// The module ends at the first `})();` at the start of a line after it.
+const close = html.indexOf('\n})();', start);
+const end = close + '\n})();'.length;
+if (start < 0 || close < 0) throw new Error('Birdsong module not found');
 const PLAYLIST = [
   { id: 'moonlight', src: '/music/moonlight.mp3', remote: 'https://upload.wikimedia.org/x/moonlight.mp3', uz: 'Betxoven — «Oy nuri» sonatasi', ru: 'Бетховен' },
   { id: 'clair-de-lune', src: '/music/clair-de-lune.mp3', remote: 'https://upload.wikimedia.org/x/clair-de-lune.mp3', uz: 'Debyussi — «Oy nuri» (Clair de lune)', ru: 'Дебюсси' },
@@ -104,6 +106,11 @@ function phone({ autoplay, ios }) {
     setTimeout: (fn, ms) => addTimer(fn, ms, false), clearTimeout: clearTimer,
     setInterval: (fn, ms) => addTimer(fn, ms, true), clearInterval: clearTimer,
     Math, Date, Object, Promise, parseInt, String, Float32Array, JSON,
+    // The real bird clips (2026-11-18) can't be fetched here: the birds fall
+    // back to the synthesized whistles, which is what this check listens for.
+    fetch: () => Promise.reject(new Error('offline')),
+    requestAnimationFrame: fn => addTimer(fn, 16, false),
+    escapeHtml: s => String(s),
   };
   vm.createContext(ctx);
   vm.runInContext(html.slice(start, end) + '\nglobalThis.Birdsong = Birdsong;', ctx);
@@ -112,7 +119,7 @@ function phone({ autoplay, ios }) {
   // audioEls[0] is the module's own volume probe; the player is the last one made.
   const player = () => audioEls[audioEls.length - 1];
   return { B: ctx.Birdsong, ctx, store, toasts, advance, tap, flush, btn, audioEls, elListeners, player,
-           routed: () => routedSources };
+           routed: () => routedSources, setGesture: v => { gestured = v; } };
 }
 
 (async () => {
@@ -182,6 +189,46 @@ function phone({ autoplay, ios }) {
   p.advance(1000);
   out.iosRouted = p.routed() === 1;
   out.iosPlays = !p.player().paused;
+
+  // 4) 2026-11-18 "musiqa o'zidan o'zi o'chib qolyapti": the phone pauses the
+  // music and then wants a fresh touch before it may start again.
+  p = phone({ autoplay: false, ios: false });
+  p.B.admin();
+  p.B.start();
+  await p.flush();
+  p.tap();
+  await p.flush();
+  p.advance(1000);
+  const m = p.player();
+  m.pause();                                     // the system paused it (a call, the background…)
+  p.advance(1500);
+  await p.flush();
+  out.backAfterSystemPause = !m.paused;
+  p.setGesture(false);                           // …and now a start needs a new touch
+  m.pause();
+  p.advance(3000);
+  await p.flush();
+  out.waitsAfterRefusal = m.paused;
+  p.tap();                                       // the old code had dropped its touch listener here
+  await p.flush();
+  p.advance(1000);
+  await p.flush();
+  out.touchBringsItBack = !m.paused;
+  p.setGesture(false);
+  m.pause();
+  p.advance(2000);
+  await p.flush();
+  p.setGesture(true);                            // the browser would allow it now — nobody touches
+  p.advance(11000);
+  await p.flush();
+  out.retriedWithoutTouch = !m.paused;
+  // A stalled download: playing, but the position stands still.
+  const piece = p.store.ketoshop_music_piece;
+  m.readyState = 2;
+  m.currentTime = 42;
+  p.advance(16000);
+  await p.flush();
+  out.stallMovesOn = p.store.ketoshop_music_piece !== piece;
 
   process.stdout.write(JSON.stringify(out));
 })();
