@@ -327,10 +327,12 @@ async def auth_middleware(request: web.Request, handler):
 
     response = await handler(request)
     if app_session is not None and isinstance(response, web.Response):
-        # Personal data never sits in a shared cache; the phone's mobile
-        # link gets JSON gzipped (the catalog is ~10x smaller).
+        # Personal data never sits in a shared cache.
         response.headers.setdefault("Cache-Control", "no-store")
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    if isinstance(response, web.Response) and not response.headers.get("Content-Encoding"):
+        # JSON gzipped for the Mini App too (2026-11-18: "bosh sahifa sekin") —
+        # the catalogue list is ~10x smaller on a phone's mobile link.
         body = response.body if isinstance(response.body, bytes) else b""
         if len(body) > 1024 and "gzip" in request.headers.get("Accept-Encoding", ""):
             response.enable_compression(web.ContentCoding.gzip)
@@ -2287,6 +2289,16 @@ async def api_pickup_config(request: web.Request):
 
 # ===== APP FACTORY =====
 
+async def _static_cache_headers(request: web.Request, response: web.StreamResponse) -> None:
+    """/static/ files: a versioned one (?v=…) is kept by the phone for a week —
+    a new release changes the version; any other is checked with the server
+    each time (a 304 when unchanged) instead of being downloaded again."""
+    if not request.path.startswith("/static/") or response.status not in (200, 304):
+        return
+    response.headers["Cache-Control"] = ("public, max-age=604800, immutable" if request.query.get("v")
+                                         else "no-cache")
+
+
 def create_webapp(bot: Bot, storage=None) -> web.Application:
     """Create and return aiohttp Application."""
     app = web.Application(middlewares=[auth_middleware])
@@ -2370,5 +2382,6 @@ def create_webapp(bot: Bot, storage=None) -> web.Application:
     # reachability from Telegram webviews was the difference between the
     # map picker rendering and showing a blank modal.
     app.router.add_static("/static/", path=Path(__file__).parent / "webapp", show_index=False)
+    app.on_response_prepare.append(_static_cache_headers)
 
     return app

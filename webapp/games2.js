@@ -16,7 +16,7 @@
    countdown pressure, no fake scarcity. */
 (function () {
   'use strict';
-  const C = window.G2C || {};
+  const C = new Proxy({}, { get: (_, k) => (window.G2C || {})[k] });   // games2_content.js is deferred
   const G2 = window.G2 = {};
   let state = null;              // GET /api/games/state
   let products = null;           // the shop's products, loaded once for «Savatga»
@@ -61,6 +61,7 @@
 
   // ── server ─────────────────────────────────────────────────────────
   G2.refresh = async function () {
+    setTimeout(() => loadProducts(), 1500);          // «Savatga» under results — ready before it is needed
     try { state = await api('/api/games/state'); } catch (_) { return; }
     const dash = document.getElementById('g2-dash');
     if (dash) dash.outerHTML = G2.dashHtml();
@@ -118,7 +119,11 @@
   const norm = s => String(s || '').toLowerCase().replace(/[ʻʼ’`‘]/g, "'");
   async function loadProducts() {
     if (products) return products;
-    try { products = ((await api('/api/products?page=0&per_page=200')) || {}).products || []; } catch (_) { products = []; }
+    try {
+      const list = typeof fetchCatalogList === 'function' ? await fetchCatalogList('all')
+        : await api('/api/products?page=0&per_page=200');
+      products = (list && list.products) || [];
+    } catch (_) { return []; }        // not kept: the next result asks again
     return products;
   }
   function findProduct(kw) {
@@ -152,12 +157,23 @@
     showToast(T(n + ' ta mahsulot savatga qo\'shildi', 'Добавлено в корзину: ' + n));
     btn.textContent = T('✓ Savatda', '✓ В корзине');
   };
-  async function shopBlockHtml(kws, title) {
-    await loadProducts();
+  function shopRowsHtml(kws, title) {
     const rows = [...new Set(kws.filter(Boolean))].map(k => shopRowHtml(k)).filter(Boolean);
     if (!rows.length) return '';
     return '<div class="g2-shop"><div class="g2-shop-title">' + E(title) + '</div>' + rows.join('') +
       (rows.length > 1 ? '<button type="button" class="game-next g2-all" onclick="G2.addAll(this)">🛒 ' + E(T('Hammasini savatga', 'Всё в корзину')) + '</button>' : '') + '</div>';
+  }
+  // The result shows at once (2026-11-18: the right answer looked dead while
+  // the product list loaded); the products slide in when they are there.
+  let shopSeq = 0;
+  function shopBlockHtml(kws, title) {
+    if (products) return shopRowsHtml(kws, title);
+    const id = 'g2-shop-' + (++shopSeq);
+    loadProducts().then(() => {
+      const el = document.getElementById(id);
+      if (el) el.outerHTML = shopRowsHtml(kws, title);
+    });
+    return '<div id="' + id + '"></div>';
   }
 
   // ── share ──────────────────────────────────────────────────────────
@@ -201,12 +217,18 @@
     const seed = state ? state.clue_seed : Math.floor((Date.now() + 5 * 3600e3) / 864e5) + 719163;
     return list[(seed * 7 + 3) % list.length];
   }
-  async function startClue() {
-    if (!state) { try { state = await api('/api/games/state'); } catch (_) {} }
+  function startClue() {
     const item = clueToday();
     begin('clue', { item, shown: 1, tried: [], opts: shuffle([item.a].concat(item.wrong)), done: false });
     if (state && state.clue_solved) return clueDone(true);
     renderClue();
+    if (!state) {
+      api('/api/games/state').then(s => {
+        state = s;
+        if (!live('clue') || run.done || run.tried.length) return;
+        if (s.clue_solved) { run.done = true; clueDone(true); } else renderClue();   // streak, social proof
+      }).catch(() => {});
+    }
   }
   function renderClue() {
     const r = run, it = r.item;
@@ -224,7 +246,11 @@
     if (!live('clue') || r.done) return;
     const ok = r.opts[i] === r.item.a;
     gameHaptic(ok);
-    if (ok) { r.done = true; r.points = 4 - r.shown; return clueDone(false); }
+    if (ok) {
+      r.done = true; r.points = 4 - r.shown;
+      document.querySelectorAll('#quiz-opts .quiz-opt').forEach((b, k) => { b.disabled = true; if (k === i) b.classList.add('right'); });
+      return clueDone(false);
+    }
     r.tried.push(i);
     if (r.shown < 3) { r.shown++; renderClue(); return; }
     r.done = true; r.points = 0; clueDone(false);
@@ -241,7 +267,7 @@
       : T('Bugun chiqmadi — ertaga yangi jumboq', 'Сегодня не вышло — завтра новая загадка');
     const answer = '<div class="g2-answer">' + E(T('Javob: ', 'Ответ: ')) + '<b>' + E(L(it.a)) + '</b></div>';
     const tomorrow = '<div class="g2-note">🌅 ' + E(T('Ertangi jumboq yarim tunda ochiladi. Ketma-ketlikni uzmang!', 'Завтрашняя загадка откроется в полночь. Не прерывайте серию!')) + '</div>';
-    const shop = await shopBlockHtml([it.kw], T("Bugungi qahramon do'konimizda", 'Сегодняшний герой — в нашем магазине'));
+    const shop = shopBlockHtml([it.kw], T("Bugungi qahramon do'konimizda", 'Сегодняшний герой — в нашем магазине'));
     const share = points ? '<div class="game-actions">' + shareBtn(T('Bugungi keto jumboqni ' + (4 - points) + ' ta ishorada topdim! Siz-chi? 🧩',
       'Я отгадал(а) кето-загадку дня с ' + (4 - points) + '-й подсказки! А вы? 🧩')) + '</div>' : '';
     setGameScreen('clue', '', resultHtml('clue', big, msg, '', answer + share + tomorrow + shop, false));
@@ -293,7 +319,7 @@
     finished('swap');
     const great = r.score >= r.steps.length * 0.8;
     const all = r.steps.map(x => x.st.kw);
-    const shop = await shopBlockHtml(all, T('Keto masalliqlar — bir bosishda savatga', 'Кето-ингредиенты — в корзину в одно касание'));
+    const shop = shopBlockHtml(all, T('Keto masalliqlar — bir bosishda savatga', 'Кето-ингредиенты — в корзину в одно касание'));
     setGameScreen('swap', '', resultHtml('swap', r.score + '/' + r.steps.length,
       great ? T('Siz haqiqiy keto oshpazsiz!', 'Вы настоящий кето-повар!') : T("Yaxshi! Har bir almashtirish — sog'liq uchun qadam", 'Хорошо! Каждая замена — шаг к здоровью'),
       T('Retseptlar saytimizda: «Retseptlar» bo\'limi', 'Рецепты — на нашем сайте в разделе «Рецепты»'), shop));
@@ -420,10 +446,12 @@
       return '<div class="g2-stat"><span>' + ic + ' ' + E(L(name)) + '</span><i><b style="width:' + v + '%"></b></i><em>' + v + '</em></div>';
     }).join('') + '</div>';
   }
-  async function startStory() {
-    if (!state) { try { state = await api('/api/games/state'); } catch (_) {} }
+  function startStory() {
     begin('story', {});
-    renderStoryHome();
+    if (state) { renderStoryHome(); return; }
+    setGameScreen('story', '', '<div class="g2-lead">' + E(T('Yuklanmoqda…', 'Загрузка…')) + '</div>');
+    api('/api/games/state').then(s => { state = s; }).catch(() => {})
+      .then(() => { if (live('story')) renderStoryHome(); });
   }
   function renderStoryHome() {
     const ch = C.story || [], s = state ? state.story : { done: 0, open: 1, stats: {} };
@@ -528,7 +556,7 @@
     const points = r.right * 10 + Math.max(0, r.hearts) * 3;
     const won = r.right >= 4 && r.hearts > 0;
     const kws = r.m.stalls.map(st => (st.goods.find(g => g[2] === 1) || [])[3]);
-    const shop = await shopBlockHtml(kws, T("Bu masalliqlar Keto shop'da bor", 'Эти продукты есть в Keto shop'));
+    const shop = shopBlockHtml(kws, T("Bu masalliqlar Keto shop'da bor", 'Эти продукты есть в Keto shop'));
     setGameScreen('bazaar', '', resultHtml('bazaar', r.right + '/5',
       won ? T(L(r.m.goal) + ' uchun savat tayyor! 🎉', 'Корзина для «' + L(r.m.goal) + '» готова! 🎉') : r.hearts <= 0 ? T('Joningiz tugadi — tuzoqlar ayyor edi', 'Жизни кончились — ловушки были хитрыми') : T("Yaxshi urinish! Yana bir bor yuring", 'Хорошая попытка! Пройдите ещё раз'),
       '🧺 ' + (r.basket.join(' · ') || '—'), shop));
@@ -537,10 +565,12 @@
   };
 
   // ═════════════ 7. «Ketoland xaritasi» ═════════════
-  async function startMap() {
-    if (!state) { try { state = await api('/api/games/state'); } catch (_) {} }
+  function startMap() {
     begin('map', {});
-    renderMap();
+    if (state) { renderMap(); return; }
+    setGameScreen('map', '', '<div class="g2-lead">' + E(T('Yuklanmoqda…', 'Загрузка…')) + '</div>');
+    api('/api/games/state').then(s => { state = s; }).catch(() => {})
+      .then(() => { if (live('map')) renderMap(); });
   }
   function renderMap() {
     const st = C.map || [], m = state ? state.map : { done: 0, open: 1 };

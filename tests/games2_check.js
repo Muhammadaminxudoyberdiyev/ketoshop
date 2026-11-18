@@ -22,7 +22,7 @@ C.bazaar.forEach((m, i) => { pair(m.goal, 'bazaar ' + i); assert.equal(m.stalls.
 C.map.forEach((s, i) => { pair(s.name, 'map ' + i); assert.equal(s.qs.length, 3); s.qs.forEach(q => { pair(q[0], 'map q'); assert.equal(q[1].length, 4); pair(q[2], 'map why'); }); });
 
 // ── a page around the games ──────────────────────────────────────────
-function page(lang) {
+function page(lang, cfg = {}) {
   const screens = [];
   const posts = [];
   const els = {};
@@ -32,7 +32,7 @@ function page(lang) {
     solvers_today: 12, board: { top: [{ name: 'Ali V.', points: 40, rank: 1, me: false }, { name: 'Siz', points: 10, rank: 2, me: true }], me: { name: 'Siz', points: 10, rank: 2, me: true } },
     share_url: 'https://t.me/ketoshopbot/shop?startapp=oyin' };
   const ctx = {
-    window: {}, console,
+    window: {}, console, setTimeout, clearTimeout, Proxy,
     lang,
     gx: (uz, ru) => (lang === 'ru' ? ru : uz),
     escapeHtml: s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])),
@@ -49,7 +49,8 @@ function page(lang) {
     tg: { openTelegramLink: url => posts.push({ share: url }), HapticFeedback: { notificationOccurred() {}, selectionChanged() {} } },
     document: { getElementById: id => el(id), querySelectorAll: () => [], querySelector: () => null, createElement: () => el('x'), head: { appendChild() {} } },
     api: async (path, opts) => {
-      if (path === '/api/games/state') return state;
+      if (path === '/api/games/state') return cfg.slowState ? new Promise(() => {}) : state;
+      if (path.startsWith('/api/products') && cfg.slowProducts) return new Promise(() => {});   // never answers
       if (path.startsWith('/api/products')) return { products: [{ id: 7, name: 'Bodom uni 500gr', price: 90000, out_of_stock: false }, { id: 8, name: 'Eritritol 100gr', price: 30000 }, { id: 9, name: 'Tabiiy GHEE 1000ml', price: 120000 }] };
       if (path === '/api/games/finish') {
         const body = JSON.parse(opts.body);
@@ -72,6 +73,26 @@ function page(lang) {
 }
 
 (async () => {
+  // 2026-11-18: «Men kimman?» — the right answer must show the result at once,
+  // even when the game state and the product list are slow or never come.
+  {
+    const P = page('uz', { slowProducts: true, slowState: true });
+    P.G2.starters.clue();
+    assert.equal(P.gs().id, 'clue');
+    assert.match(P.last().inner, /quiz-opts/);               // the puzzle is on screen without the server
+    P.G2.answerClue(0);
+    await P.tick();
+    assert.ok(P.last().inner.includes('game-result'), 'result shown without waiting for products');
+    assert.ok(P.last().inner.includes('id="g2-shop-'), 'products come later into their place');
+    P.G2.starters.swap();
+    for (let i = 0; i < 20 && P.gs() && !P.gs().finished; i++) { P.G2.answerSwap(0); await P.G2.nextSwap(); }
+    assert.ok(P.last().inner.includes('game-result'));
+    P.G2.starters.story();
+    assert.match(P.last().inner, /Yuklanmoqda|G2\.playChapter/);   // drawn at once — from the state or with a loading line
+    const Q = page('ru', { slowState: true });
+    Q.G2.starters.map();
+    assert.match(Q.last().inner, /Загрузка/);                 // nothing known yet: a visible line, never a frozen tap
+  }
   for (const lang of ['uz', 'ru', 'uz_cyr']) {
     const P = page(lang);
     const { G2, posts, last, tick } = P;
