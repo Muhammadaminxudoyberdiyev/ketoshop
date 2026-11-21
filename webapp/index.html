@@ -5247,7 +5247,7 @@ const Birdsong = (() => {
   // products and recipes, rests on the ordering screens and while the app is
   // hidden, and keeps the birds' night rule.
   const MUSIC_KEY = 'ketoshop_music_piece';
-  const MUSIC_LEVEL = 0.35;
+  const MUSIC_LEVEL = 0.6;          // 2026-11-21: "juda past" — was 0.35
   const MUSIC_REST_PAGES = ['checkout', 'cheque', 'order-success'];
   const PLAYLIST = (() => {
     try { return JSON.parse(document.getElementById('music-playlist').textContent) || []; } catch (_) { return []; }
@@ -5332,7 +5332,7 @@ const Birdsong = (() => {
     if (routed && mus) mus.gain.value = 0; else if (VOLUME_WORKS) a.volume = 0;
     playing = true;
     const p = a.play();
-    const up = () => setLevel(MUSIC_LEVEL, 1.5);
+    const up = () => setLevel(MUSIC_LEVEL, 0.8);
     if (p && typeof p.then === 'function') {
       p.then(up).catch(() => { playing = false; blocked = true; blockedTicks = 0; });   // this phone wants a touch first
     } else up();
@@ -7172,6 +7172,9 @@ async function checkStartGate(manual) {
   // while we wait on a network round trip just to double-check it.
   applyLanguage();
   updateBackButton();
+  // The music starts with the page, not after the access check's round trip
+  // (owner, 2026-11-21: "musiqa juda kech ... boshlanyapti").
+  Birdsong.start();
 
   // Nothing loads for a buyer the bot can't reach — they get the START card.
   try {
@@ -7185,7 +7188,6 @@ async function checkStartGate(manual) {
       : qs.get('product') ? 'product' : qs.get('game') ? 'game' : sp ? 'link' : 'direct');
   });
   Butterfly.start();
-  Birdsong.start();
   SiteTime.start();
 
   // Reconcile the server-saved language preference in the background; only

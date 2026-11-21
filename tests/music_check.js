@@ -135,7 +135,7 @@ function phone({ autoplay, ios }) {
   out.playsWithoutTap = !!el && !el.paused;
   out.firstPiece = p.store.ketoshop_music_piece;
   out.firstSrc = el && el.src;
-  out.fadedIn = el && el.volume > 0.2 && el.volume <= 0.36;
+  out.fadedIn = el && el.volume > 0.4 && el.volume <= 0.61;
 
   p.ctx.activePage = 'checkout';
   p.advance(1500);
