@@ -172,9 +172,9 @@ class OrderEditTest(unittest.TestCase):
         with self.assertRaises(database.InsufficientStockError):
             self._run([_line(1, 1, 10)], [_line(1, 5, 10)], {1: 2})
 
-    def test_stale_draft_or_shipped_rejected(self):
+    def test_stale_draft_or_cancelled_rejected(self):
         with self.assertRaises(database.OrderChangedError):
-            self._run([_line(1, 1, 10)], [_line(1, 2, 10)], {1: 5}, status="shipped")
+            self._run([_line(1, 1, 10)], [_line(1, 2, 10)], {1: 5}, status="cancelled")
         order = {"id": 1, "status": "pending", "total": 10, "items": json.dumps([_line(1, 3, 10)])}
         database.pool = FakePool(FakeConn(order, {1: 5}))
         with self.assertRaises(database.OrderChangedError):
@@ -184,13 +184,16 @@ class OrderEditTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self._run([_line(1, 1, 10), GIFT], [GIFT], {1: 5})
 
-    def test_edit_button_only_for_admin_before_shipping(self):
+    def test_edit_button_only_for_admin_until_cancelled(self):
         def has_edit(status, is_admin):
             kb = seller_order_keyboard("uz", 5, status, is_admin=is_admin)
             return any(b.callback_data == "oedit:5" for row in kb.inline_keyboard for b in row)
         self.assertTrue(has_edit("pending", True))
         self.assertTrue(has_edit("ready", True))
-        self.assertFalse(has_edit("shipped", True))
+        # Owner, 2026-11-21: a shipped or delivered order can be corrected too.
+        self.assertTrue(has_edit("shipped", True))
+        self.assertTrue(has_edit("delivered", True))
+        self.assertFalse(has_edit("cancelled", True))
         self.assertFalse(has_edit("pending", False))
 
 
@@ -207,8 +210,9 @@ class ManualOrderEditTest(unittest.TestCase):
             self.assertTrue(e(st, "manual"), st)
         self.assertFalse(e("cancelled", "manual"))
         self.assertTrue(e("confirmed", None))
-        self.assertFalse(e("shipped", None))
-        self.assertFalse(e("delivered", "bot"))
+        self.assertTrue(e("shipped", None))                  # 2026-11-21
+        self.assertTrue(e("delivered", "bot"))
+        self.assertFalse(e("cancelled", "bot"))
         self.assertFalse(e("confirmed", "b2b"))
 
     def test_delivered_manual_order_gets_its_extra_two(self):
@@ -225,9 +229,11 @@ class ManualOrderEditTest(unittest.TestCase):
         self.assertEqual(res["new_total"], 36_000)
         self.assertEqual(conn.saved[0][0]["price"], 9_000)
 
-    def test_customer_order_after_shipping_and_cancelled_manual_stay_shut(self):
+    def test_delivered_customer_order_moves_stock_cancelled_stays_shut(self):
+        _, conn = self._run([_line(1, 1, 10)], [_line(1, 2, 10)], {1: 5}, status="delivered", source="bot")
+        self.assertEqual(conn.stock, {1: 4})                      # one more taken from stock
         with self.assertRaises(database.OrderChangedError):
-            self._run([_line(1, 1, 10)], [_line(1, 2, 10)], {1: 5}, status="delivered", source="bot")
+            self._run([_line(1, 1, 10)], [_line(1, 2, 10)], {1: 5}, status="cancelled", source="bot")
         with self.assertRaises(database.OrderChangedError):
             self._run([_line(1, 1, 10)], [_line(1, 2, 10)], {1: 5}, status="cancelled", source="manual")
 
@@ -238,7 +244,7 @@ class ManualOrderEditTest(unittest.TestCase):
         self.assertTrue(has_edit("delivered", "manual"))
         self.assertTrue(has_edit("shipped", "manual"))
         self.assertFalse(has_edit("cancelled", "manual"))
-        self.assertFalse(has_edit("delivered", "bot"))
+        self.assertTrue(has_edit("delivered", "bot"))
         self.assertFalse(has_edit("confirmed", "b2b"))           # wholesale: its own books
 
 

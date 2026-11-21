@@ -6288,7 +6288,10 @@ async def cancel_order(order_id: int) -> dict | None:
 
 # Admin order editing (2026-09-30): an order can have its lines changed until
 # it leaves for delivery. After "shipped" the box is packed and on the road.
-ORDER_EDITABLE_STATUSES = ("pending", "confirmed", "preparing", "ready")
+# Owner, 2026-11-21 ("shu yerda buyurtmani o'zgartirish imkoniyatini qo'shib ber" — on a
+# delivered order's card): a bot/site order can be corrected after it shipped or arrived
+# too; stock still moves by the difference, as before shipping.
+ORDER_EDITABLE_STATUSES = ("pending", "confirmed", "preparing", "ready", "shipped", "delivered")
 # A manual order never moves stock, so a typo in it — the amount, the price,
 # a forgotten product — can be fixed after the goods went out too (owner,
 # 2026-11-08: "qo'lda buyurtma kiritishda buyurtmani o'zgartirish imkonini
