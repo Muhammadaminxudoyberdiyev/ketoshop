@@ -2178,7 +2178,7 @@ def _apply_set_stock(data: dict, stock: dict) -> dict:
 # Anything malformed is dropped silently — analytics must never cost a buyer
 # an error, and a bad client can't push more than 60 short rows per call.
 TRACK_KINDS = {"open", "view", "time", "scroll", "row", "search", "cart_add", "fav", "checkout", "game",
-               "assistant"}
+               "assistant", "party"}            # party: «🛒 Xarid qilish» on the Keto gift card (2026-11-18)
 _TRACK_SID = re.compile(r"[A-Za-z0-9_-]{6,40}")
 
 
