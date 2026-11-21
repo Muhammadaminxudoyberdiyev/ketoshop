@@ -92,6 +92,24 @@ async def record(user_id: int, channel: str, question: str, answer: str) -> None
         logger.warning("AI dialog could not be recorded for %s", user_id, exc_info=True)
 
 
+async def review_page(limit: int = 100, before_id: int | None = None, staff: list[int] | None = None) -> list[dict]:
+    """The newest AI turns across all customers, for reviewing the AI's answers
+    (owner, 2026-11-21: AI'ni haqiqiy suhbatlar asosida o'qitish). Staff excluded."""
+    if database.pool is None:
+        return []
+    limit = max(1, min(500, int(limit)))
+    async with database.pool.acquire() as conn:
+        await _ensure(conn)
+        rows = await conn.fetch(
+            """SELECT d.id, d.user_id, d.channel, d.question, d.answer, d.created_at,
+                      u.full_name, u.username
+               FROM ai_dialog d LEFT JOIN users u ON u.user_id = d.user_id
+               WHERE ($1::int IS NULL OR d.id < $1) AND NOT (d.user_id = ANY($2::bigint[]))
+               ORDER BY d.id DESC LIMIT $3""",
+            before_id, list(staff or []), limit)
+    return [dict(r, created_at=r["created_at"].isoformat() if r["created_at"] else None) for r in rows]
+
+
 async def recent(user_id: int, after_id: int = 0, limit: int = RECENT_TURNS,
                  hours: int = RECENT_HOURS) -> list[dict]:
     """Oxirgi savol-javoblar, eskisidan yangisiga. after_id — shundan keyingilari."""
