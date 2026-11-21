@@ -226,6 +226,9 @@ class LoginFlowTest(unittest.IsolatedAsyncioTestCase):
         app_auth.add_routes(app)
         import app_terms
         app_terms.add_routes(app)
+        import push
+        push._ready = False
+        push.add_routes(app)
         app.router.add_get("/api/echo", echo)
         app.router.add_post("/api/echo", echo)
         app.router.add_post("/api/upload", upload)
@@ -325,6 +328,31 @@ class LoginFlowTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(r.status, 200)
         r = await self.client.post("/app/v1/terms/accept", json={"version": app_terms.VERSION})
         self.assertEqual(r.status, 401)
+
+    async def test_push_register(self):
+        """A phone's FCM token belongs to its app session; logout ends it."""
+        from unittest.mock import AsyncMock, patch
+        import push
+        device = Device()
+        tokens = await self.login(device)
+        token = "fcm-token-" + "a" * 40
+        r = await self.call("POST", "/app/v1/push/register", device, {"token": token, "enabled": True, "build": 2},
+                            token=tokens["access_token"])
+        self.assertEqual(r.status, 200, await r.text())
+        bad = await self.call("POST", "/app/v1/push/register", device, {"token": "x"}, token=tokens["access_token"])
+        self.assertEqual(bad.status, 400)
+        unsigned = await self.client.post("/app/v1/push/register", json={"token": token})
+        self.assertEqual(unsigned.status, 401)
+        with patch.object(push, "configured", AsyncMock(return_value=True)):
+            self.assertEqual(await push.app_user_ids([self.USER, 999]), {self.USER})
+            # Notifications switched off on the phone → no push, the bot writes.
+            await self.call("POST", "/app/v1/push/register", device, {"token": token, "enabled": False},
+                            token=tokens["access_token"])
+            self.assertEqual(await push.app_user_ids([self.USER]), set())
+            await self.call("POST", "/app/v1/push/register", device, {"token": token, "enabled": True},
+                            token=tokens["access_token"])
+            await self.call("POST", "/app/v1/auth/logout", device, token=tokens["access_token"])
+            self.assertEqual(await push.app_user_ids([self.USER]), set())
 
     async def test_shop_view_session(self):
         """The app's WebView shows the Mini App page, which authenticates with

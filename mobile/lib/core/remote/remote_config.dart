@@ -21,6 +21,10 @@ class RemoteConfig {
     required this.updateUrl,
     required this.updateNotes,
     this.termsVersion = '',
+    this.apkSha256 = '',
+    this.apkSize = 0,
+    this.shopPath = '/',
+    this.shimPath = '/app/v1/shim.js',
   });
 
   /// Built-in values: the app works offline and before the first answer.
@@ -41,6 +45,16 @@ class RemoteConfig {
   /// The Oferta edition in force (app_terms.VERSION).
   final String termsVersion;
 
+  /// Set when the new APK sits on our server (app_release.py): the app
+  /// downloads it itself, checks this hash and opens the installer.
+  final String apkSha256;
+  final int apkSize;
+  bool get selfUpdate => apkSha256.length == 64 && updateUrl.startsWith('https://');
+
+  /// Where the shop opens, and the bridge script's path — both on our host.
+  final String shopPath;
+  final String shimPath;
+
   bool get mustUpdate => AppConfig.appBuild < minBuild && updateUrl.isNotEmpty;
   bool get updateAvailable => AppConfig.appBuild < latestBuild && updateUrl.isNotEmpty;
 
@@ -51,7 +65,15 @@ class RemoteConfig {
         updateUrl: _safeUrl(j['update_url']),
         updateNotes: (j['update_notes'] as String?) ?? '',
         termsVersion: (j['terms_version'] as String?) ?? '',
+        apkSha256: RegExp(r'^[0-9a-f]{64}$').hasMatch((j['apk_sha256'] as String?) ?? '') ? j['apk_sha256']! as String : '',
+        apkSize: (j['apk_size'] as num?)?.toInt() ?? 0,
+        shopPath: _path(j['shop_path'], '/'),
+        shimPath: _path(j['shim_path'], '/app/v1/shim.js'),
       );
+
+  /// A path on our own host ("/", "/?x=1") — never "//other.host".
+  static String _path(Object? v, String fallback) =>
+      v is String && v.startsWith('/') && !v.startsWith('//') && !v.contains(RegExp(r'[\s\\]')) ? v : fallback;
 
   static String _safeUrl(Object? v) {
     final uri = v is String ? Uri.tryParse(v) : null;

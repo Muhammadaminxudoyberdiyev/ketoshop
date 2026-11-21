@@ -48,6 +48,9 @@ class AuthController extends ChangeNotifier {
   /// Told which Oferta edition a successful login accepted.
   Future<void> Function(String version)? onTermsAccepted;
 
+  /// Runs before a logout (the phone's push token is forgotten).
+  Future<void> Function()? beforeLogout;
+
   Session? get session => _sessions.current;
 
   Future<void> bootstrap() async {
@@ -104,6 +107,7 @@ class AuthController extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    await beforeLogout?.call();
     try {
       await _api.post('/app/v1/auth/logout');
     } on Object {

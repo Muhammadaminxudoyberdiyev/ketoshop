@@ -43,5 +43,8 @@
   "terms_updated_body": "Do'kondan foydalanishni davom ettirish uchun yangi tahrir bilan tanishib, uni qabul qiling.",
   "terms_read": "O'qish",
   "terms_accept": "Qabul qilaman",
-  "settings_title": "Ilova va xavfsizlik"
+  "settings_title": "Ilova va xavfsizlik",
+  "update_downloading": "Yangi versiya yuklanmoqda…",
+  "update_allow_install": "Ketoshop'ga ilova o'rnatishga ruxsat bering — o'rnatish o'zi davom etadi.",
+  "update_failed": "Yangilab bo'lmadi. Internetni tekshirib, qayta urinib ko'ring."
 }

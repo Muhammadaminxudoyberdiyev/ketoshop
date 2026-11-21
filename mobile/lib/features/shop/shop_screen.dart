@@ -36,35 +36,60 @@ class _ShopScreenState extends State<ShopScreen> with WidgetsBindingObserver {
   bool _offline = false;
   Color? _header;
 
+  /// The page the shop opens on: a tapped push's page, else the server's.
+  String? _startPath;
+  StreamSubscription<String>? _opens;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _opens = context.services.push.opens.stream.listen(_openPath);
     unawaited(_mint());
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       await askToAcceptNewTerms(context);
-      if (mounted) unawaited(offerUpdate(context));
+      if (mounted) await offerUpdate(context);
+      if (mounted) unawaited(context.services.push.start());
     });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    unawaited(_opens?.cancel());
     _view?.setMethodCallHandler(null);
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && DateTime.now().difference(_mintedAt) > _remintAfter) {
-      unawaited(_mint(reload: true));
+    if (state != AppLifecycleState.resumed) return;
+    unawaited(context.services.push.sync());
+    if (DateTime.now().difference(_mintedAt) > _remintAfter) unawaited(_mint(reload: true));
+  }
+
+  String _pageUrl(String path) {
+    final sep = path.contains('?') ? '&' : '?';
+    return '${AppConfig.baseUri}$path${sep}app=android';
+  }
+
+  /// A push tapped while the shop is open.
+  void _openPath(String path) {
+    final view = _view;
+    if (view == null) {
+      _startPath = path;
+      return;
     }
+    unawaited(view.invokeMethod<void>('load', {'url': _pageUrl(path)}));
   }
 
   Future<void> _mint({bool reload = false}) async {
     try {
-      final initData = await context.services.account.shopSession();
+      final services = context.services;
+      _startPath ??= await services.native.takeLaunchUrl() ?? services.remote.config.shopPath;
+      if (!mounted) return;
+      final initData = await services.account.shopSession();
       if (!mounted) return;
       _mintedAt = DateTime.now();
       if (reload && _view != null) {
@@ -104,6 +129,8 @@ class _ShopScreenState extends State<ShopScreen> with WidgetsBindingObserver {
         setState(() => _header = _parseColor(call.arguments as String?));
       case 'settings':
         await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SettingsScreen()));
+      case 'reload_session':
+        await _mint(reload: true);
       case 'back_visible':
         break; // the back key asks the page itself (see _back)
     }
@@ -155,10 +182,13 @@ class _ShopScreenState extends State<ShopScreen> with WidgetsBindingObserver {
                         viewType: 'uz.ketoshop/webview',
                         layoutDirection: TextDirection.ltr,
                         creationParams: {
-                          'url': '${AppConfig.baseUri}/?app=android',
+                          'url': _pageUrl(_startPath ?? '/'),
                           'host': AppConfig.host,
                           'bot': AppConfig.botUsername,
                           'initData': initData,
+                          'shimPath': context.services.remote.config.shimPath,
+                          'appVersion': AppConfig.appVersion,
+                          'appBuild': AppConfig.appBuild,
                         },
                         creationParamsCodec: const StandardMessageCodec(),
                         onPlatformViewCreated: _attach,

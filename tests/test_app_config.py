@@ -16,7 +16,8 @@ class ConfigTest(unittest.TestCase):
     def test_shape(self):
         data = app_config.build("uz")
         self.assertEqual(set(data), {"latest_version", "latest_build", "min_build", "update_url",
-                                     "update_notes", "terms_version"})
+                                     "update_notes", "terms_version", "apk_sha256", "apk_size",
+                                     "shop_path", "shim_path"})
         self.assertLessEqual(data["min_build"], data["latest_build"])
         self.assertEqual(data["terms_version"], app_terms.VERSION)
         self.assertTrue(data["update_url"].startswith("https://"))

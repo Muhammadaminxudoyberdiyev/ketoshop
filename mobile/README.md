@@ -64,13 +64,32 @@ Qoidalar:
   (≥ 1024 px) bo'lsa, shu faylni almashtirib qayta ishga tushiring.
 - Uchinchi tomon paketlari qo'shilmaydi.
 
-## Qachon yangi APK kerak
+## APK'siz o'zgaradigan hamma narsa
 
-Faqat native qism o'zgarsa (kirish, xavfsizlik, WebView ko'prigi). Unda
-`tool\build_release.ps1 -Version X -Build N`, so'ng `app_config.py` da
-`LATEST_BUILD = N` — o'rnatilgan ilovalar «Yangi versiya bor» deydi
-(`MIN_BUILD` dan past ilova yangilashni talab qiladi; APK manzili
-`APP_APK_URL`, bo'lmasa do'kon kanali).
+Egasi: "apkni yangilashga deyarli 99.99% zarurat bo'lmasin". Shuning uchun:
+
+- **Do'kon** — saytning o'zi; saytdagi har o'zgarish darhol.
+- **Ko'prik** (`webapp/app_shim.js`, `/app/v1/shim.js`) — saytga Telegram
+  o'rnini bosuvchi qism serverdan keladi; APK ichidagisi faqat zaxira.
+  Native imkoniyatlar (BRIDGE_VERSION 2): joylashuv, ulashish, nusxa olish,
+  yuklab olish, kamera/fayl, bildirishnoma ruxsati, tebranish, havola,
+  ilova sozlamalari. Sayt ulardan `window.KsApp` orqali foydalanadi.
+- **Push** (`push.py`) — turlar, telefon bo'limlari, matn, rasm, bosilganda
+  ochiladigan sahifa — hammasi serverda. Admin panel → «📲 Ilova».
+- **Yangi APK** — admin panel → «📲 Ilova» → APK yuklash. O'rnatilgan
+  ilovalar «Yangilash» bosilganda uni serverdan o'zi yuklab, SHA-256 ni
+  tekshirib, o'rnatish oynasini ochadi (`app_release.py`).
+
+Yangi APK faqat: domen o'zgarsa yoki telefonning mutlaqo yangi imkoniyati
+(masalan NFC) kerak bo'lsa. Unda `tool\build_release.ps1 -Version X -Build N`
+va APK'ni admin panelga yuklash kifoya.
+
+## Firebase (push) sozlash
+
+1. Firebase'da `uz.ketoshop.app` Android ilovasi → `google-services.json`
+   → `mobile/android/app/google-services.json` (maxfiy emas; repoda).
+2. Service accounts → private key (MAXFIY) → admin panel → «📲 Ilova» →
+   «Firebase kaliti». Repoga hech qachon qo'yilmaydi.
 
 ## Yig'ish (Windows)
 

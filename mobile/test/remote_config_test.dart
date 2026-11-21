@@ -24,6 +24,20 @@ void main() {
     expect(c.mustUpdate, isFalse);
   });
 
+  test('self-update needs a real hash and an https link', () {
+    final hash = 'ab' * 32;
+    final c = RemoteConfig.fromJson({'update_url': 'https://keto.standart-eko.uz/app/download/ketoshop-3.apk',
+                                     'apk_sha256': hash, 'apk_size': 100});
+    expect((c.selfUpdate, c.apkSha256, c.apkSize), (true, hash, 100));
+    expect(RemoteConfig.fromJson({'update_url': 'https://t.me/x', 'apk_sha256': 'nothex'}).selfUpdate, isFalse);
+  });
+
+  test('server paths stay on our host', () {
+    expect(RemoteConfig.fromJson({'shop_path': '/?game=quiz', 'shim_path': '/app/v2/shim.js'}).shopPath, '/?game=quiz');
+    final bad = RemoteConfig.fromJson({'shop_path': '//evil.example/', 'shim_path': 'https://evil.example/x.js'});
+    expect((bad.shopPath, bad.shimPath), ('/', '/app/v1/shim.js'));
+  });
+
   test('the Oferta edition in force', () {
     expect(RemoteConfig.fromJson({'terms_version': '2026-11-17'}).termsVersion, '2026-11-17');
     expect(RemoteConfig.fromJson(const {}).termsVersion, '');

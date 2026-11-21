@@ -878,11 +878,22 @@ async def _showcase_tick(bot: Bot) -> None:
               for lang in ("uz", "uz_cyr", "ru")}
 
     sent = failed = 0
+    import push
     import push_cap
+    # Buyers with the Android app get it as a push instead of a bot message
+    # (owner, 2026-11-21: "ilovasi borga faqat push"); same daily cap.
+    app_users = await push.app_user_ids(user_ids)
+    push_texts = push.Texts(
+        {"uz": f"🎁 {promo_name(promo, 'uz')}", "ru": f"🎁 {promo_name(promo, 'ru')}"},
+        {"uz": "Bugungi sovg'alar tayyor — ko'rish uchun bosing.",
+         "ru": "Подарки дня ждут вас — нажмите, чтобы посмотреть."})
     for user_id in user_ids:
         lang = langs.get(user_id, "uz")
         text, keyboard = bodies.get(lang) or bodies["uz"]
         if not await push_cap.claim(user_id, "aksiya"):
+            continue
+        if user_id in app_users and await push.deliver(user_id, "aksiya", push_texts, "/"):
+            sent += 1
             continue
         try:
             await bot.send_message(

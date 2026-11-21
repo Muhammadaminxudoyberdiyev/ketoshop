@@ -75,4 +75,33 @@ class NativeBridge {
 
   /// Opens https:// and tg:// links only (checked again natively).
   Future<bool> openUrl(String url) async => (await _channel.invokeMethod<bool>('open.url', {'url': url})) ?? false;
+
+  // ── push ──
+
+  /// "on", "off", "ask" (Android 13+ not asked yet) or "unavailable".
+  Future<String> pushState() async => (await _channel.invokeMethod<String>('push.state')) ?? 'unavailable';
+
+  /// Shows Android's notification permission dialog when it may; the new state.
+  Future<String> requestPushPermission() async =>
+      (await _channel.invokeMethod<String>('push.permission')) ?? 'unavailable';
+
+  Future<String?> pushToken() => _channel.invokeMethod<String>('push.token');
+
+  Future<void> deletePushToken() => _channel.invokeMethod('push.delete');
+
+  /// The page a tapped push asked for, when it started the app (once).
+  Future<String?> takeLaunchUrl() => _channel.invokeMethod<String>('push.launchUrl');
+
+  // ── the app's own update ──
+
+  /// Downloads the APK from our server, checks its SHA-256 and opens
+  /// Android's installer. "installing", "need_permission", "bad_hash",
+  /// "bad_url" or "error".
+  Future<String> startUpdate(String url, String sha256) async =>
+      (await _channel.invokeMethod<String>('update.start', {'url': url, 'sha256': sha256})) ?? 'error';
+
+  /// Calls from the native side: "push.open" (url), "update.progress" (0..100).
+  void onNativeEvent(Future<Object?> Function(String method, Object? args) handler) {
+    _channel.setMethodCallHandler((call) => handler(call.method, call.arguments));
+  }
 }
