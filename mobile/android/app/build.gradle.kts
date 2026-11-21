@@ -16,6 +16,27 @@ val keyProperties = Properties().apply {
     }
 }
 val hasReleaseKey = keyProperties.getProperty("storeFile") != null
+
+// Firebase (push) client config from app/google-services.json — public
+// values, the same ones every installed APK carries. Without the file the
+// app builds and runs with push switched off.
+@Suppress("UNCHECKED_CAST")
+val firebaseValues: Map<String, String> = run {
+    val f = file("google-services.json")
+    if (!f.isFile) return@run emptyMap()
+    val root = groovy.json.JsonSlurper().parse(f) as Map<String, Any?>
+    val info = root["project_info"] as Map<String, Any?>
+    val client = (root["client"] as List<Map<String, Any?>>).first {
+        val ci = it["client_info"] as Map<String, Any?>
+        (ci["android_client_info"] as Map<String, Any?>)["package_name"] == "uz.ketoshop.app"
+    }
+    mapOf(
+        "google_app_id" to ((client["client_info"] as Map<String, Any?>)["mobilesdk_app_id"] as String),
+        "google_api_key" to ((client["api_key"] as List<Map<String, Any?>>).first()["current_key"] as String),
+        "project_id" to (info["project_id"] as String),
+        "gcm_defaultSenderId" to (info["project_number"] as String),
+    )
+}
 val expectedCert: String =
     if (hasReleaseKey) (project.findProperty("ketoshop.signingCertSha256") as String? ?: "") else ""
 
@@ -39,6 +60,10 @@ android {
         // The SHA-256 of the certificate this build is signed with; the app
         // treats any other signer as a repackaged copy (security/Integrity.kt).
         buildConfigField("String", "SIGNING_CERT_SHA256", "\"$expectedCert\"")
+        firebaseValues.forEach { (name, value) -> resValue("string", name, value) }
+        buildConfigField("boolean", "PUSH_CONFIGURED", firebaseValues.isNotEmpty().toString())
+        // Bridge protocol between the app and webapp/app_shim.js.
+        buildConfigField("int", "BRIDGE_VERSION", "2")
     }
 
     buildFeatures {
@@ -91,4 +116,10 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // The app's only third-party code: Google's own push client (SECURITY.md).
+    implementation("com.google.firebase:firebase-messaging:24.1.0")
+    implementation("androidx.core:core:1.13.1")
 }

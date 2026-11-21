@@ -2317,6 +2317,11 @@ def create_webapp(bot: Bot, storage=None) -> web.Application:
     games.add_routes(app)
     app_config.add_routes(app)
     app_terms.add_routes(app)
+    # 📲 Push (push.py) and the app's own updates (app_release.py).
+    import app_release
+    import push
+    push.add_routes(app)
+    app_release.add_routes(app)
 
     app.router.add_get("/healthz", healthz)
     app.router.add_get("/", index)

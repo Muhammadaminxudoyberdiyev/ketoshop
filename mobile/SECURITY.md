@@ -15,8 +15,28 @@ serverda `app_auth.py`.
    sessiya, sayt sessiyasini olish, qurilmalar) Android Keystore ichida
    (TEE) yaratilgan P-256 kalit bilan imzolanadi. Serverda faqat ochiq kalit
    saqlanadi. Token o'g'irlansa ham boshqa qurilmada ishlamaydi.
-3. **Uchinchi tomon kodi yo'q.** Ilovada birorta tashqi Dart paketi yoki
-   Android plagini yo'q — faqat Flutter SDK va o'zimizning kod.
+3. **Uchinchi tomon kodi deyarli yo'q.** Tashqi Dart paketi yoki Flutter
+   plagini yo'q. Yagona istisno — Google'ning rasmiy push kutubxonasi
+   (`firebase-messaging`, Kotlin tomonda): push'ni boshqa ishonchli yo'l
+   bilan yetkazib bo'lmaydi (egasi tanlovi, 21.11). U faqat FCM tokenini
+   oladi va data-xabarni ilovaga beradi; analitika qo'shilmagan.
+
+## Push, o'z-o'zini yangilash, serverdagi ko'prik
+
+- **Push**: tokenni faqat imzolangan so'rov bilan ro'yxatdan o'tkazamiz
+  (`/app/v1/push/register`); token app sessiyasiga bog'langan — chiqish
+  yoki «Chiqarib yuborish» bilan push to'xtaydi. Xabardagi rasm faqat
+  bizning domendan, bosilganda ochiladigan sahifa faqat bizning saytdagi
+  yo'l (`/...`) bo'lishi mumkin — boshqa narsa tashlab yuboriladi.
+- **Yangilash**: APK faqat `https://<bizning domen>` dan yuklanadi, uning
+  SHA-256 i `/app/v1/config` dagi bilan bir xil bo'lishi shart; o'rnatishni
+  Android'ning o'z oynasi qiladi va u boshqa kalit bilan imzolangan APK'ni
+  rad etadi. Xaridor «noma'lum manbadan o'rnatish»ga faqat shu ilova uchun
+  bir marta ruxsat beradi.
+- **Ko'prik (`webapp/app_shim.js`)** serverdan olinadi: sahifaning o'zi ham
+  shu serverdan keladi, shuning uchun yangi ishonch qo'shilmaydi. Native
+  tomon qat'iy, cheklangan amallar ro'yxatini beradi (BRIDGE_VERSION 2):
+  kalit, token yoki sessiya bu kanaldan hech qachon o'tmaydi.
 
 ## Do'kon (sayt) ilova ichida
 

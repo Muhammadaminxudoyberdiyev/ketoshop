@@ -7,6 +7,7 @@ import '../core/net/api_client.dart';
 import '../core/net/signing.dart';
 import '../core/net/tls.dart';
 import '../core/platform/native_bridge.dart';
+import '../core/push/push_controller.dart';
 import '../core/remote/remote_config.dart';
 import '../data/account_repository.dart';
 import '../data/terms_repository.dart';
@@ -50,6 +51,7 @@ class AppServices {
     required this.secure,
     required this.remote,
     required this.terms,
+    required this.push,
   });
 
   final NativeBridge native;
@@ -64,6 +66,9 @@ class AppServices {
 
   /// «Oferta shartlari»: the text and which edition this phone accepted.
   final TermsRepository terms;
+
+  /// Push token registration and tapped-push pages (server-driven kinds).
+  final PushController push;
 
   static Future<AppServices> create() async {
     final native = NativeBridge();
@@ -80,8 +85,11 @@ class AppServices {
       secure: SecureScreenController(native),
       remote: RemoteConfigController(api, native, locale),
       terms: TermsRepository(api, native, locale),
+      push: PushController(native, api),
     );
+    services.push.attach();
     services.auth.onTermsAccepted = services.terms.rememberAccepted;
+    services.auth.beforeLogout = services.push.forget;
     await services.remote.loadCached();
     unawaited(services.remote.refresh(force: true));
     locale.addListener(() => unawaited(services.remote.refresh(force: true)));

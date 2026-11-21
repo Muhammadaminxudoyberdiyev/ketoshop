@@ -48,6 +48,9 @@ const Map<String, Map<String, String>> kStrings = {
     'terms_read': 'O\'qish',
     'terms_accept': 'Qabul qilaman',
     'settings_title': 'Ilova va xavfsizlik',
+    'update_downloading': 'Yangi versiya yuklanmoqda…',
+    'update_allow_install': 'Ketoshop\'ga ilova o\'rnatishga ruxsat bering — o\'rnatish o\'zi davom etadi.',
+    'update_failed': 'Yangilab bo\'lmadi. Internetni tekshirib, qayta urinib ko\'ring.',
   },
   'uz_new': {
     'retry': 'Qayta uriniş',
@@ -95,6 +98,9 @@ const Map<String, Map<String, String>> kStrings = {
     'terms_read': 'Öqiş',
     'terms_accept': 'Qabul qilaman',
     'settings_title': 'Ilova va xavfsizlik',
+    'update_downloading': 'Yangi versiya yuklanmoqda…',
+    'update_allow_install': 'Ketoshop\'ga ilova örnatişga ruxsat bering — örnatiş özi davom etadi.',
+    'update_failed': 'Yangilab bölmadi. Internetni tekşirib, qayta urinib köring.',
   },
   'uz_cyr': {
     'retry': 'Қайта уриниш',
@@ -142,6 +148,9 @@ const Map<String, Map<String, String>> kStrings = {
     'terms_read': 'Ўқиш',
     'terms_accept': 'Қабул қиламан',
     'settings_title': 'Илова ва хавфсизлик',
+    'update_downloading': 'Янги версия юкланмоқда…',
+    'update_allow_install': 'Ketoshopъга илова ўрнатишга рухсат беринг — ўрнатиш ўзи давом этади.',
+    'update_failed': 'Янгилаб бўлмади. Интернетни текшириб, қайта уриниб кўринг.',
   },
   'ru': {
     'retry': 'Повторить',
@@ -189,5 +198,8 @@ const Map<String, Map<String, String>> kStrings = {
     'terms_read': 'Читать',
     'terms_accept': 'Принимаю',
     'settings_title': 'Приложение и безопасность',
+    'update_downloading': 'Загружается новая версия…',
+    'update_allow_install': 'Разрешите Ketoshop устанавливать приложения — установка продолжится сама.',
+    'update_failed': 'Не удалось обновить. Проверьте интернет и попробуйте ещё раз.',
   },
 };

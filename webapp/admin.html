@@ -831,6 +831,7 @@ body.kuryer-mode .kb-admin-only{display:none!important}
     <button class="tab" data-view="retention">🔁 Qayta sotuv</button>
     <button class="tab" data-view="expenses">📉 Chiqimlar</button>
     <button class="tab" data-view="pickup">🏪 Olib ketish</button>
+    <button class="tab" data-view="ilova">📲 Ilova</button>
   </div>
 
   <!-- ===== DASHBOARD VIEW ===== -->
@@ -1238,6 +1239,50 @@ body.kuryer-mode .kb-admin-only{display:none!important}
       <iframe id="kbRouteFrame" title="Marshrut — Yandex xarita" src="about:blank" allow="geolocation"></iframe>
       <div class="hint" id="kbRouteViewHint"></div>
     </div>
+  </section>
+
+  <section class="view" id="view-ilova">
+    <div class="toolbar"><h2>📲 Android ilova: push va yangi versiya</h2></div>
+    <p class="hint">Push faqat ilovani o'rnatib, bildirishnomaga ruxsat bergan xaridorlarga boradi. Ularga aksiya va yangiliklar botdan emas, push bilan keladi. Bu bo'limdagi hech narsa yangi APK talab qilmaydi.</p>
+    <div id="ilState" class="hint" style="font-size:14px"></div>
+
+    <h3 style="margin-top:18px">1. Push yuborish</h3>
+    <form id="ilPushForm" style="max-width:720px;display:grid;gap:10px">
+      <label>Tur (telefonda alohida bo'lim bo'lib turadi)<select id="ilKind"></select></label>
+      <label>Mahsulotdan tayyorlash (ixtiyoriy): mahsulot ID<span style="display:flex;gap:8px"><input id="ilProduct" type="number" min="1" placeholder="masalan 12"><button type="button" class="btn btn-o btn-sm" id="ilProductBtn">To'ldirish</button></span></label>
+      <label>Sarlavha (o'zbekcha)<input id="ilTitleUz" maxlength="120" required></label>
+      <label>Matn (o'zbekcha)<textarea id="ilBodyUz" rows="2" maxlength="600"></textarea></label>
+      <label>Sarlavha (ruscha)<input id="ilTitleRu" maxlength="120"></label>
+      <label>Matn (ruscha)<textarea id="ilBodyRu" rows="2" maxlength="600"></textarea></label>
+      <label>Bosilganda ochiladi (ixtiyoriy): /?product=12, /?game=quiz, /?recipe=nomi<input id="ilUrl" placeholder="/"></label>
+      <label>Rasm (ixtiyoriy): /img/N<input id="ilImage" placeholder="/img/7"></label>
+      <p class="hint">Kirillcha matn o'zbekchadan avtomatik yasaladi.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="btn btn-o" id="ilTestBtn">🧪 Sinov: faqat adminlarga</button>
+        <button type="button" class="btn" id="ilAllBtn">📣 Hammaga yuborish</button>
+      </div>
+    </form>
+    <h3 style="margin-top:18px">Oxirgi pushlar</h3>
+    <div id="ilLog" class="hint"></div>
+
+    <h3 style="margin-top:18px">2. Yangi APK (ilova o'zi yangilanadi)</h3>
+    <p class="hint">APK'ni yuklang. O'rnatilgan ilovalar «Yangi versiya bor → Yangilash» deydi, faylni shu serverdan oladi va o'rnatadi. Build raqami avvalgisidan katta bo'lsin.</p>
+    <form id="ilRelForm" style="max-width:720px;display:grid;gap:10px">
+      <label>APK fayl<input id="ilApk" type="file" accept=".apk,application/vnd.android.package-archive" required></label>
+      <label>Versiya (masalan 1.2.0)<input id="ilVersion" required></label>
+      <label>Build raqami (masalan 3)<input id="ilBuild" type="number" min="1" required></label>
+      <label>Nima yangi (o'zbekcha)<textarea id="ilNotesUz" rows="2"></textarea></label>
+      <label>Nima yangi (ruscha)<textarea id="ilNotesRu" rows="2"></textarea></label>
+      <label>Majburiy: shu build'dan pastlar yangilamasa ishlamaydi (ixtiyoriy)<input id="ilMinBuild" type="number" min="1"></label>
+      <div><button type="submit" class="btn">📦 Yuklash</button></div>
+    </form>
+
+    <h3 style="margin-top:18px">3. Firebase kaliti (bir marta)</h3>
+    <p class="hint">Firebase → Project settings → Service accounts → Generate new private key. Shu JSON faylni tanlang. Kalit faqat serverda saqlanadi.</p>
+    <form id="ilKeyForm" style="max-width:720px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input id="ilKeyFile" type="file" accept=".json,application/json" required>
+      <button type="submit" class="btn btn-o">🔑 Saqlash</button>
+    </form>
   </section>
 
   <section class="view" id="view-pickup">
@@ -2182,6 +2227,67 @@ async function api(path,opts={}){
   return data;
 }
 
+/* ===== 📲 Ilova: push + yangi APK (push.py, app_release.py) ===== */
+function ilEsc(x){return String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+async function loadIlova(){
+  try{
+    const d=await api('/admin/api/push');
+    const sel=$('#ilKind');
+    if(!sel.options.length)sel.innerHTML=d.categories.map(c=>`<option value="${ilEsc(c.id)}">${ilEsc(c.name)}</option>`).join('');
+    const rel=d.release?`📦 Serverdagi oxirgi APK: <b>${ilEsc(d.release.version)}</b> (build ${d.release.build}, ${(d.release.size/1048576).toFixed(1)} MB)`:'📦 Serverda APK yo‘q — ilova «Yangilash»da kanalni ochadi.';
+    $('#ilState').innerHTML=(d.configured
+      ?`✅ Firebase ulangan (<b>${ilEsc(d.project_id)}</b>). Push oladi: <b>${d.users}</b> xaridor, ${d.devices} telefon. Bildirishnomani o‘chirganlar: ${d.notifications_off}.`
+      :'⚠️ Firebase kaliti hali yuklanmagan — push yuborilmaydi (pastdagi 3-qadam).')+'<br>'+rel;
+    $('#ilLog').innerHTML=d.log.length?d.log.map(l=>`${ilEsc(l.created_at.slice(0,16).replace('T',' '))} — <b>${ilEsc(l.title)}</b> · ${ilEsc(l.audience)} · ✅ ${l.sent} · ❌ ${l.failed}${l.done_at?'':' · ⏳ yuborilmoqda'}`).join('<br>'):'Hali yo‘q.';
+  }catch(e){toast(e.message);}
+}
+function ilPayload(audience){
+  return JSON.stringify({kind:$('#ilKind').value,title_uz:$('#ilTitleUz').value,body_uz:$('#ilBodyUz').value,
+    title_ru:$('#ilTitleRu').value,body_ru:$('#ilBodyRu').value,url:$('#ilUrl').value,image:$('#ilImage').value,audience});
+}
+$('#ilProductBtn').addEventListener('click',async()=>{
+  const id=parseInt($('#ilProduct').value,10); if(!id)return;
+  try{
+    const t=await api('/admin/api/push/product/'+id);
+    $('#ilKind').value=t.kind;$('#ilTitleUz').value=t.title_uz;$('#ilBodyUz').value=t.body_uz;
+    $('#ilTitleRu').value=t.title_ru;$('#ilBodyRu').value=t.body_ru;$('#ilUrl').value=t.url;$('#ilImage').value=t.image;
+  }catch(e){toast(e.message);}
+});
+$('#ilTestBtn').addEventListener('click',async()=>{
+  try{const r=await api('/admin/api/push/send',{method:'POST',body:ilPayload('test')});
+    toast(r.users?`Sinov yuborildi: ${r.users} admin telefoniga`:'Adminlarda push yoqilgan ilova yo‘q');loadIlova();}
+  catch(e){toast(e.message);}
+});
+$('#ilAllBtn').addEventListener('click',async()=>{
+  if(!$('#ilTitleUz').value.trim()){toast('Sarlavha yozing');return;}
+  if(!confirm('Push ilovasi bor HAMMA xaridorga yuboriladi. Davom etamizmi?'))return;
+  try{const r=await api('/admin/api/push/send',{method:'POST',body:ilPayload('all')});
+    toast(`Yuborish boshlandi: ${r.queued} xaridor`);setTimeout(loadIlova,3000);}
+  catch(e){toast(e.message);}
+});
+async function ilUpload(path,form){
+  const r=await fetch(path,{method:'POST',body:form,credentials:'same-origin'});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(d.error||('HTTP '+r.status));
+  return d;
+}
+$('#ilRelForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const f=new FormData();
+  f.append('version',$('#ilVersion').value);f.append('build',$('#ilBuild').value);
+  f.append('notes_uz',$('#ilNotesUz').value);f.append('notes_ru',$('#ilNotesRu').value);
+  if($('#ilMinBuild').value)f.append('min_build',$('#ilMinBuild').value);
+  f.append('apk',$('#ilApk').files[0]);
+  try{const d=await ilUpload('/admin/api/app/release',f);toast(`APK yuklandi: build ${d.build}`);loadIlova();}
+  catch(err){toast(err.message);}
+});
+$('#ilKeyForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const f=new FormData();f.append('file',$('#ilKeyFile').files[0]);
+  try{const d=await ilUpload('/admin/api/push/key',f);toast('Firebase ulandi: '+d.project_id);$('#ilKeyFile').value='';loadIlova();}
+  catch(err){toast(err.message);}
+});
+
 /* ===== auth ===== */
 function showLogin(){$('#loginView').style.display='grid';$('#shell').style.display='none';}
 function showShell(){$('#loginView').style.display='none';$('#shell').style.display='block';}
@@ -2603,6 +2709,7 @@ function switchView(v){
   if(v==='retention')loadRetention();
   if(v==='expenses')loadExpenses();
   if(v==='pickup')loadPickup();
+  if(v==='ilova')loadIlova();
 }
 $$('.tab').forEach(t=>t.addEventListener('click',()=>switchView(t.dataset.view)));
 

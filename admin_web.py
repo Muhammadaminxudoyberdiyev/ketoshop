@@ -2118,6 +2118,132 @@ async def api_upload(request: web.Request):
     return _json({"ok": True, "url": f"/img/{image_id}"})
 
 
+# ─────────────────────── 📲 push + 📦 ilova versiyasi ───────────────────────
+# push.py / app_release.py. The owner sends pushes and uploads a new APK
+# from the panel; nothing here needs a new APK.
+
+_push_tasks: set = set()
+
+
+@require_auth
+async def api_push_state(request: web.Request):
+    import app_release
+    import push
+    data = await push.stats()
+    rel = await app_release.latest()
+    data["release"] = ({k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in rel.items()}
+                       if rel else None)
+    return _json(data)
+
+
+@require_auth
+async def api_push_key(request: web.Request):
+    """The Firebase service-account JSON (file upload or raw body)."""
+    import push
+    if (request.content_type or "").startswith("multipart/"):
+        reader = await request.multipart()
+        field = await reader.next()
+        raw = (await field.read(decode=False)).decode("utf-8", "replace") if field else ""
+    else:
+        raw = await request.text()
+    try:
+        info = await push.save_service_account(raw)
+    except ValueError as e:
+        return _json({"error": f"Kalit qabul qilinmadi: {e}"}, status=400)
+    return _json({"ok": True, **info})
+
+
+def _push_texts(body: dict):
+    import push
+    title = {k: str(body.get(f"title_{k}") or "").strip() for k in ("uz", "ru")}
+    text = {k: str(body.get(f"body_{k}") or "").strip() for k in ("uz", "ru")}
+    if not (title["uz"] or title["ru"]):
+        raise ValueError("Sarlavha yozing")
+    return push.Texts({k: v for k, v in title.items() if v}, {k: v for k, v in text.items() if v})
+
+
+@require_auth
+async def api_push_send(request: web.Request):
+    """{kind, title_uz, body_uz, title_ru, body_ru, url, image, audience: test|all}.
+    «test» goes to the admins' own phones and waits; «all» runs in the
+    background and shows up in the log."""
+    import asyncio as _asyncio
+    import push
+    body = await request.json()
+    try:
+        texts = _push_texts(body)
+    except ValueError as e:
+        return _json({"error": str(e)}, status=400)
+    kind = str(body.get("kind") or push.DEFAULT_KIND)
+    if kind not in push.CATEGORIES:
+        return _json({"error": "noma'lum tur"}, status=400)
+    if not await push.configured():
+        return _json({"error": "Firebase kaliti hali yuklanmagan"}, status=400)
+    url, image = str(body.get("url") or ""), str(body.get("image") or "")
+    if body.get("audience") == "all":
+        users = sorted(await push.app_user_ids())
+        task = _asyncio.create_task(push.broadcast(users, kind, texts, url, image,
+                                                   audience=f"hammasi ({len(users)})", created_by="admin panel"))
+        _push_tasks.add(task)
+        task.add_done_callback(_push_tasks.discard)
+        return _json({"ok": True, "queued": len(users)})
+    result = await push.broadcast(list(ADMIN_IDS), kind, texts, url, image, audience="sinov (adminlar)",
+                                  created_by="admin panel")
+    return _json({"ok": True, "users": result["users"], "sent": result["sent"], "failed": result["failed"]})
+
+
+@require_auth
+async def api_push_product_template(request: web.Request):
+    """A ready push for one product: «Yangi mahsulot: …», its picture, a tap
+    opens its card."""
+    product = await database.get_product(int(request.match_info["id"]))
+    if not product:
+        return _json({"error": "not found"}, status=404)
+    price = f"{int(product.get('price') or 0):,}".replace(",", " ")
+    image = product.get("image_url") or ""
+    return _json({
+        "kind": "yangi_mahsulot",
+        "title_uz": f"🆕 Yangi mahsulot: {product['name']}",
+        "body_uz": f"{price} so'm. Ko'rish uchun bosing.",
+        "title_ru": f"🆕 Новинка: {product.get('name_ru') or product['name']}",
+        "body_ru": f"{price} сум. Нажмите, чтобы посмотреть.",
+        "url": f"/?product={product['id']}",
+        "image": image if str(image).startswith("/img/") else "",
+    })
+
+
+@require_auth
+async def api_app_release(request: web.Request):
+    """Multipart: apk (file), version, build, notes_uz, notes_ru, min_build."""
+    import app_release
+    reader = await request.multipart()
+    fields, data = {}, b""
+    while True:
+        field = await reader.next()
+        if field is None:
+            break
+        if field.name == "apk":
+            buf = bytearray()
+            while True:
+                chunk = await field.read_chunk(256 * 1024)
+                if not chunk:
+                    break
+                buf.extend(chunk)
+                if len(buf) > app_release.MAX_APK:
+                    return _json({"error": "APK juda katta"}, status=413)
+            data = bytes(buf)
+        else:
+            fields[field.name] = (await field.text()).strip()
+    try:
+        build = int(fields.get("build") or 0)
+        min_build = int(fields["min_build"]) if fields.get("min_build") else None
+        info = await app_release.save(data, fields.get("version") or "", build, fields.get("notes_uz", ""),
+                                      fields.get("notes_ru", ""), min_build, "admin panel")
+    except ValueError as e:
+        return _json({"error": str(e)}, status=400)
+    return _json({"ok": True, **info})
+
+
 async def serve_image(request: web.Request):
     """Public image endpoint — used by the admin panel now and available to the
     Mini App later (image_url on products/sets points here)."""
@@ -2368,6 +2494,11 @@ def setup_admin_routes(app: web.Application):
     app.router.add_post("/admin/api/sets/{id:\\d+}", api_sets_update)
     app.router.add_post("/admin/api/sets/{id:\\d+}/delete", api_sets_delete)
     app.router.add_post("/admin/api/upload", api_upload)
+    app.router.add_get("/admin/api/push", api_push_state)
+    app.router.add_post("/admin/api/push/key", api_push_key)
+    app.router.add_post("/admin/api/push/send", api_push_send)
+    app.router.add_get(r"/admin/api/push/product/{id:\d+}", api_push_product_template)
+    app.router.add_post("/admin/api/app/release", api_app_release)
     app.router.add_post("/admin/api/reco/on", api_reco_on)
     app.router.add_post("/admin/api/reco/now", api_reco_send_now)
     app.router.add_post("/admin/api/reco/backfill", api_reco_backfill)

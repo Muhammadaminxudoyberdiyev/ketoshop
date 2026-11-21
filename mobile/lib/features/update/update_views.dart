@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/scope.dart';
 import '../../app/theme.dart';
 import '../../core/remote/remote_config.dart';
+import '../../widgets/common.dart';
 
 /// This build is below the server's minimum: it may no longer talk to the
 /// server correctly, so the only way on is the update.
@@ -26,7 +27,7 @@ class UpdateRequiredScreen extends StatelessWidget {
                 textAlign: TextAlign.center),
             const SizedBox(height: Tokens.pad * 1.5),
             FilledButton(
-              onPressed: () => context.services.native.openUrl(config.updateUrl),
+              onPressed: () => runUpdate(context, config),
               child: Text(context.t('update_button', {'v': config.latestVersion})),
             ),
           ]),
@@ -58,5 +59,55 @@ Future<void> offerUpdate(BuildContext context) async {
       ],
     ),
   );
-  if (update == true && context.mounted) await context.services.native.openUrl(config.updateUrl);
+  if (update == true && context.mounted) await runUpdate(context, config);
+}
+
+/// «Yangilash»: when the APK is on our server the app downloads it itself,
+/// checks its SHA-256 and opens Android's installer; otherwise the link
+/// (the channel) opens.
+Future<void> runUpdate(BuildContext context, RemoteConfig config) async {
+  final services = context.services;
+  if (!config.selfUpdate) {
+    await services.native.openUrl(config.updateUrl);
+    return;
+  }
+  final progress = services.push.updateProgress..value = 0;
+  final job = services.native.startUpdate(config.updateUrl, config.apkSha256);
+  final navigator = Navigator.of(context, rootNavigator: true);
+  var open = true;
+  // ignore: unawaited_futures — closed below when the job ends.
+  showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => PopScope(
+      canPop: false,
+      child: AlertDialog(
+        title: Text(context.t('update_downloading')),
+        content: ValueListenableBuilder<int>(
+          valueListenable: progress,
+          builder: (context, pct, _) => Column(mainAxisSize: MainAxisSize.min, children: [
+            LinearProgressIndicator(value: pct > 0 ? pct / 100 : null),
+            const SizedBox(height: Tokens.gap),
+            Text(pct > 0 ? '$pct%' : ''),
+          ]),
+        ),
+      ),
+    ),
+  ).whenComplete(() => open = false);
+  String result;
+  try {
+    result = await job;
+  } on Object {
+    result = 'error';
+  }
+  if (open) navigator.pop();
+  if (!context.mounted) return;
+  switch (result) {
+    case 'installing':
+      break;
+    case 'need_permission':
+      showSnack(context, context.t('update_allow_install'));
+    default:
+      showSnack(context, context.t('update_failed'), error: true);
+  }
 }
