@@ -1432,6 +1432,23 @@ async def api_portraits(request: web.Request):
 
 
 @require_auth
+async def api_ai_dialogs(request: web.Request):
+    """GET /admin/api/ai-dialogs?limit=&before_id= — the newest AI question/answer
+    turns (bot, site, group), newest first, staff left out. Read-only; for
+    reviewing and teaching the AI (owner, 2026-11-21)."""
+    import ai_dialog
+    import database
+    try:
+        limit = int(request.query.get("limit") or 100)
+        before = int(request.query["before_id"]) if request.query.get("before_id") else None
+    except ValueError:
+        return _json({"error": "bad request"}, status=400)
+    staff = list(set(ADMIN_IDS) | set(database.LEADERBOARD_EXCLUDED_USER_IDS))
+    rows = await ai_dialog.review_page(limit, before, staff)
+    return _json({"rows": rows, "next_before_id": rows[-1]["id"] if rows else None})
+
+
+@require_auth
 async def api_portrait_card(request: web.Request):
     """GET /admin/api/portraits/{user_id} — one customer's full card."""
     found = await portrait_web.card(int(request.match_info["user_id"]))
@@ -2377,6 +2394,7 @@ def setup_admin_routes(app: web.Application):
     app.router.add_get("/admin/api/shop-links", api_shop_links)
     app.router.add_get("/admin/api/feedback", api_feedback)
     app.router.add_get("/admin/api/portraits", api_portraits)
+    app.router.add_get("/admin/api/ai-dialogs", api_ai_dialogs)
     app.router.add_get("/admin/api/portraits/{user_id:\\d+}", api_portrait_card)
     app.router.add_get("/admin/api/site-analytics/user/{user_id:\\d+}", api_site_user)
     app.router.add_get("/admin/api/promos", api_promos_list)
