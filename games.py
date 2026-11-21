@@ -65,6 +65,7 @@ GAMES = {
     "clue": (15, 3),        # daily puzzle: points = 3 / 2 / 1 by hints used
     "story": (5, 10),       # per chapter, once ever
     "map": (10, 10),        # per station, once ever
+    "kuryer": (8, 120),     # «Ketobek / Ketoxonim» driving game (2026-11-21): 10 per delivery + 1 per item
 }
 CLUE_KETO = {3: 15, 2: 10, 1: 5}
 STREAK_BONUS = {3: 10, 7: 25, 14: 30, 30: 50}
