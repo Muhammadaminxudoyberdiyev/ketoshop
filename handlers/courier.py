@@ -29,6 +29,125 @@ def _feed(bot: Bot, order_id: int, old: str | None, new: str, by) -> None:
         logger.exception("order feed for courier move #%s failed", order_id)
 
 
+# ── Holat tugmalari buyurtma kartochkasining o'zida (owner, 2026-11-21:
+# "kuryer uchun ochilgan profilda ... tugmalar kuryer statuslari uchun qo'shib
+# ber chiqib turishi kerak, yo'lga chiqdi, yetkazildi vahokazo"; "faqat 2 ta
+# tugma emas, boshqa tugmalar ham kerak bo'lsa qo'shgin"). The order watcher
+# (config.ORDER_WATCHER_IDS, a courier) gets every status card; the card now
+# carries the courier's next step, the route and a way to write to the buyer.
+# A step moves the order exactly as the courier menu does, and the fresh
+# status card comes back with the step after.
+
+def card_keyboard(order: dict, username: str | None = None) -> InlineKeyboardMarkup | None:
+    status = order.get("status")
+    oid = order.get("id")
+    if not oid or order.get("delivery_method") == "pickup" or status in ("pending", "cancelled", "delivered"):
+        return None
+    rows = []
+    if status in _WAITING:
+        rows.append([InlineKeyboardButton(text="🚚 Yo'lga chiqdi", callback_data=f"cwq:ship:{oid}")])
+    elif status in _CARRYING:
+        rows.append([InlineKeyboardButton(text="🏁 Yetkazildi", callback_data=f"cwq:done:{oid}")])
+        rows.append([InlineKeyboardButton(text="↩️ Yetkazilmadi — qaytarish", callback_data=f"cwq:back:{oid}")])
+    links = []
+    try:
+        import order_admin_feed
+        route = order_admin_feed.map_url(order)
+    except Exception:
+        route = None
+    if route:
+        links.append(InlineKeyboardButton(text="🧭 Marshrut", url=route))
+    if username:
+        links.append(InlineKeyboardButton(text="💬 Mijozga yozish", url=f"https://t.me/{username}"))
+    if links:
+        rows.append(links)
+    return InlineKeyboardMarkup(inline_keyboard=rows) if rows else None
+
+
+async def _rewards(order: dict, bot: Bot) -> None:
+    """Delivery rewards — the same three the courier menu triggers; each is
+    idempotent per order."""
+    for name, mod, func in (("Keto", "gamification", "award_keto_for_order"),
+                            ("Blogger", "bloggers", "award_for_order"),
+                            ("Referral", "referral_program", "award_order_cashback")):
+        try:
+            module = __import__(mod)
+            await getattr(module, func)(order, bot)
+        except Exception:
+            logger.exception("%s reward failed for card-delivered order %s", name, order.get("id"))
+
+
+_BUYER = {
+    "shipped": ("🚚 Buyurtmangiz #{id} yo'lga chiqdi!", "🚚 Ваш заказ #{id} в пути!"),
+    "delivered": ("✅ Buyurtmangiz #{id} yetkazib berildi!", "✅ Ваш заказ #{id} доставлен!"),
+}
+
+
+@router.callback_query(F.data.startswith("cwq:"))
+async def cb_card_step(callback: CallbackQuery, bot: Bot):
+    from config import ORDER_WATCHER_IDS
+    uid = callback.from_user.id
+    if uid not in ORDER_WATCHER_IDS and not await is_courier(uid):
+        await callback.answer()
+        return
+    try:
+        _, step, oid = callback.data.split(":")
+        order_id = int(oid)
+    except ValueError:
+        await callback.answer()
+        return
+    async with database.pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM orders WHERE id = $1", order_id)
+        if not row:
+            await callback.answer("Buyurtma topilmadi.", show_alert=True)
+            return
+        order = dict(row)
+        if step == "ship":
+            if order["status"] not in _WAITING:
+                await callback.answer("Bu buyurtma allaqachon yo'lda yoki yopilgan.", show_alert=True)
+                return
+            await conn.execute(
+                "UPDATE orders SET courier_id = COALESCE(courier_id, $1), status = 'shipped', "
+                "shipped_at = COALESCE(shipped_at, CURRENT_TIMESTAMP) WHERE id = $2", uid, order_id)
+            new = "shipped"
+        elif step == "done":
+            import sinov_buyurtma
+            if sinov_buyurtma.is_test(order):
+                await callback.answer(sinov_buyurtma.NO_DELIVERY, show_alert=True)
+                return
+            if order["status"] not in _CARRYING:
+                await callback.answer("Avval «🚚 Yo'lga chiqdi» bo'lishi kerak.", show_alert=True)
+                return
+            await conn.execute(
+                "UPDATE orders SET status = 'delivered', courier_id = COALESCE(courier_id, $1), "
+                "delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP) WHERE id = $2", uid, order_id)
+            new = "delivered"
+        elif step == "back":
+            if order["status"] not in _CARRYING:
+                await callback.answer("Bu buyurtma yo'lda emas.", show_alert=True)
+                return
+            await conn.execute("UPDATE orders SET status = 'confirmed', courier_id = NULL WHERE id = $1", order_id)
+            new = "confirmed"
+        else:
+            await callback.answer()
+            return
+    _feed(bot, order_id, order["status"], new, callback.from_user)
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)    # the fresh card brings the next step
+    except Exception:
+        pass
+    await callback.answer({"shipped": "🚚 Yo'lga chiqdi", "delivered": "🏁 Yetkazildi",
+                           "confirmed": "↩️ Qaytarildi"}[new])
+    if new in _BUYER and order.get("user_id"):
+        lang = await database.get_user_language(order["user_id"])
+        try:
+            await bot.send_message(order["user_id"], _BUYER[new][1 if lang == "ru" else 0].format(id=order_id))
+        except Exception:
+            pass
+    if new == "delivered":
+        await _rewards(dict(order, status="delivered"), bot)
+
+
 async def is_courier(user_id: int) -> bool:
     couriers = await database.get_courier_ids()
     return user_id in couriers or user_id in ADMIN_IDS

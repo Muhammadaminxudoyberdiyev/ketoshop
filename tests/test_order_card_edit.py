@@ -82,7 +82,9 @@ class FeedEditTest(unittest.TestCase):
         self.assertIn("#905", by_chat[OTHER][0])
         self.assertIn("order_act:ship:905", buttons(by_chat[OTHER][1]))     # next step: «Yo'lda»
         self.assertNotIn("order_act:confirm:905", buttons(by_chat[OTHER][1]))
-        self.assertIsNone(by_chat[WATCHER][1])                              # watcher: no buttons
+        # watcher (courier): the courier's next step, never the seller's (2026-11-21)
+        self.assertIn("cwq:ship:905", buttons(by_chat[WATCHER][1]))
+        self.assertNotIn("order_act:ship:905", buttons(by_chat[WATCHER][1]))
         self.assertEqual(remembered, {})
 
     def test_no_card_yet_sends_one_and_remembers_it(self):
