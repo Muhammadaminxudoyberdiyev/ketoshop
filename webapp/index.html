@@ -335,6 +335,30 @@
     cursor: pointer;
   }
   .birdsong-btn.off { opacity: .75; }
+  /* The singing bird's name, softly, left of the 🎶 button (2026-11-18). */
+  .bird-name {
+    position: fixed;
+    right: 62px;
+    bottom: calc(var(--dock-h) + var(--dock-gap) * 2 + var(--safe-b) + 14px);
+    z-index: 9001;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 12.5px;
+    font-weight: 700;
+    box-shadow: 0 8px 18px -12px rgba(0,0,0,.4);
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity .5s, transform .5s;
+  }
+  .bird-name.show { opacity: .92; transform: none; }
+  @media (prefers-reduced-motion: reduce) { .bird-name { transition: none; transform: none; } }
+  .sound-credits { margin: 18px 16px 8px; color: var(--hint); font-size: 11.5px; line-height: 1.5; }
+  .sound-credits summary { cursor: pointer; font-weight: 700; }
+  .sound-credits a { color: inherit; }
 
   /* ── Page system ───────────────────────────────────────────────────── */
   .page { display: none; min-height: calc(100dvh - 120px); }
@@ -4467,6 +4491,7 @@
     <div class="profile-meta" id="profile-lang"></div>
     <div id="st-profile"></div>
     <div id="profile-menu"></div>
+    <details class="sound-credits" id="sound-credits"></details>
   </div>
 </div>
 
@@ -5093,6 +5118,88 @@ const Birdsong = (() => {
     },
   };
 
+  // ── Haqiqiy qushlar (owner, 2026-11-18: "qushlarni sayrashini xar
+  // xillaridan yoqimlilaridan nomiga qo'sh, hozirgisi biroq qo'polroq").
+  // Seven songbirds: short clean clips cut from freely licensed Wikimedia
+  // Commons recordings (webapp/birds/, credits in CREDITS.md and at the foot
+  // of the profile page). One at a time, never the same twice in a row,
+  // fetched only when it is about to sing (~90 KB), its name shown softly by
+  // the 🎶 button. The synthesized whistles below stay as the fallback.
+  const BIRDS = [
+    { id: 'bulbul', uz: 'Bulbul', ru: 'Соловей', by: 'Guido Gerding', lic: 'CC BY-SA 3.0',
+      page: 'XN_Luscinia_megarhynchos_017.ogg' },
+    { id: 'zargaldoq', uz: "Zarg'aldoq", ru: 'Иволга', by: 'Joost van Bruggen', lic: 'CC BY-SA 4.0',
+      page: 'Oriolus_oriolus_-_Eurasian_Golden_Oriole_XC431707.mp3' },
+    { id: 'qorayaloq', uz: 'Qora qorayaloq', ru: 'Чёрный дрозд', by: 'Marie-Lan Taÿ Pamart', lic: 'CC BY-SA 4.0',
+      page: 'Turdus_merula_-_Common_Blackbird_XC483999.mp3' },
+    { id: 'sayroqi', uz: 'Sayroqi qorayaloq', ru: 'Певчий дрозд', by: 'Daniel71953', lic: 'CC BY-SA 4.0',
+      page: 'Turdus_philomelos.ogg' },
+    { id: 'torgay', uz: "To'rg'ay", ru: 'Жаворонок', by: 'British Library', lic: 'CC BY-SA 4.0',
+      page: 'Eurasian_Skylark_(Alauda_arvensis)_(W1CDR0001421_BD2).ogg' },
+    { id: 'chittak', uz: 'Katta chittak', ru: 'Большая синица', by: 'Marie-Lan Taÿ Pamart', lic: 'CC BY-SA 4.0',
+      page: 'Parus_major_-_Great_Tit_XC519544.mp3' },
+    { id: 'qiziltosh', uz: "Qizilto'sh", ru: 'Зарянка', by: 'British Library', lic: 'CC BY-SA 4.0',
+      page: 'European_Robin_(Erithacus_rubecula)_(W1CDR0001425_BD16).ogg' },
+  ];
+  const BIRD_VER = '1';
+  const BIRD_LEVEL = 0.5;               // under the music: a garden behind the shop, not a ringtone
+  const buffers = {};                   // id → AudioBuffer, or false when it couldn't be had
+  let lastBird = null, nameEl = null, nameTimer = null;
+
+  function fetchBird(b) {
+    if (buffers[b.id] !== undefined) return Promise.resolve(buffers[b.id]);
+    return fetch('/static/birds/' + b.id + '.mp3?v=' + BIRD_VER)
+      .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.arrayBuffer(); })
+      .then(data => new Promise((resolve, reject) => {
+        // Older Safari: callbacks only; newer browsers: a promise as well.
+        const p = ctx.decodeAudioData(data, resolve, reject);
+        if (p && typeof p.then === 'function') p.then(resolve, reject);
+      }))
+      .then(buf => (buffers[b.id] = buf))
+      .catch(() => (buffers[b.id] = false));
+  }
+  function showBirdName(b) {
+    if (!btn || btn.style.display === 'none') return;
+    if (!nameEl) {
+      nameEl = document.createElement('div');
+      nameEl.className = 'bird-name';
+      nameEl.setAttribute('aria-live', 'polite');
+      document.body.appendChild(nameEl);
+    }
+    nameEl.textContent = '🐦 ' + gx(b.uz, b.ru);
+    clearTimeout(nameTimer);
+    requestAnimationFrame(() => nameEl.classList.add('show'));
+    nameTimer = setTimeout(() => nameEl.classList.remove('show'), 4200);
+  }
+  function playBird(b, buf) {
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const g = ctx.createGain();
+    g.gain.value = BIRD_LEVEL;
+    let dest = out;
+    if (ctx.createStereoPanner) {
+      dest = ctx.createStereoPanner();
+      dest.pan.value = rand(-0.5, 0.5);
+      dest.connect(out);
+    }
+    src.connect(g);
+    g.connect(dest);
+    src.start(ctx.currentTime + 0.05);
+    showBirdName(b);
+  }
+  function creditsHtml() {
+    const link = (href, text) => '<a href="' + href + '" onclick="event.preventDefault(); try { tg.openLink(this.href); } catch (_) { window.open(this.href, \'_blank\'); }">' + escapeHtml(text) + '</a>';
+    return '<summary>🎶 ' + escapeHtml(gx('Musiqa va qush ovozlari manbasi', 'Источники музыки и голосов птиц')) + '</summary>' +
+      '<p>' + escapeHtml(gx("Musiqa — Wikimedia Commons'dagi public domain va CC0 yozuvlar.",
+                            'Музыка — записи Wikimedia Commons в общественном достоянии и CC0.')) + '</p>' +
+      '<p>' + escapeHtml(gx("Qush ovozlari — Wikimedia Commons yozuvlaridan qisqa, tozalangan bo'laklar (CC BY-SA):",
+                            'Голоса птиц — короткие очищенные фрагменты записей Wikimedia Commons (CC BY-SA):')) + '</p>' +
+      '<ul>' + BIRDS.map(b => '<li>' + escapeHtml(gx(b.uz, b.ru)) + ' — ' +
+        link('https://commons.wikimedia.org/wiki/File:' + encodeURIComponent(b.page).replace(/%2C/g, ','), b.by) + ', ' +
+        link(b.lic.indexOf('3.0') > 0 ? 'https://creativecommons.org/licenses/by-sa/3.0/' : 'https://creativecommons.org/licenses/by-sa/4.0/', b.lic) +
+        '</li>').join('') + '</ul>';
+  }
+
   function bird(t, kind) {
     let dest = out;
     if (ctx.createStereoPanner) {        // each bird sits somewhere in the garden
@@ -5105,6 +5212,22 @@ const Birdsong = (() => {
 
   // A phrase: one bird, and sometimes a second one answering it.
   function sing() {
+    if (!ctx || ctx.state !== 'running') return;
+    const choices = BIRDS.filter(b => b.id !== lastBird && buffers[b.id] !== false);
+    if (choices.length) {
+      const b = pick(choices);
+      lastBird = b.id;
+      if (!heard) { heard = true; sync(); }
+      fetchBird(b).then(buf => {
+        if (!ctx || ctx.state !== 'running' || muted()) return;
+        if (buf) playBird(b, buf); else whistle();
+      });
+      return;
+    }
+    whistle();
+  }
+  // The synthesized birds — only when the recordings can't be fetched.
+  function whistle() {
     if (!ctx || ctx.state !== 'running') return;
     const kinds = Object.keys(SONGS);
     const first = pick(kinds);
@@ -5134,7 +5257,7 @@ const Birdsong = (() => {
   // products and recipes, rests on the ordering screens and while the app is
   // hidden, and keeps the birds' night rule.
   const MUSIC_KEY = 'ketoshop_music_piece';
-  const MUSIC_LEVEL = 0.35;
+  const MUSIC_LEVEL = 0.6;          // 2026-11-21: "juda past" — was 0.35
   const MUSIC_REST_PAGES = ['checkout', 'cheque', 'order-success'];
   const PLAYLIST = (() => {
     try { return JSON.parse(document.getElementById('music-playlist').textContent) || []; } catch (_) { return []; }
@@ -5148,6 +5271,13 @@ const Birdsong = (() => {
   })();
   let mus = null, el = null, routed = false, piece = -1, playing = false, blocked = false;
   let musicTimer = null, volTimer = null;
+  // 2026-11-18 ("musiqa o'zidan o'zi o'chib qolyapti"): when the phone paused
+  // the music (the app went to the background, a call, another sound) and
+  // the browser then refused to start it again without a touch, it stayed
+  // off — the one-touch unlock had already been removed. Now any touch
+  // brings it back, a refused start is tried again every 10 s, and a piece
+  // that stops moving (a stalled download) is replaced by the next one.
+  let blockedTicks = 0, lastPos = -1, stillTicks = 0;
 
   function savedPiece() {
     try { return parseInt(localStorage.getItem(MUSIC_KEY) || '0', 10) || 0; } catch (_) { return 0; }
@@ -5212,9 +5342,9 @@ const Birdsong = (() => {
     if (routed && mus) mus.gain.value = 0; else if (VOLUME_WORKS) a.volume = 0;
     playing = true;
     const p = a.play();
-    const up = () => setLevel(MUSIC_LEVEL, 1.5);
+    const up = () => setLevel(MUSIC_LEVEL, 0.8);
     if (p && typeof p.then === 'function') {
-      p.then(up).catch(() => { playing = false; blocked = true; });   // this phone wants a touch first
+      p.then(up).catch(() => { playing = false; blocked = true; blockedTicks = 0; });   // this phone wants a touch first
     } else up();
   }
   function pauseMusic() {
@@ -5226,8 +5356,15 @@ const Birdsong = (() => {
   // Twice a second: rest or carry on as the page changes.
   function musicTick() {
     if (!PLAYLIST.length) return;
-    if (!musicOk()) { pauseMusic(); return; }
-    if (!playing || element().paused) play();
+    if (!musicOk()) { pauseMusic(); stillTicks = 0; return; }
+    if (blocked && ++blockedTicks >= 20) blocked = false;               // ask again every ~10 s
+    const a = element();
+    if (!playing || a.paused) { stillTicks = 0; play(); return; }
+    // Playing but not moving for ~15 s: the download stalled — next piece.
+    if (a.currentTime === lastPos && a.readyState < 3) {
+      if (++stillTicks >= 30) { stillTicks = 0; startPiece(piece + 1); }
+    } else stillTicks = 0;
+    lastPos = a.currentTime;
   }
 
   // The first tap unlocks sound (browser rule); the music and the birds start then.
@@ -5279,21 +5416,34 @@ const Birdsong = (() => {
     musicTick();
     // touchend/click, not pointerdown: a touch only counts as the gesture
     // that may start sound when it ends (Chrome and iOS alike).
+    // Every touch, not only the first: whenever the sound is due but stopped,
+    // a touch is the moment the browser lets it start again.
     const gestures = ['touchend', 'click'];
-    const first = () => {
-      unlock();
-      if (ctx && ctx.state === 'running' && (!PLAYLIST.length || (el && !el.paused)))
-        gestures.forEach(e => document.removeEventListener(e, first, true));
+    const touched = () => {
+      if (muted()) return;
+      const stopped = PLAYLIST.length && musicOk() && (!el || el.paused);
+      if (!ctx || ctx.state !== 'running' || blocked || stopped) unlock();
     };
-    gestures.forEach(e => document.addEventListener(e, first, true));
+    gestures.forEach(e => document.addEventListener(e, touched, true));
     document.addEventListener('visibilitychange', () => {
-      if (!ctx) return;
-      if (document.hidden) ctx.suspend().catch(() => {});
-      else ctx.resume().catch(() => {});
+      if (ctx) {
+        if (document.hidden) ctx.suspend().catch(() => {});
+        else ctx.resume().catch(() => {});
+      }
+      if (!document.hidden) setTimeout(musicTick, 60);      // back from the background: carry on at once
     });
+    const credits = document.getElementById('sound-credits');
+    if (credits) credits.innerHTML = creditsHtml();
   }
 
-  return { start, sync, sing, admin() { isAdmin = true; } };
+  return {
+    start, sing, admin() { isAdmin = true; },
+    sync() {
+      sync();
+      const credits = document.getElementById('sound-credits');     // its language follows the page's
+      if (credits && started) credits.innerHTML = creditsHtml();
+    },
+  };
 })();
 
 function applySiteTheme() {
@@ -7032,6 +7182,9 @@ async function checkStartGate(manual) {
   // while we wait on a network round trip just to double-check it.
   applyLanguage();
   updateBackButton();
+  // The music starts with the page, not after the access check's round trip
+  // (owner, 2026-11-21: "musiqa juda kech ... boshlanyapti").
+  Birdsong.start();
 
   // Nothing loads for a buyer the bot can't reach — they get the START card.
   try {
@@ -7045,7 +7198,6 @@ async function checkStartGate(manual) {
       : qs.get('product') ? 'product' : qs.get('game') ? 'game' : sp ? 'link' : 'direct');
   });
   Butterfly.start();
-  Birdsong.start();
   SiteTime.start();
 
   // Reconcile the server-saved language preference in the background; only

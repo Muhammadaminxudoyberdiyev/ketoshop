@@ -990,6 +990,11 @@ async def render_orders_list(callback: CallbackQuery, status_filter: str, page: 
     if status:
         title += f" ({get_order_status(status, lang)})"
     text = f"<b>{title}</b> ({total})\n\n"
+    # 📍 Manzil har buyurtmada (owner, 2026-11-21: "Адрес ҳам кўринсин") — the
+    # street and a Yandex Maps link; on a page too long for one Telegram
+    # message (4096) the street alone, shortened.
+    import order_admin_feed
+    rows_full, rows_short = [], []
 
     for o in orders:
         status_text = get_order_status(o["status"], lang)
@@ -1009,12 +1014,23 @@ async def render_orders_list(callback: CallbackQuery, status_filter: str, page: 
         if o.get("delivered_at"):
             lifecycle += f" → 📦 {format_local_dt(o['delivered_at'])}"
 
-        text += (
-            f"#{o['id']} | {status_text} | 💰 {total_str}\n"
-            f"   👤 {html.escape(o.get('customer_name') or '—')} | 📱 {html.escape(o.get('phone') or '—')}\n"
-            f"   🚚 {delivery_label}\n"
-            f"   {lifecycle}\n\n"
-        )
+        head = (f"#{o['id']} | {status_text} | 💰 {total_str}\n"
+                f"   👤 {html.escape(o.get('customer_name') or '—')} | 📱 {html.escape(o.get('phone') or '—')}\n"
+                f"   🚚 {delivery_label}\n")
+        tail = f"   {lifecycle}\n\n"
+        try:
+            addr_full = order_admin_feed.address_html(o, lang)
+            addr_short = html.escape(order_admin_feed.street(o.get("address")), quote=False)[:70]
+        except Exception:
+            addr_full = addr_short = ""
+        rows_full.append(head + (f"   📍 {addr_full}\n" if addr_full else "") + tail)
+        rows_short.append(head + (f"   📍 {addr_short}\n" if addr_short else "") + tail)
+
+    text += "".join(rows_full)
+    if len(text) > 4000:
+        text = text[:text.index("\n\n") + 2] + "".join(rows_short)
+    if len(text) > 4000:
+        text = text[:3990] + "…"
 
     # Each order gets a row with the title (opens the detail card) + a
     # quick-action button matching the *next* lifecycle step. Tapping the
@@ -1077,6 +1093,7 @@ async def render_orders_list(callback: CallbackQuery, status_filter: str, page: 
             text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
             parse_mode="HTML",
+            disable_web_page_preview=True,
         )
     except Exception:
         # Fallback to plain text on HTML-entity oddities (long customer names, etc.)

@@ -328,9 +328,11 @@ async def _buyer_username(order: dict) -> str | None:
 
 
 def _markup(order: dict, lang: str, chat_id: int, username: str | None):
-    """The card's next-step buttons — admins only; a watcher's card has none."""
+    """The card's next-step buttons — admins get the seller's; an order watcher
+    (a courier) gets the courier's: 🚚 / 🏁 / ↩️, 🧭 route, 💬 the buyer."""
     if chat_id not in ADMIN_IDS:
-        return None
+        from handlers.courier import card_keyboard
+        return card_keyboard(order, username)
     from keyboards import seller_order_keyboard
     return seller_order_keyboard(lang, order["id"], order.get("status") or "pending",
                                  buyer_username=username, is_admin=True, source=order.get("source"))
