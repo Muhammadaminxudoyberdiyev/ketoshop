@@ -166,6 +166,10 @@ async def main():
     # cheer line so it converts the final text; /alifbo flips it (alphabet.py).
     import alphabet
     await alphabet.load()
+    # «Savolingiz bo'lsa — botga yozing» on every post (post_ask.py) — before the
+    # alphabet (it converts this line too) and the channel signature (last line).
+    import post_ask
+    bot.session.middleware(post_ask.PostAskMiddleware())
     bot.session.middleware(alphabet.NewAlphabetMiddleware())
     # «💚 @ketoshop_uz — Сизнинг Кето дўконингиз» at the end of every channel
     # post — registered last, so it signs the final text (channel_signature.py).
@@ -343,6 +347,9 @@ async def main():
     dp.include_router(stock_alerts_router)
     dp.include_router(recipe_channel_router)
     dp.include_router(keto_fakt_router)
+    # 📱 «Saytda nima bor?» — the site's games and features in the channel (channel_features.py).
+    from channel_features import router as channel_features_router
+    dp.include_router(channel_features_router)
     dp.include_router(restock_notify_router)
     # Catch-all for free text that no state/handler above claimed — must stay
     # last so it never steals a message a real flow was waiting on.
@@ -508,6 +515,8 @@ async def main():
     # 🔎 «Keto fakt» — every 2 days at 16:00, on the recipe-free days.
     from keto_fakt import scheduler_loop as keto_fakt_loop
     keto_fakt_task = asyncio.create_task(keto_fakt_loop(bot))
+    from channel_features import scheduler_loop as channel_features_loop
+    asyncio.create_task(channel_features_loop(bot))
     # "Siz qiziqqan mahsulot qaytdi" — buyers who asked on a sold-out product
     # hear when it's restocked, 09:00–21:00 (restock_notify.py).
     from restock_notify import scheduler_loop as restock_notify_loop

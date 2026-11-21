@@ -64,6 +64,31 @@ def _t(uz: str, ru: str, lang: str) -> str:
     return uz
 
 
+def who_line(user) -> str:
+    """Kim yozyapti — guruhdagi hisobotda har bir sayt yozuvida (owner, 2026-11-21:
+    "sayt: .... deb emas balki ism yoki id yoki username qisqasi kim yozayotganini
+    ko'rsat"). Plain text: _mirror escapes it with the message."""
+    name = getattr(user, "full_name", None) or "Ismsiz"
+    username = getattr(user, "username", None)
+    return f"{name}" + (f" @{username}" if username else "") + f" · id {user.id}"
+
+
+async def _fill_who(user) -> None:
+    """The site's Telegram profile can arrive without a name (the Android app's
+    shop view, an empty profile) — take the name and @username we keep."""
+    if getattr(user, "full_name", None) and getattr(user, "username", None):
+        return
+    try:
+        row = await database.get_user(user.id) or {}
+    except Exception:
+        return
+    if not getattr(user, "full_name", None) and row.get("full_name"):
+        user.full_name = row["full_name"]
+        user.first_name = user.first_name or row["full_name"].split()[0]
+    if not getattr(user, "username", None) and row.get("username"):
+        user.username = row["username"]
+
+
 class WebMessage:
     """aiogram Message o'rnida — ai_sales._respond va vositalar ishlatadigan
     qismlari: from_user, chat, bot, answer(). web_cards — vositalar izi."""
@@ -232,6 +257,7 @@ async def ask(bot, tg_user: dict, text: str, lang: str) -> dict:
                             "botimiz @ketoshopbot ga murojaat qiling 🙂", "Слишком много вопросов за час — "
                             "напишите чуть позже или в Telegram-бот @ketoshopbot 🙂", lang), "cards": []}
     message = WebMessage(bot, tg_user, text)
+    await _fill_who(message.from_user)
     lock = _locks.setdefault(user_id, asyncio.Lock())
     async with lock:
         try:
@@ -259,7 +285,7 @@ async def ask(bot, tg_user: dict, text: str, lang: str) -> dict:
         logger.exception("site assistant cards failed for user %s", user_id)
         cards = []
     try:
-        await ai_sales._mirror(bot, message, "🌐 Sayt: " + text, reply or "—")
+        await ai_sales._mirror(bot, message, f"🌐 Sayt · {who_line(message.from_user)}: " + text, reply or "—")
     except Exception:
         logger.warning("site assistant mirror failed", exc_info=True)
     if user_id not in ai_sales.ADMIN_IDS and user_id not in database.LEADERBOARD_EXCLUDED_USER_IDS:

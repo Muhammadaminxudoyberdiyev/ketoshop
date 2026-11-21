@@ -37,9 +37,15 @@ async def claim(user_id: int, kind: str, unless: tuple[str, ...] = ()) -> bool:
     hech qachon oshib ketmasin."""
     try:
         if unless:
-            return await database.claim_user_push(user_id, kind, ACTIVE_BUYER_MAX, QUIET_MAX, QUIET_AFTER_DAYS,
-                                                  list(unless))
-        return await database.claim_user_push(user_id, kind, ACTIVE_BUYER_MAX, QUIET_MAX, QUIET_AFTER_DAYS)
+            ok = await database.claim_user_push(user_id, kind, ACTIVE_BUYER_MAX, QUIET_MAX, QUIET_AFTER_DAYS,
+                                                list(unless))
+        else:
+            ok = await database.claim_user_push(user_id, kind, ACTIVE_BUYER_MAX, QUIET_MAX, QUIET_AFTER_DAYS)
+        if ok:
+            # The post that follows ends with «savolingiz bo'lsa — yozing» (post_ask.py).
+            import post_ask
+            post_ask.mark(user_id)
+        return ok
     except Exception:
         logger.exception("push cap: claim failed for %s (%s) — not sent", user_id, kind)
         return False

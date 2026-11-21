@@ -115,6 +115,14 @@ class AskTest(unittest.TestCase):
         self.assertIs(seen["tools"], sa.WEB_TOOLS)
         self.assertEqual(seen["uid"], 555)
         self.assertIn("🌐 Sayt", mirror.await_args.args[2])
+        self.assertIn("id 555", mirror.await_args.args[2])          # who is writing (2026-11-21)
+
+    def test_who_line_from_the_database_when_the_profile_is_empty(self):
+        from types import SimpleNamespace
+        user = SimpleNamespace(id=7, full_name=None, first_name="", username=None)
+        with patch.object(database, "get_user", AsyncMock(return_value={"full_name": "Dilnoza K", "username": "dil"})):
+            asyncio.run(sa._fill_who(user))
+        self.assertEqual(sa.who_line(user), "Dilnoza K @dil · id 7")
 
     def test_ai_off_gives_contacts_without_calling_the_model(self):
         respond = AsyncMock()
