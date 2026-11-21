@@ -51,6 +51,11 @@ class RulesTest(unittest.TestCase):
         self.assertEqual(g.clue_index(D, 30), (D.toordinal() * 7 + 3) % 30)
         self.assertNotEqual(g.clue_index(D, 30), g.clue_index(D + timedelta(days=1), 30))
 
+    def test_ketobek_driving_game_is_known(self):
+        self.assertEqual(g.GAMES["kuryer"], (8, 120))
+        self.assertEqual(g.clamp_points("kuryer", 500), 120)
+        self.assertTrue(g.passed("kuryer", 1, 1))
+
     def test_board_names_are_short(self):
         self.assertEqual(g._name("Dilnoza Karimova", 5), "Dilnoza K.")
         self.assertEqual(g._name("", 12345), "O'yinchi 345")
