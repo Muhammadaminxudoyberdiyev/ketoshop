@@ -3784,7 +3784,7 @@
   #keto-party .kp-note { margin: 6px 0 0; font-size: 12.5px; line-height: 1.4; opacity: .92; }
   #keto-party .kp-next { margin: 0; font-size: 15px; font-weight: 800; }
   #keto-party .kp-hint { margin: 3px 0 14px; font-size: 12.5px; line-height: 1.4; color: var(--hint, #7A6A55); }
-  #keto-party .kp-go {
+  #keto-party .kp-go, #keto-party .kp-buy {
     width: 100%;
     border: 0;
     border-radius: 16px;
@@ -3794,6 +3794,16 @@
     color: var(--btn-text, #fff);
     cursor: pointer;
   }
+  /* 2026-11-18: «🛒 Xarid qilish» leads; «Keyinroq» just closes. */
+  #keto-party .kp-go.kp-later {
+    margin-top: 8px;
+    padding: 11px;
+    border: 1px solid var(--hairline, #E5DAC6);
+    background: transparent;
+    color: var(--text, #2B2116);
+    font: 700 14.5px var(--font-body);
+  }
+  #keto-party .kp-spend { margin: 0 0 12px; font-size: 13px; line-height: 1.45; font-weight: 600; }
   .kp-more {
     margin-top: 8px;
     padding: 8px 12px;
@@ -7450,7 +7460,7 @@ const Fanfare = (() => {
     const gestures = ['touchend', 'click'];
     const once = e => {
       gestures.forEach(g => document.removeEventListener(g, once, true));
-      const closing = e && e.target && e.target.closest && e.target.closest('.kp-go');
+      const closing = e && e.target && e.target.closest && e.target.closest('.kp-go, .kp-buy');
       c.resume().then(() => { if (!closing && stillOpen()) notes(c); }).catch(() => {});
     };
     gestures.forEach(g => document.addEventListener(g, once, true));
@@ -7580,8 +7590,8 @@ const KetoParty = (() => {
     tick();
     const timer = setInterval(tick, 1000);
     root._stops.push(() => clearInterval(timer));
-    const go = root.querySelector('.kp-go');
-    if (go) go.textContent = t.wpGo;
+    const buy = root.querySelector('.kp-buy');
+    if (buy && !(typeof cartData !== 'undefined' && cartData && cartData.items && cartData.items.length)) buy.textContent = t.wpGo;
   }
   function show() {
     const items = queue.splice(0);
@@ -7591,11 +7601,24 @@ const KetoParty = (() => {
     const top = Math.max(...awards.map(a => a.seconds || 0));
     const still = reduced();
     const why = top === 0
-      ? gx("Saytimizga xush kelibsiz! Tashrifingiz uchun kichik sovg'a — sog'lom mahsulotlarimiz bilan bemalol tanishing.",
-           'Добро пожаловать на наш сайт! Небольшой подарок за визит — знакомьтесь с полезными продуктами не спеша.')
-      : gx("Saytimizda sog'lom mahsulotlar bilan tanishishga jami {d} vaqt ajratdingiz. Rahmat — bu sizga sovg'amiz!",
-           'В сумме вы провели на нашем сайте {d}, знакомясь с полезными продуктами. Спасибо — это вам подарок!')
+      ? gx("Saytimizga xush kelibsiz! Tashrifingiz uchun kichik sovg'a — uni birinchi xaridingizda ishlating.",
+           'Добро пожаловать на наш сайт! Небольшой подарок за визит — используйте его в первой покупке.')
+      : gx("Saytimizda sog'lom mahsulotlar bilan jami {d} vaqt o'tkazdingiz. Rahmat — bu sizga sovg'amiz!",
+           'В сумме вы провели на нашем сайте {d} среди полезных продуктов. Спасибо — это вам подарок!')
           .replace('{d}', stDur(top, true, true));
+    // The buy CTA (2026-11-18): the coins are worth money at checkout, so say so
+    // and lead there — to the cart when something waits in it, else the shop.
+    const info = last.info || SiteTime.info() || {};
+    const inCart = !!(typeof cartData !== 'undefined' && cartData && cartData.items && cartData.items.length);
+    const spend = info.redeem
+      ? gx("🛒 Keto'lar xaridda pul o'rniga o'tadi: <b>1 Keto = 1 so'm</b>. Buyurtmada «{l}» ni tanlang.",
+           '🛒 Keto идут в покупку вместо денег: <b>1 Keto = 1 сум</b>. При заказе выберите «{l}».')
+          .replace('{l}', escapeHtml(t.ketoRedeemLabel || ''))
+      : gx("🛒 Keto hisobingizda yig'iladi, har yetkazilgan xariddan esa keshbek ham qo'shiladi.",
+           '🛒 Keto копятся на счёте, а с каждой доставленной покупки добавляется ещё и кешбэк.');
+    const buyLabel = inCart
+      ? (info.redeem ? gx("🛒 Savatga — Keto bilan to'lash", '🛒 В корзину — оплатить Keto') : gx("🛒 Savatga o'tish", '🛒 Перейти в корзину'))
+      : gx('🛒 Xarid qilish', '🛒 За покупками');
     box = document.createElement('div');
     box.id = 'keto-party';
     box._stops = [];
@@ -7610,10 +7633,12 @@ const KetoParty = (() => {
         '<p class="kp-why">' + escapeHtml(why) + '</p>' +
         '<div class="kp-balance">' + gx('👛 Balansingiz: <b>{b} Keto</b>', '👛 Ваш баланс: <b>{b} Keto</b>').replace('{b}', formatPrice(last.balance || 0)) + '</div>' +
         '<div class="kp-yangi-slot"></div>' +
+        '<p class="kp-spend">' + spend + '</p>' +
         (last.next ? '<p class="kp-next">' + escapeHtml(stNextText(last.next)) + '</p>' +
           '<p class="kp-hint">' + escapeHtml(gx("Mahsulot va retseptlarni bemalol ko'ring — faol vaqtingiz o'zi hisoblanadi.",
                                                   'Смотрите товары и рецепты не спеша — активное время считается само.')) + '</p>' : '') +
-        '<button class="kp-go" type="button">' + escapeHtml(gx('Rahmat! 🛍 Davom etamiz', 'Спасибо! 🛍 Продолжим')) + '</button>' +
+        '<button class="kp-buy" type="button">' + escapeHtml(buyLabel) + '</button>' +
+        '<button class="kp-go kp-later" type="button">' + escapeHtml(gx('Rahmat, keyinroq', 'Спасибо, позже')) + '</button>' +
         '<button class="kp-more" type="button" aria-expanded="false"></button>' +
         '<div class="kp-details" hidden>' + ketoInfoHtml(last.info || SiteTime.info()) + '</div>' +
       '</div>';
@@ -7646,7 +7671,14 @@ const KetoParty = (() => {
     if (!still && !soundOff()) Fanfare.play(() => box === mine);
     try { tg.HapticFeedback.notificationOccurred('success'); } catch (_) {}
     box.querySelector('.kp-go').onclick = () => close(last.next);
-    box.querySelector('.kp-go').focus({ preventScroll: true });
+    const buy = box.querySelector('.kp-buy');
+    buy.onclick = () => {
+      trk(() => Trk.ev('party', 'buy', inCart ? 'cart' : 'catalog', null, total));
+      close(last.next);
+      if (inCart) switchPage('cart');
+      else { switchPage('catalog'); window.scrollTo(0, 0); }
+    };
+    buy.focus({ preventScroll: true });
   }
   function close(next) {
     if (!box) return;

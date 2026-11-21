@@ -24,7 +24,7 @@ from config import ADMIN_IDS
 
 logger = logging.getLogger(__name__)
 
-RELEASE_KEY = "2026-11-03-navigator-sovga-ai-narx"
+RELEASE_KEY = "2026-11-21-oyinlar-kuryer-tezlik"
 TZ_OFFSET = timedelta(hours=5)
 SEND_WINDOW = (8, 22)          # never wake admins at night
 # True bypasses the daytime window (used 2026-09-25, and 2026-10-22 at 03:00
@@ -34,35 +34,44 @@ SEND_NOW = RELEASE_KEY == "2026-10-22-sayt-yangiliklari"
 CHECK_EVERY = 300
 
 NOTES = (
-    "🆕 <b>Yangi: Yandex Navigator, sirli sovg'a eslatmasi, AI narxlari va kanal</b>\n"
-    '\n'
-    '🚚 <b>Kuryer paneli</b>\n'
-    "1. Telefonda «🧭 Yo'l» yoki xaritani bossangiz, endi <b>sayt emas — Yandex ilovasi</b> ochiladi: avval <b>Yandex Navigator</b>, u bo'lmasa Yandex Maps; ikkalasi ham yo'q bo'lsa — «o'rnatish» tugmasi chiqadi. Yandex Go tashqaridan marshrut qabul qilmaydi.\n"
-    '\n'
-    "2. «🗺 Xarita» bo'limidagi marshrut tugmasi <b>barcha faol manzillarni bitta marshrut</b> qilib Navigatorda ochadi — sizga eng yaqinidan boshlab (joylashuvga ruxsat bering). Bitta buyurtmaning xaritasi — faqat o'sha manzilni.\n"
-    '\n'
-    "3. ⚠️ Yandex qoidasi: Navigator bitta telefonda kuniga taxminan <b>5 marta</b> tashqi havoladan marshrut ochadi. Ochilmay qolsa — «🗺 Yandex Maps'da ochish» tugmasini bosing.\n"
-    '\n'
-    "4. 🧪 <b>Test buyurtma</b>: admin saytida «Kuryer» → «🧪 Test buyurtma» (yoki botda /test_buyurtma) — «Yo'lda» turgan sinov kartasi: Amir Temur xiyoboni, 0 so'm, <b>tushumga kirmaydi</b>, «Yetkazildi» qilinmaydi. Sinab bo'lgach kartaning «⋯» → «🗑» bilan o'chiring.\n"
-    '\n'
-    '📦 <b>Buyurtmalar</b>\n'
-    "5. 🎁 400 000 so'mdan yuqori buyurtmada «<b>SIRLI SOVG'A — qutiga soling</b>» eslatmasi endi <b>ochilgan buyurtma kartasida va holat kartalarida</b> ham turadi (avval faqat birinchi xabarda edi).\n"
-    '\n'
-    "6. Savat va buyurtma matnida miqdor «2.0 dona» emas, <b>«2 dona»</b>; sovg'a narxi «<s>15 000 so'm</s> → bepul» (avval «15 000 0» bo'lib, 150 000 deb o'qilardi).\n"
-    '\n'
-    "7. ✏️ Qo'lda kiritilgan (oflayn) buyurtmaning tarkibini ham «Tarkibni o'zgartirish» bilan tahrirlash mumkin — ombor o'zgarmaydi.\n"
-    '\n'
-    '🤖 <b>AI sotuvchi</b>\n'
-    "8. AI endi narx va «Jami»ni <b>o'zi hisoblamaydi</b> — kod hisoblaydi va javobdagi har bir summa katalog bilan tekshiriladi. «Yashil grechka uni»ni 29 000 deb (bu — grechka <b>doni</b> narxi) yozib, jamini o'zi qo'shgan xato endi takrorlanmaydi: noto'g'ri summa mijozga ketmaydi.\n"
-    '\n'
-    '📣 <b>Kanal</b>\n'
-    "9. Kanal postlarida endi <b>tugma yo'q — izoh yozish mumkin</b>: do'kon, bot yoki mahsulot havolasi matnning o'zida turadi.\n"
-    '\n'
-    "10. Yangi rubrika <b>«🔎 Keto fakt»</b>: har 2 kunda soat 16:00 da (retseptsiz kunlarda) savol bilan boshlanadigan qisqa fakt — mahsulot zararlari, noto'g'ri ishlatish holatlari, kutilmagan foydalar, tarixiy faktlar. Keyingisini ko'rish: /fakt_test, to'xtatish: /fakt_off.\n"
-    '\n'
-    "AI yoki Navigator bilan g'alati narsa ko'rsangiz — skrinshot yuboring.\n"
-    '\n'
-    'Rahmat 🤝'
+    "🆕 <b>Nima yangi (17–21.11): o'yinlar, kuryer tugmalari, buyurtma manbai, tezlik</b>\n"
+    "\n"
+    "📦 <b>Buyurtmalar</b>\n"
+    "1. Har yangi buyurtma kartochkasida <b>«🧭 Qayerdan»</b> qatori: 💬 botdan / 🌐 saytdan / 📱 ilovadan, "
+    "AI bilan gaplashganmi, 📸 Instagram, reklama, bloger yoki do'st taklifi. Hisobot: /buyurtma_manba\n"
+    "2. «Barcha buyurtmalar» ro'yxatida endi <b>📍 manzil</b> va Yandex xarita havolasi bor.\n"
+    "3. ✏️ Bot va saytdan kelgan buyurtmani <b>yo'lga chiqqandan va yetkazilgandan keyin ham</b> "
+    "tahrirlash mumkin («Tarkibni o'zgartirish») — ombor farq bo'yicha o'zgaradi.\n"
+    "\n"
+    "🚚 <b>Kuryer</b>\n"
+    "4. Kuryer profiliga keladigan har buyurtma kartochkasida tugmalar: <b>🚚 Yo'lga chiqdi → 🏁 Yetkazildi</b>, "
+    "«↩️ Yetkazilmadi — qaytarish», «🧭 Marshrut», «💬 Mijozga yozish». Bosilganda mijozga xabar ketadi.\n"
+    "\n"
+    "🎁 <b>Eritritol sovg'asi</b>\n"
+    "5. 20.11 dan yana <b>40 kun (30.12 gacha)</b> har bot/sayt buyurtmasiga 100 gr Eritritol.\n"
+    "\n"
+    "🎮 <b>Saytda o'yinlar markazi</b>\n"
+    "6. 7 ta yangi o'yin: 🧩 «3 ta ishora» (kunlik jumboq), 📖 «Keto yo'li: 30 kun», 🗺 «Ketoland xaritasi», "
+    "🔁 «Almashtir!», 🏷 «Yorliq detektivi», ⭐ «Afsona yoki haqiqat», 🧺 «Bozor sarguzashti». "
+    "Ketma-ketlik 🔥, kunlik 3 topshiriq, haftalik reyting; o'yinlardan Keto kuniga ko'pi bilan 60. "
+    "Statistika: /oyinlar\n"
+    "7. O'ynayotganlarga har kuni 07:30 da seriya eslatmasi (kunlik xabar chegarasi ichida, 🔕 bilan o'chiriladi). "
+    "Boshqaruv: /oyin_eslatma\n"
+    "\n"
+    "⚡ <b>Sayt</b>\n"
+    "8. Bosh sahifa ancha tez ochiladi; o'yinlarda to'g'ri javob endi qotmaydi.\n"
+    "9. Musiqa balandroq, sahifa bilan darhol boshlanadi va o'zidan o'chib qolmaydi. Qushlar — "
+    "<b>haqiqiy yozuvlar</b>: Bulbul, Zarg'aldoq, Qorayaloq, To'rg'ay, Chittak va boshqalar, nomi bilan.\n"
+    "10. Saytda vaqt uchun Keto tabrigida endi <b>«🛒 Xarid qilish»</b> tugmasi (savatda narsa bo'lsa — "
+    "«Savatga — Keto bilan to'lash»).\n"
+    "11. «Yordamchi» tugmasi faqat bosh sahifa va katalogda, pastga aylantirganda yashirinadi.\n"
+    "\n"
+    "📱 <b>Android ilova</b>\n"
+    "12. Ilovada do'kon — saytning o'zi; ilova belgisi — Ketoshop logosi.\n"
+    "\n"
+    "G'alati narsa ko'rsangiz — skrinshot yuboring.\n"
+    "\n"
+    "Rahmat 🤝"
 )
 
 
