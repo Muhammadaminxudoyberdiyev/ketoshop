@@ -17,3 +17,4 @@ require('./test_expense_crud.js');
 require('./test_admin_portraits.js');
 require('./assistant_fab_check.js');
 require('./games2_check.js');
+require('./games_intro_check.js');

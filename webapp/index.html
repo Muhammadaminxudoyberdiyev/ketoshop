@@ -4691,6 +4691,7 @@
 <script src="/static/pickup_checkout.js"></script>
 <script src="/static/games2_content.js?v=20261118" defer></script>
 <script src="/static/games2.js?v=20261118"></script>
+<script src="/static/games2_intro.js?v=20261121"></script>
 <script>
 const tg = window.Telegram.WebApp;
 tg.ready();
@@ -6623,7 +6624,8 @@ function openGame(id) {
   document.getElementById('page-games').classList.add('playing');
   const start = ({ keto: startKetoGame, duel: startDuelGame, quiz: startQuizGame, memory: startMemoryGame })[id]
     || (window.G2 && G2.starters[id]);
-  if (start) start();
+  // The first time: «Qanday o'ynaladi» before the game (games2_intro.js).
+  if (start && !(window.G2 && G2.intro && G2.intro(id, start))) start();
   trk(() => Trk.open('game', id));
   window.scrollTo(0, 0);
 }
@@ -6641,11 +6643,13 @@ function gameTitle(id) {
 
 function setGameScreen(id, score, inner) {
   document.getElementById('games-body').innerHTML =
-    '<div class="game-shell">' +
+    '<div class="game-shell g2-scene g2-scene-' + id + '">' +
       '<div class="game-top">' +
         '<button type="button" class="game-back" onclick="renderGamesPage()">‹ ' + escapeHtml(gx("O'yinlar", 'Игры')) + '</button>' +
         '<div class="game-title">' + escapeHtml(gameTitle(id)) + '</div>' +
         (score !== '' ? '<div class="game-score" id="game-score">' + score + '</div>' : '') +
+        (window.G2 && G2.hasHelp && G2.hasHelp(id)
+          ? '<button type="button" class="game-help" aria-label="?" onclick="G2.help(\'' + id + '\')">?</button>' : '') +
       '</div>' + inner +
     '</div>';
 }
